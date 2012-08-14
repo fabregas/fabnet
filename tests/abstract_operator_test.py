@@ -11,7 +11,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class EchoOperation(OperationBase):
-    def transform_for_resend(self, packet):
+    def before_resend(self, packet):
         pass
 
     def process(self, packet):

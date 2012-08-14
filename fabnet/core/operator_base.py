@@ -69,7 +69,7 @@ class Operator:
             if operation_obj is None:
                 raise OperException('Method "%s" does not implemented!'%packet.method)
 
-            n_packet = operation_obj.transform_for_resend(packet)
+            n_packet = operation_obj.before_resend(packet)
             if n_packet:
                 n_packet.message_id = packet.message_id
                 self._send_to_neighbours(n_packet)
@@ -128,20 +128,34 @@ class OperationBase:
     def __init__(self, operator):
         self.operator = operator
 
-    def transform_for_resend(self, packet):
+    def before_resend(self, packet):
+        """In this method should be implemented packet transformation
+        for resend it to neighbours
+
+        @params packet - object of FabnetPacketRequest class
+        @return object of FabnetPacketRequest class
+                or None for disabling packet resend to neigbours
+        """
         pass
 
     def process(self, packet):
-        """call operation handler
-        @param packet - dict with following keys:
-                            - message_id (mandatory)
-                            - method (mandatory)
-                            - sender (optional)
-                            - parameters (optional)
-        @return req_packet, resp_packet
+        """In this method should be implemented logic of processing
+        reuqest packet from sender node
+
+        @param packet - object of FabnetPacketRequest class
+        @return object of FabnetPacketResponse
+                or None for disabling packet response to sender
         """
         pass
 
     def callback(self, packet):
+        """In this method should be implemented logic of processing
+        response packet from requested node
+
+        @param packet - object of FabnetPacketResponse class
+        @return object of FabnetPacketResponse
+                that should be resended to current node requestor
+                or None for disabling packet resending
+        """
         pass
 
