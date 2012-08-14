@@ -1,4 +1,4 @@
 fabnet
 ======
 
-P2P secure self-management network implementation
+P2P secure self-managed network implementation
