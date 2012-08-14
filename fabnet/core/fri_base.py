@@ -16,27 +16,75 @@ import threading
 import time
 from Queue import Queue
 
+import json
+
 from fabnet.utils.logger import logger
-from fabnet.core.constants import RC_OK, RC_ERROR, STOP_THREAD_EVENT, \
-                        S_ERROR, S_PENDING, S_INWORK
+from fabnet.core.constants import RC_OK, RC_ERROR, RC_UNEXPECTED, STOP_THREAD_EVENT, \
+                        S_ERROR, S_PENDING, S_INWORK, \
+                        BUF_SIZE, KEEP_ALIVE_PACKET
+
+class FriException(Exception):
+    pass
+
+
+class FabnetPacketRequest:
+    def __init__(self, **packet):
+        self.message_id = packet.get('message_id', None)
+        self.method = packet.get('method', None)
+        self.sender = packet.get('sender', None)
+        self.parameters = packet.get('parameters', {})
+
+        self.validate()
+
+    def validate(self):
+        if self.message_id is None:
+            raise FriException('Invalid packet: message_id does not exists')
+
+        if self.method is None:
+            raise FriException('Invalid packet: method does not exists')
+
+        if self.sender is None:
+            raise FriException('Invalid packet: sender does not exists')
+
+    def to_dict(self):
+        return {'message_id': self.message_id, \
+                'method': self.method, \
+                'sender': self.sender, \
+                'parameters': self.parameters }
+
+
+class FabnetPacketResponse:
+    def __init__(self, **packet):
+        self.message_id = packet.get('message_id', None)
+        self.ret_code = packet.get('ret_code', RC_OK)
+        self.ret_message = packet.get('ret_message', '')
+        self.ret_parameters = packet.get('ret_parameters', {})
+
+    def to_dict(self):
+        return {'message_id': self.message_id,
+                'ret_code': self.ret_code,
+                'ret_message': self.ret_message,
+                'ret_parameters': self.ret_parameters}
+
+
 
 class FriServer:
-    def __init__(self, hostname, port,  operator_class, workers_count=2):
+    def __init__(self, hostname, port,  operator_obj, workers_count=2, server_name='fri-node'):
         self.hostname = hostname
         self.port = port
 
         self.queue = Queue()
-        self.operator = operator_class()
+        self.operator = operator_obj
         self.stopped = True
 
         self.__workers = []
         for i in xrange(workers_count):
             thread = FriWorker(self.queue, self.operator)
-            thread.setName('FriWorkerThread#%i'%i)
+            thread.setName('%s-FriWorkerThread#%i'%(server_name,i))
             self.__workers.append( thread )
 
         self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.queue)
-        self.__conn_handler_thread.setName('FriConnectionHandler')
+        self.__conn_handler_thread.setName('%s-FriConnectionHandler'%(server_name,))
 
     def start(self):
         self.stopped = False
@@ -50,8 +98,10 @@ class FriServer:
         if self.__conn_handler_thread.status == S_ERROR:
             self.stop()
             logger.error('FriServer does not started!')
+            return False
         else:
             logger.info('FriServer started!')
+            return True
 
     def stop(self):
         if self.stopped:
@@ -100,7 +150,7 @@ class FriConnectionHandler(threading.Thread):
             self.sock.listen(2)
         except Exception, err:
             self.status = S_ERROR
-            logger.error('[FriConnectionHandler][__bind_socket] %s'%err)
+            logger.error('[__bind_socket] %s'%err)
         else:
             self.status = S_INWORK
             self.stopped = False
@@ -121,10 +171,10 @@ class FriConnectionHandler(threading.Thread):
                 if len(received) < BUF_SIZE:
                     break
 
-            logger.debug('Received: %s'%data)
+            logger.debug('[%s:%s] received: %s'%(self.hostname, self.port, data))
 
             if not data:
-                raise Exception('empty data block')
+                raise FriException('empty data block')
 
             if data != KEEP_ALIVE_PACKET:
                 self.queue.put(data)
@@ -156,8 +206,7 @@ class FriConnectionHandler(threading.Thread):
 
                 self.handle_connection(sock)
             except Exception, err:
-                err_message = '[FriConnectionHandler] %s'%err
-                logger.error(err_message)
+                logger.error(err)
 
         self.sock.close()
         logger.info('Connection handler thread stopped!')
@@ -189,9 +238,9 @@ class FriWorker(threading.Thread):
 
                 packet = self.parse_message(data)
                 if not packet.has_key('ret_code'):
-                    self.operator.process(packet)
+                    self.operator.process(FabnetPacketRequest(**packet))
                 else:
-                    self.operator.callback(packet)
+                    self.operator.callback(FabnetPacketResponse(**packet))
             except Exception, err:
                 ret_message = '%s error: %s' % (self.getName(), err)
                 logger.error(ret_message)
@@ -203,13 +252,13 @@ class FriWorker(threading.Thread):
         raw_message = json.loads(data)
 
         if not raw_message.has_key('message_id'):
-            raise NodeException('[FriWorker.parse_message] message_id does not found in FRI message {%s}'%str(raw_message))
+            raise FriException('[FriWorker.parse_message] message_id does not found in FRI message {%s}'%str(raw_message))
 
         if (not raw_message.has_key('method')) and (not raw_message.has_key('ret_code')):
-            raise NodeException('[FriWorker.parse_message] invalid FRI message {%s}'%str(raw_message))
+            raise FriException('[FriWorker.parse_message] invalid FRI message {%s}'%str(raw_message))
 
         if raw_message.has_key('method') and (not raw_message.has_key('sender')):
-            raise NodeException('[FriWorker.parse_message] sender does not found in FRI message {%s}'%str(raw_message))
+            raise FriException('[FriWorker.parse_message] sender does not found in FRI message {%s}'%str(raw_message))
 
         return raw_message
 
@@ -222,12 +271,12 @@ class FriClient:
 
         try:
             address = node_address.split(':')
-            if len(address) == 2:
+            if len(address) != 2:
                 raise FriException('Node address %s is invalid! ' \
                             'Address should be in format <hostname>:<port>'%node_address)
             hostname = address[0]
             try:
-                port = int(port)
+                port = int(address[1])
                 if 0 > port > 65535:
                     raise ValueError()
             except ValueError:

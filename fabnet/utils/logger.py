@@ -23,7 +23,8 @@ def init_logger():
     hdlr = logging.handlers.SysLogHandler(address=log_path,
               facility=logging.handlers.SysLogHandler.LOG_DAEMON)
     #formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
-    formatter = logging.Formatter('FABNET %(levelname)s %(message)s')
+
+    formatter = logging.Formatter('FABNET %(levelname)s [%(threadName)s] %(message)s')
     hdlr.setFormatter(formatter)
     logger.addHandler(hdlr)
 

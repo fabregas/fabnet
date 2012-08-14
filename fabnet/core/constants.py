@@ -11,12 +11,16 @@ Copyright (C) 2011 Konstantin Andrusenko
 This module contains the fabnet core constants
 """
 
+#socket buffer size
+BUF_SIZE = 1024
+
 #message container size
 MC_SIZE = 10000
 
 #response codes
 RC_OK = 0
 RC_ERROR = 1
+RC_UNEXPECTED = -1
 
 #flag for worker stopping
 STOP_THREAD_EVENT = None
@@ -25,3 +29,6 @@ STOP_THREAD_EVENT = None
 S_PENDING = -1
 S_INWORK = 0
 S_ERROR =  1
+
+#keep alive packet marker
+KEEP_ALIVE_PACKET = 'KEEP-ALIVE'
