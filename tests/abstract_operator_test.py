@@ -18,7 +18,7 @@ class EchoOperation(OperationBase):
         open('/tmp/server1.out', 'w').write(json.dumps(packet.to_dict()))
         return FabnetPacketResponse(ret_code=0, ret_message='ok', ret_parameters={'message': packet.parameters['message']})
 
-    def callback(self, packet):
+    def callback(self, packet, sender):
         open('/tmp/server2.out', 'w').write(json.dumps(packet.to_dict()))
 
 
@@ -26,14 +26,14 @@ class TestAbstractOperator(unittest.TestCase):
     def test_echo_operation(self):
         server1 = server2 = None
         try:
-            operator = Operator()
+            operator = Operator('127.0.0.1:1986')
             operator.neighbours = ['127.0.0.1:1987']
             operator.register_operation('ECHO', EchoOperation)
             server1 = FriServer('0.0.0.0', 1986, operator, server_name='node_1')
             ret = server1.start()
             self.assertEqual(ret, True)
 
-            operator = Operator()
+            operator = Operator('127.0.0.1:1987')
             operator.neighbours = ['127.0.0.1:1986']
             operator.register_operation('ECHO', EchoOperation)
             server2 = FriServer('0.0.0.0', 1987, operator, server_name='node_2')
@@ -45,7 +45,7 @@ class TestAbstractOperator(unittest.TestCase):
                         'sender': '127.0.0.1:1987',
                         'parameters': {'message': 'test message'}}
             packet_obj = FabnetPacketRequest(**packet)
-            rcode, rmsg = operator.call('127.0.0.1:1986', packet_obj)
+            rcode, rmsg = operator.call_node('127.0.0.1:1986', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
 
             time.sleep(1)

@@ -36,21 +36,32 @@ class FabnetPacketRequest:
 
         self.validate()
 
+    def copy(self):
+        return FabnetPacketRequest(**self.to_dict())
+
     def validate(self):
-        if self.message_id is None:
-            raise FriException('Invalid packet: message_id does not exists')
+        #if self.message_id is None:
+        #    raise FriException('Invalid packet: message_id does not exists')
+
+        #if self.sender is None:
+        #    raise FriException('Invalid packet: sender does not exists')
 
         if self.method is None:
             raise FriException('Invalid packet: method does not exists')
 
-        if self.sender is None:
-            raise FriException('Invalid packet: sender does not exists')
+
 
     def to_dict(self):
         return {'message_id': self.message_id, \
                 'method': self.method, \
                 'sender': self.sender, \
                 'parameters': self.parameters }
+
+    def __str__(self):
+        return str(self.to_dict())
+
+    def __repr__(self):
+        return str(self.to_dict())
 
 
 class FabnetPacketResponse:
@@ -155,41 +166,6 @@ class FriConnectionHandler(threading.Thread):
             self.status = S_INWORK
             self.stopped = False
 
-    def handle_connection(self, sock):
-        ret_code = RC_OK
-        ret_message = ''
-
-        try:
-            data = ''
-            while True:
-                received = sock.recv(BUF_SIZE)
-                if not received:
-                    break
-
-                data += received
-
-                if len(received) < BUF_SIZE:
-                    break
-
-            logger.debug('[%s:%s] received: %s'%(self.hostname, self.port, data))
-
-            if not data:
-                raise FriException('empty data block')
-
-            if data != KEEP_ALIVE_PACKET:
-                self.queue.put(data)
-        except Exception, err:
-            ret_message = '[handle_connection] %s' % err
-            ret_code = RC_ERROR
-            logger.error(ret_message)
-
-        try:
-            if sock:
-                sock.send(json.dumps({'ret_code':ret_code, 'ret_message':ret_message}))
-                sock.close()
-        except Exception, err:
-            logger.error('Sending result error: %s' %  err)
-
 
     def run(self):
         logger.info('Starting connection handler thread...')
@@ -204,7 +180,7 @@ class FriConnectionHandler(threading.Thread):
                     sock.close()
                     break
 
-                self.handle_connection(sock)
+                self.queue.put(sock)
             except Exception, err:
                 logger.error(err)
 
@@ -223,6 +199,38 @@ class FriWorker(threading.Thread):
         self.queue = queue
         self.operator = operator
 
+    def handle_connection(self, sock):
+        ret_code = RC_OK
+        ret_message = ''
+        data = ''
+
+        try:
+            while True:
+                received = sock.recv(BUF_SIZE)
+                if not received:
+                    break
+
+                data += received
+
+                if len(received) < BUF_SIZE:
+                    break
+
+            if not data:
+                raise FriException('empty data block')
+        except Exception, err:
+            ret_message = '[handle_connection] %s' % err
+            ret_code = RC_ERROR
+            logger.error(ret_message)
+
+        try:
+            if sock:
+                sock.send(json.dumps({'ret_code':ret_code, 'ret_message':ret_message}))
+                sock.close()
+        except Exception, err:
+            logger.error('Sending result error: %s' %  err)
+
+        return data
+
     def run(self):
         logger.info('%s started!'%self.getName())
         while True:
@@ -230,11 +238,13 @@ class FriWorker(threading.Thread):
             ret_message = ''
 
             try:
-                data = self.queue.get()
+                sock = self.queue.get()
 
-                if data == STOP_THREAD_EVENT:
+                if sock == STOP_THREAD_EVENT:
                     logger.info('%s stopped!'%self.getName())
                     break
+
+                data = self.handle_connection(sock)
 
                 packet = self.parse_message(data)
                 if not packet.has_key('ret_code'):
@@ -302,7 +312,7 @@ class FriClient:
 
             return json_object.get('ret_code', RC_UNEXPECTED), json_object.get('ret_message', '')
         except Exception, err:
-            return RC_ERROR, '[FriCaller] %s'%err
+            return RC_ERROR, '[FriClient] %s'%err
         finally:
             if sock:
                 sock.close()

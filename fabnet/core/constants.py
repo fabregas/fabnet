@@ -32,3 +32,9 @@ S_ERROR =  1
 
 #keep alive packet marker
 KEEP_ALIVE_PACKET = 'KEEP-ALIVE'
+
+#neighbours types
+NT_SUPERIOR = 1
+NT_UPPER = 2
+
+ONE_DIRECT_NEIGHBOURS_COUNT = 2
