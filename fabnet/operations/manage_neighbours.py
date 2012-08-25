@@ -1,3 +1,14 @@
+#!/usr/bin/python
+"""
+Copyright (C) 2012 Konstantin Andrusenko
+    See the documentation for further information on copyrights,
+    or contact the author. All Rights Reserved.
+
+@package fabnet.operations.manage_meighbours
+
+@author Konstantin Andrusenko
+@date September 7, 2012
+"""
 
 from fabnet.core.operator_base import OperationBase
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
@@ -80,3 +91,4 @@ class ManageNeighbour(OperationBase):
         elif operation == MNO_REMOVE:
             self.operator.remove_neighbour(n_type, node_address)
 
+        self.rebalance_neighbours()

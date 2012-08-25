@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-Copyright (C) 2011 Konstantin Andrusenko
+Copyright (C) 2012 Konstantin Andrusenko
     See the documentation for further information on copyrights,
     or contact the author. All Rights Reserved.
 
