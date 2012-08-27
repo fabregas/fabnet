@@ -192,6 +192,7 @@ class Operator:
 class OperationBase:
     def __init__(self, operator):
         self.operator = operator
+        self.__lock = threading.RLock()
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
@@ -230,3 +231,9 @@ class OperationBase:
         """Initiate new operation"""
         req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, parameters=parameters)
         self.operator.call_node(node_address, req)
+
+    def _lock(self):
+        self.__lock.acquire()
+
+    def _unlock(self):
+        self.__lock.release()

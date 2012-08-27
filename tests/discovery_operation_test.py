@@ -13,6 +13,7 @@ from fabnet.utils.logger import logger
 
 logger.setLevel(logging.DEBUG)
 
+NODES_COUNT = 8
 
 class TestDiscoverytOperation(unittest.TestCase):
     def test_discovery_operation(self):
@@ -59,7 +60,7 @@ class TestDiscoverytOperation(unittest.TestCase):
         servers = []
         addresses = []
         try:
-            for i in range(1900, 1910):
+            for i in range(1900, 1900+NODES_COUNT):
                 address = '127.0.0.1:%s'%i
                 operator = Operator(address)
 
@@ -83,7 +84,7 @@ class TestDiscoverytOperation(unittest.TestCase):
 
                 addresses.append(address)
 
-            time.sleep(1)
+            time.sleep(8)
 
             packet = {  'method': 'TopologyCognition',
                         'sender': None,
@@ -97,7 +98,7 @@ class TestDiscoverytOperation(unittest.TestCase):
             topology_file = '/tmp/fabnet_topology.info'
             self.assertEqual(os.path.exists(topology_file), True)
             top_info = open(topology_file).read()
-            for i in range(1900, 1910):
+            for i in range(1900, 1900+NODES_COUNT):
                 self.assertTrue('Node: 127.0.0.1:%s'%i in top_info)
         finally:
             for server in servers:

@@ -11,11 +11,19 @@ Copyright (C) 2012 Konstantin Andrusenko
 """
 
 from fabnet.core.operator_base import OperationBase
-from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
+from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER,\
+                        ONE_DIRECT_NEIGHBOURS_COUNT
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.operations.constants import MNO_APPEND, MNO_REMOVE
 
+
 class ManageNeighbour(OperationBase):
+    def __init__(self, operator):
+        OperationBase.__init__(self, operator)
+        self.__cache = {}
+        self.__cache[NT_UPPER] = []
+        self.__cache[NT_SUPERIOR] = []
+
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
         for resend it to neighbours
@@ -42,7 +50,43 @@ class ManageNeighbour(OperationBase):
         return n_type, operation, node_address
 
     def rebalance_neighbours(self):
-        pass
+        upper_neighbours = self.operator.get_neighbours(NT_UPPER)
+        superior_neighbours = self.operator.get_neighbours(NT_SUPERIOR)
+
+        for_delete = None
+        parameters = {'operation': MNO_REMOVE, 'node_address': self.operator.self_address}
+        if len(superior_neighbours) > ONE_DIRECT_NEIGHBOURS_COUNT:
+            for superior in superior_neighbours:
+                if superior in self.__cache[NT_SUPERIOR]:
+                    continue
+
+                for_delete = superior
+                if superior in upper_neighbours:
+                    break
+            else:
+                self.__cache[NT_SUPERIOR] = []
+
+            parameters['neighbour_type'] = NT_UPPER
+
+        if for_delete is None and len(upper_neighbours) > ONE_DIRECT_NEIGHBOURS_COUNT:
+            for upper in upper_neighbours:
+                if upper in self.__cache[NT_UPPER]:
+                    continue
+
+                for_delete = upper
+                if upper in upper_neighbours:
+                    break
+            else:
+                self.__cache[NT_UPPER] = []
+
+            parameters['neighbour_type'] = NT_SUPERIOR
+        else:
+            return
+
+        if for_delete:
+            self._init_operation(for_delete, 'ManageNeighbour', parameters)
+
+
 
     def process(self, packet):
         """In this method should be implemented logic of processing
@@ -54,21 +98,34 @@ class ManageNeighbour(OperationBase):
         """
         n_type, operation, node_address = self._valiadate_packet(packet.parameters)
 
+        ret_params = packet.parameters
+        ret_params['neighbour_type'] = n_type
+        ret_params['node_address'] = self.operator.self_address
+
         if operation == MNO_APPEND:
             self.operator.set_neighbour(n_type, node_address)
         elif operation == MNO_REMOVE:
-            self.operator.remove_neighbour(n_type, node_address)
+            neighbours = self.operator.get_neighbours(n_type)
+            if len(neighbours) > ONE_DIRECT_NEIGHBOURS_COUNT:
+                self.operator.remove_neighbour(n_type, node_address)
+            else:
+                ret_params['dont_remove'] = True
 
         if n_type == NT_SUPERIOR:
             n_type = NT_UPPER
         elif n_type == NT_UPPER:
             n_type = NT_SUPERIOR
 
-        ret_params = packet.parameters
         ret_params['neighbour_type'] = n_type
-        ret_params['node_address'] = self.operator.self_address
 
-        self.rebalance_neighbours()
+        #redirect response to connected/removed node
+        packet.sender = node_address
+
+        self._lock()
+        try:
+            self.rebalance_neighbours()
+        finally:
+            self._unlock()
 
         return FabnetPacketResponse(ret_parameters=ret_params)
 
@@ -86,9 +143,18 @@ class ManageNeighbour(OperationBase):
         """
         n_type, operation, node_address = self._valiadate_packet(packet.ret_parameters)
 
-        if operation == MNO_APPEND:
-            self.operator.set_neighbour(n_type, node_address)
-        elif operation == MNO_REMOVE:
-            self.operator.remove_neighbour(n_type, node_address)
+        self._lock()
+        try:
+            if operation == MNO_APPEND:
+                self.operator.set_neighbour(n_type, node_address)
+            elif operation == MNO_REMOVE:
+                dont_remove = packet.ret_parameters.get('dont_remove', False)
+                if not dont_remove:
+                    self.operator.remove_neighbour(n_type, node_address)
+                else:
+                    self.__cache[n_type].append(node_address)
 
-        self.rebalance_neighbours()
+            self.rebalance_neighbours()
+        finally:
+            self._unlock()
+
