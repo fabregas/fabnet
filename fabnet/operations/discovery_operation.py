@@ -53,8 +53,10 @@ class DiscoveryOperation(OperationBase):
                 or None for disabling packet resending
         """
         neighbours = packet.ret_parameters.get('neighbours', [])
+        uppers = self.operator.get_neighbours(NT_UPPER)
+        superiors = self.operator.get_neighbours(NT_SUPERIOR)
 
-        count = ONE_DIRECT_NEIGHBOURS_COUNT
+        count = ONE_DIRECT_NEIGHBOURS_COUNT - len(uppers)
         if count > len(neighbours):
             count = len(neighbours)
 
@@ -65,7 +67,12 @@ class DiscoveryOperation(OperationBase):
 
             self._init_operation(neighbours[i], 'ManageNeighbour', parameters)
 
+
         neighbours.reverse()
+        count = ONE_DIRECT_NEIGHBOURS_COUNT - len(superiors)
+        if count > len(neighbours):
+            count = len(neighbours)
+
         node_type = NT_SUPERIOR
         for i in xrange(count):
             parameters = { 'neighbour_type': node_type, 'operation': MNO_APPEND,

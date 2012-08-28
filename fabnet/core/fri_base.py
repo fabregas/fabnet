@@ -11,6 +11,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of FriServer and FriClient classes.
 """
 
+import uuid
 import socket
 import threading
 import time
@@ -21,7 +22,7 @@ import json
 from fabnet.utils.logger import logger
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_UNEXPECTED, STOP_THREAD_EVENT, \
                         S_ERROR, S_PENDING, S_INWORK, \
-                        BUF_SIZE, KEEP_ALIVE_PACKET
+                        BUF_SIZE, CHECK_NEIGHBOURS_TIMEOUT
 
 class FriException(Exception):
     pass
@@ -30,6 +31,8 @@ class FriException(Exception):
 class FabnetPacketRequest:
     def __init__(self, **packet):
         self.message_id = packet.get('message_id', None)
+        if not self.message_id:
+            self.message_id = str(uuid.uuid1())
         self.method = packet.get('method', None)
         self.sender = packet.get('sender', None)
         self.parameters = packet.get('parameters', {})
@@ -40,8 +43,8 @@ class FabnetPacketRequest:
         return FabnetPacketRequest(**self.to_dict())
 
     def validate(self):
-        #if self.message_id is None:
-        #    raise FriException('Invalid packet: message_id does not exists')
+        if self.message_id is None:
+            raise FriException('Invalid packet: message_id does not exists')
 
         #if self.sender is None:
         #    raise FriException('Invalid packet: sender does not exists')
@@ -97,12 +100,16 @@ class FriServer:
         self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.queue)
         self.__conn_handler_thread.setName('%s-FriConnectionHandler'%(server_name,))
 
+        self.__check_neighbours_thread = CheckNeighboursThread(self.operator)
+        self.__check_neighbours_thread.setName('%s-CheckNeighbours'%(server_name,))
+
     def start(self):
         self.stopped = False
         for worker in self.__workers:
             worker.start()
 
         self.__conn_handler_thread.start()
+        self.__check_neighbours_thread.start()
         while self.__conn_handler_thread.status == S_PENDING:
             time.sleep(.1)
 
@@ -118,10 +125,11 @@ class FriServer:
         if self.stopped:
             return
 
+        self.__conn_handler_thread.stop()
+        self.__check_neighbours_thread.stop()
+
         for thread in self.__workers:
             self.queue.put(STOP_THREAD_EVENT)
-
-        self.__conn_handler_thread.stop()
 
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -272,6 +280,33 @@ class FriWorker(threading.Thread):
 
         return raw_message
 
+
+class CheckNeighboursThread(threading.Thread):
+    def __init__(self, operator):
+        threading.Thread.__init__(self)
+        self.operator = operator
+        self.stopped = True
+
+    def run(self):
+        self.stopped = False
+        logger.info('Check neighbours thread is started!')
+
+        while not self.stopped:
+            try:
+                time.sleep(CHECK_NEIGHBOURS_TIMEOUT)
+
+                self.operator._check_neighbours()
+            except Exception, err:
+                logger.error('[CheckNeighboursThread] %s'%err)
+
+        logger.info('Check neighbours thread is stopped!')
+
+    def stop(self):
+        self.stopped = True
+
+
+
+#------------- FRI client class ----------------------------------------------
 
 class FriClient:
     """class for calling asynchronous operation over FRI protocol"""

@@ -15,6 +15,7 @@ from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER,\
                         ONE_DIRECT_NEIGHBOURS_COUNT
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.operations.constants import MNO_APPEND, MNO_REMOVE
+from fabnet.utils.logger import logger
 
 
 class ManageNeighbour(OperationBase):
@@ -49,7 +50,7 @@ class ManageNeighbour(OperationBase):
 
         return n_type, operation, node_address
 
-    def rebalance_neighbours(self):
+    def rebalance_neighbours(self, packet):
         upper_neighbours = self.operator.get_neighbours(NT_UPPER)
         superior_neighbours = self.operator.get_neighbours(NT_SUPERIOR)
 
@@ -123,7 +124,7 @@ class ManageNeighbour(OperationBase):
 
         self._lock()
         try:
-            self.rebalance_neighbours()
+            self.rebalance_neighbours(packet)
         finally:
             self._unlock()
 
@@ -154,7 +155,7 @@ class ManageNeighbour(OperationBase):
                 else:
                     self.__cache[n_type].append(node_address)
 
-            self.rebalance_neighbours()
+            self.rebalance_neighbours(packet)
         finally:
             self._unlock()
 

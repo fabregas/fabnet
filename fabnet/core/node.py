@@ -14,6 +14,8 @@ This module contains the Node class implementation
 from fabnet.core.fri_base import FriServer
 from fabnet.core.operator_base import Operator
 from fabnet.operations import OPERATIONS_MAP
+from fabnet.core.fri_base import FabnetPacketRequest
+from fabnet.utils.logger import logger
 
 class Node:
     def __init__(self, hostname, port, home_dir, node_name='anonymous_node'):
@@ -24,8 +26,9 @@ class Node:
 
         self.server = None
 
-    def start(self):
-        operator = Operator('%s:%s'%(self.hostname, self.port), self.home_dir)
+    def start(self, neighbour):
+        address = '%s:%s'%(self.hostname, self.port)
+        operator = Operator(address, self.home_dir)
 
         for (op_name, op_class) in OPERATIONS_MAP.items():
             operator.register_operation(op_name, op_class)
@@ -33,7 +36,16 @@ class Node:
         self.server = FriServer(self.hostname, self.port, operator, \
                                     server_name=self.node_name)
 
-        return server.start()
+        started = self.server.start()
+        if not started:
+            return started
+
+        packet = FabnetPacketRequest(method='DiscoveryOperation', sender=address)
+
+        rcode, rmsg = self.server.operator.call_node(neighbour, packet)
+        if rcode:
+            logger.warning('Neighbour %s does not respond!'%neighbour)
+        return True
 
     def stop(self):
-        return server.stop()
+        return self.server.stop()

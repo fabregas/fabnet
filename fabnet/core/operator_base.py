@@ -11,7 +11,6 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the Operator class implementation and
 base OperationBase interface
 """
-import uuid
 import copy
 import threading
 import traceback
@@ -21,10 +20,13 @@ from fabnet.core.message_container import MessageContainer
 from fabnet.core.constants import MC_SIZE
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.utils.logger import logger
-from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
+from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, \
+                KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, \
+                KEEP_ALIVE_MAX_WAIT_TIME
 
 class OperException(Exception):
     pass
+
 
 class Operator:
     def __init__(self, self_address, home_dir='/tmp/'):
@@ -38,6 +40,9 @@ class Operator:
         self.superior_neighbours = []
         self.upper_neighbours = []
         self.fri_client = FriClient()
+
+        self.__upper_keep_alives = {}
+        self.__superior_keep_alives = {}
 
     def set_neighbour(self, neighbour_type, address):
         self.__lock.acquire()
@@ -88,9 +93,6 @@ class Operator:
         self.__operations[op_name] = op_class(self)
 
     def call_node(self, node_address, packet):
-        if not packet.message_id:
-            packet.message_id = str(uuid.uuid1())
-
         self.msg_container.put(packet.message_id,
                         {'operation': packet.method,
                             'sender': None,
@@ -99,18 +101,68 @@ class Operator:
         return self.fri_client.call(node_address, packet.to_dict())
 
     def call_network(self, packet):
-        if not packet.message_id:
-            packet.message_id = str(uuid.uuid1())
-
         packet.sender = None
 
         return self.fri_client.call(self.self_address, packet.to_dict())
+
+    def _process_keep_alive(self, packet):
+        self.__lock.acquire()
+        try:
+            self.__upper_keep_alives[packet.sender] = datetime.now()
+        finally:
+            self.__lock.release()
+
+    def _check_neighbours(self):
+        ka_packet = FabnetPacketRequest(method=KEEP_ALIVE_METHOD, sender=self.self_address)
+        superiors = self.get_neighbours(NT_SUPERIOR)
+
+        for superior in superiors:
+            code, msg = self.fri_client.call(superior, ka_packet.to_dict())
+            cnt = 0
+            self.__lock.acquire()
+            try:
+                if self.__superior_keep_alives.get(superior, None) is None:
+                    self.__superior_keep_alives[superior] = 0
+                if code:
+                    self.__superior_keep_alives[superior] += 1
+                else:
+                    self.__superior_keep_alives[superior] = 0
+
+                cnt = self.__superior_keep_alives[superior]
+            finally:
+                self.__lock.release()
+
+            if cnt == KEEP_ALIVE_TRY_COUNT:
+                logger.info('Neighbour %s does not respond. removing it...'%superior)
+                self.remove_neighbour(NT_SUPERIOR, superior)
+
+        #check upper nodes...
+        uppers = self.get_neighbours(NT_UPPER)
+        self.__lock.acquire()
+        try:
+            cur_dt = datetime.now()
+            for upper in uppers:
+                dt = self.__upper_keep_alives.get(upper, None)
+                if dt == None:
+                    self.__upper_keep_alives[upper] = datetime.now()
+                    continue
+                delta = cur_dt - dt
+                if delta.total_seconds() >= KEEP_ALIVE_MAX_WAIT_TIME:
+                    logger.info('No keep alive packets from upper neighbour %s. removing it...'%upper)
+                    self.remove_neighbour(NT_UPPER, upper)
+        finally:
+            self.__lock.release()
+
+
 
     def process(self, packet):
         """process request fabnet packet
         @param packet - object of FabnetPacketRequest class
         """
         try:
+            if packet.method == KEEP_ALIVE_METHOD:
+                return self._process_keep_alive(packet)
+
             inserted = self.msg_container.put_safe(packet.message_id,
                             {'operation': packet.method,
                              'sender': packet.sender,
@@ -192,7 +244,7 @@ class Operator:
 class OperationBase:
     def __init__(self, operator):
         self.operator = operator
-        self.__lock = threading.RLock()
+        self.__lock = threading.Lock()
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
@@ -237,3 +289,5 @@ class OperationBase:
 
     def _unlock(self):
         self.__lock.release()
+
+

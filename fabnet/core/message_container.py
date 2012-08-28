@@ -44,7 +44,7 @@ class MessageContainer:
         finally:
             self.__lock.release()
 
-    def get(self, message_id, default=None):
+    def get(self, message_id, default=None, delete=False):
         self.__lock.acquire()
         try:
             return self.__messages.get(message_id, default)

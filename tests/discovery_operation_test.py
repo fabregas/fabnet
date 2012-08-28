@@ -2,8 +2,11 @@ import unittest
 import time
 import os
 import logging
+import threading
 import json
 import random
+from fabnet.core import constants
+constants.CHECK_NEIGHBOURS_TIMEOUT = .1
 from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.operator_base import Operator, OperationBase
 from fabnet.operations.manage_neighbours import ManageNeighbour
@@ -13,7 +16,39 @@ from fabnet.utils.logger import logger
 
 logger.setLevel(logging.DEBUG)
 
-NODES_COUNT = 8
+NODES_COUNT = 3
+
+class TestServerThread(threading.Thread):
+    def __init__(self, port):
+        threading.Thread.__init__(self)
+        self.port = port
+        self.stopped = True
+        self.operator = None
+
+    def run(self):
+        address = '127.0.0.1:%s'%self.port
+        operator = Operator(address)
+        self.operator = operator
+
+        operator.register_operation('ManageNeighbour', ManageNeighbour)
+        operator.register_operation('DiscoveryOperation', DiscoveryOperation)
+        operator.register_operation('TopologyCognition', TopologyCognition)
+        server = FriServer('0.0.0.0', self.port, operator, server_name='node_%s'%self.port)
+        ret = server.start()
+        if not ret:
+            return
+
+        self.stopped = False
+
+        while not self.stopped:
+            time.sleep(0.1)
+
+        server.stop()
+
+    def stop(self):
+        self.stopped = True
+
+
 
 class TestDiscoverytOperation(unittest.TestCase):
     def test_discovery_operation(self):
@@ -62,16 +97,11 @@ class TestDiscoverytOperation(unittest.TestCase):
         try:
             for i in range(1900, 1900+NODES_COUNT):
                 address = '127.0.0.1:%s'%i
-                operator = Operator(address)
-
-                operator.register_operation('ManageNeighbour', ManageNeighbour)
-                operator.register_operation('DiscoveryOperation', DiscoveryOperation)
-                operator.register_operation('TopologyCognition', TopologyCognition)
-                server = FriServer('0.0.0.0', i, operator, server_name='node_%s'%i)
-                ret = server.start()
-                self.assertEqual(ret, True)
-
+                server = TestServerThread(i)
+                server.start()
                 servers.append(server)
+
+                time.sleep(.5)
 
                 if addresses:
                     part_address = random.choice(addresses)
@@ -79,12 +109,12 @@ class TestDiscoverytOperation(unittest.TestCase):
                                 'sender': address,
                                 'parameters': {}}
                     packet_obj = FabnetPacketRequest(**packet)
-                    rcode, rmsg = operator.call_node(part_address, packet_obj)
+                    rcode, rmsg = server.operator.call_node(part_address, packet_obj)
                     self.assertEqual(rcode, 0, rmsg)
 
                 addresses.append(address)
 
-            time.sleep(8)
+            time.sleep(1)
 
             packet = {  'method': 'TopologyCognition',
                         'sender': None,
@@ -104,6 +134,10 @@ class TestDiscoverytOperation(unittest.TestCase):
             for server in servers:
                 if server:
                     server.stop()
+
+            for server in servers:
+                if server:
+                    server.join()
 
 
 if __name__ == '__main__':
