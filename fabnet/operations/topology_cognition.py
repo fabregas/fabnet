@@ -10,6 +10,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 @date September 7, 2012
 """
 import os
+import yaml
 from lockfile import FileLock
 
 from fabnet.core.operator_base import  OperationBase
@@ -51,6 +52,7 @@ class TopologyCognition(OperationBase):
         superior_neighbours = self.operator.get_neighbours(NT_SUPERIOR)
 
         ret_params['node_address'] = self.operator.self_address
+        ret_params['node_name'] = self.operator.node_name
         ret_params['upper_neighbours'] = upper_neighbours
         ret_params['superior_neighbours'] = superior_neighbours
 
@@ -75,19 +77,26 @@ class TopologyCognition(OperationBase):
         node_address = packet.ret_parameters.get('node_address', None)
         superior_neighbours = packet.ret_parameters.get('superior_neighbours', None)
         upper_neighbours = packet.ret_parameters.get('upper_neighbours', None)
+        node_name = packet.ret_parameters.get('node_name', '')
 
         if (node_address is None) or (superior_neighbours is None) or (upper_neighbours is None):
             raise Exception('TopologyCognition response packet is invalid! Packet: %s'%str(packet.to_dict()))
 
-        node_info = '-'*80 + '\nNode: %s' % node_address + \
-                    '\n  Superior nodes: %s' % superior_neighbours + \
-                    '\n  Upper nodes: %s' % upper_neighbours + \
-                    '\n' + '-'*80 + '\n'
-
         lock = FileLock(os.path.join(self.operator.home_dir, TOPOLOGY_FILE))
         lock.acquire()
         try:
-            open(lock.path, 'a').write(node_info)
+            obj = yaml.load(open(lock.path))
+            if obj is None:
+                nodes = []
+            else:
+                nodes = obj.get('nodes', [])
+            nodes.append({'address': node_address,
+                            'superiors': superior_neighbours,
+                            'uppers': upper_neighbours,
+                            'name': node_name})
+
+            yaml.add_representer(unicode, lambda dumper, value: dumper.represent_scalar(u'tag:yaml.org,2002:str', value))
+            yaml.dump({'nodes': nodes}, open(lock.path, 'w'))
         finally:
             lock.release()
 

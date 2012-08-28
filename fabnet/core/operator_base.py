@@ -36,6 +36,7 @@ class Operator:
         self.__lock = threading.RLock()
         self.self_address = self_address
         self.home_dir = home_dir
+        self.node_name = 'unknown-node'
 
         self.superior_neighbours = []
         self.upper_neighbours = []
@@ -43,6 +44,9 @@ class Operator:
 
         self.__upper_keep_alives = {}
         self.__superior_keep_alives = {}
+
+    def set_node_name(self, node_name):
+        self.node_name = node_name
 
     def set_neighbour(self, neighbour_type, address):
         self.__lock.acquire()

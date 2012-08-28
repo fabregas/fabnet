@@ -5,7 +5,7 @@ import logging
 import json
 import random
 from fabnet.core import constants
-constants.CHECK_NEIGHBOURS_TIMEOUT = .1
+constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 constants.KEEP_ALIVE_MAX_WAIT_TIME = 0.5
 
 from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
@@ -49,7 +49,7 @@ class TestKeepAlive(unittest.TestCase):
 
             time.sleep(1)
             server1.stop()
-            time.sleep(1)
+            time.sleep(3.5)
             server1 = None
 
             self.assertEqual(operator.upper_neighbours, ['127.0.0.1:1987'])

@@ -1,0 +1,54 @@
+import unittest
+import time
+import os
+import logging
+import threading
+import json
+import random
+import subprocess
+import signal
+from fabnet.utils.logger import logger
+
+logger.setLevel(logging.DEBUG)
+
+NODES_COUNT = 20
+
+PROCESSES = []
+
+class TestBigNework(unittest.TestCase):
+    def test_00_create_network(self):
+        global PROCESSES
+        addresses = []
+        for i in range(1900, 1900+NODES_COUNT):
+            address = '127.0.0.1:%s'%i
+            if not addresses:
+                n_node = 'fake:9999'
+            else:
+                n_node = random.choice(addresses)
+
+            addresses.append(address)
+
+            p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, 'node_%s'%i, '/tmp'])
+            time.sleep(1)
+
+            PROCESSES.append(p)
+
+        time.sleep(10)
+
+        p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', random.choice(addresses)])
+        time.sleep(10)
+
+    def test_99_stop_network(self):
+        for process in PROCESSES:
+            process.send_signal(signal.SIGINT)
+
+        print 'SENDED SIGNALS'
+        for process in PROCESSES:
+            process.wait()
+
+        print 'STOPPED'
+
+
+if __name__ == '__main__':
+    unittest.main()
+

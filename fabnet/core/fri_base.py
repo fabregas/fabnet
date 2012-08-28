@@ -89,6 +89,7 @@ class FriServer:
 
         self.queue = Queue()
         self.operator = operator_obj
+        self.operator.set_node_name(server_name)
         self.stopped = True
 
         self.__workers = []
@@ -293,9 +294,12 @@ class CheckNeighboursThread(threading.Thread):
 
         while not self.stopped:
             try:
-                time.sleep(CHECK_NEIGHBOURS_TIMEOUT)
-
                 self.operator._check_neighbours()
+
+                for i in range(CHECK_NEIGHBOURS_TIMEOUT):
+                    if self.stopped:
+                        break
+                    time.sleep(1)
             except Exception, err:
                 logger.error('[CheckNeighboursThread] %s'%err)
 

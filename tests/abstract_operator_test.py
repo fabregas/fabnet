@@ -4,7 +4,7 @@ import os
 import logging
 import json
 from fabnet.core import constants
-constants.CHECK_NEIGHBOURS_TIMEOUT = .1
+constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.operator_base import Operator, OperationBase
 from fabnet.utils.logger import logger

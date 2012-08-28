@@ -6,7 +6,7 @@ import threading
 import json
 import random
 from fabnet.core import constants
-constants.CHECK_NEIGHBOURS_TIMEOUT = .1
+constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.operator_base import Operator, OperationBase
 from fabnet.operations.manage_neighbours import ManageNeighbour
@@ -129,7 +129,7 @@ class TestDiscoverytOperation(unittest.TestCase):
             self.assertEqual(os.path.exists(topology_file), True)
             top_info = open(topology_file).read()
             for i in range(1900, 1900+NODES_COUNT):
-                self.assertTrue('Node: 127.0.0.1:%s'%i in top_info)
+                self.assertTrue('- address: 127.0.0.1:%s'%i in top_info)
         finally:
             for server in servers:
                 if server:
