@@ -13,7 +13,7 @@ from fabnet.utils.logger import logger
 
 logger.setLevel(logging.DEBUG)
 
-NODES_COUNT = range(5, 6)
+NODES_COUNT = range(25, 26)
 
 class TestBigNework(unittest.TestCase):
     def test_00_create_network(self):

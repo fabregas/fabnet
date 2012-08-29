@@ -34,12 +34,11 @@ class DiscoveryOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        neighbours = [self.operator.self_address] + \
-                        self.operator.get_neighbours(NT_UPPER) + \
+        neighbours = self.operator.get_neighbours(NT_UPPER) + \
                         self.operator.get_neighbours(NT_SUPERIOR)
 
         neighbours = dict(zip(neighbours, [0 for i in neighbours])).keys()
-        neighbours = [self.operator.self_address]#fixme
+        neighbours += [self.operator.self_address]
         return FabnetPacketResponse(ret_parameters={'neighbours': neighbours})
 
     def callback(self, packet, sender=None):
@@ -63,37 +62,5 @@ class DiscoveryOperation(OperationBase):
         parameters = { 'neighbour_type': NT_SUPERIOR, 'operation': MNO_APPEND,
                         'node_address': self.operator.self_address }
 
-        self._init_operation(neighbours[0], 'ManageNeighbour', parameters)
+        self._init_operation(neighbours[-1], 'ManageNeighbour', parameters)
 
-        '''
-        uppers = self.operator.get_neighbours(NT_UPPER)
-        superiors = self.operator.get_neighbours(NT_SUPERIOR)
-
-        count = ONE_DIRECT_NEIGHBOURS_COUNT - len(uppers)
-        if count > len(neighbours):
-            count = len(neighbours)
-
-        node_type = NT_UPPER
-        for i in xrange(count):
-            if neighbours[i] in uppers:
-                continue
-            parameters = { 'neighbour_type': node_type, 'operation': MNO_APPEND,
-                        'node_address': self.operator.self_address }
-
-            self._init_operation(neighbours[i], 'ManageNeighbour', parameters)
-
-
-        neighbours.reverse()
-        count = ONE_DIRECT_NEIGHBOURS_COUNT - len(superiors)
-        if count > len(neighbours):
-            count = len(neighbours)
-
-        node_type = NT_SUPERIOR
-        for i in xrange(count):
-            if neighbours[i] in superiors:
-                continue
-            parameters = { 'neighbour_type': node_type, 'operation': MNO_APPEND,
-                        'node_address': self.operator.self_address }
-
-            self._init_operation(neighbours[i], 'ManageNeighbour', parameters)
-        '''
