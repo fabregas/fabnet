@@ -12,3 +12,8 @@ Copyright (C) 2012 Konstantin Andrusenko
 #manage neighbour operations
 MNO_APPEND = 'append'
 MNO_REMOVE = 'remove'
+
+#node balance constants
+NB_NORMAL = 0
+NB_MORE = 1
+NB_LESS = -1

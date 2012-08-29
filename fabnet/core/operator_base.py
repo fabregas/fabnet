@@ -37,6 +37,7 @@ class Operator:
         self.self_address = self_address
         self.home_dir = home_dir
         self.node_name = 'unknown-node'
+        self.server = None
 
         self.superior_neighbours = []
         self.upper_neighbours = []
@@ -45,8 +46,13 @@ class Operator:
         self.__upper_keep_alives = {}
         self.__superior_keep_alives = {}
 
+        self.start_datetime = datetime.now()
+
     def set_node_name(self, node_name):
         self.node_name = node_name
+
+    def set_server(self, server):
+        self.server = server
 
     def set_neighbour(self, neighbour_type, address):
         self.__lock.acquire()
@@ -188,19 +194,21 @@ class Operator:
             n_packet = operation_obj.before_resend(n_packet)
             if n_packet:
                 n_packet.message_id = packet.message_id
+                n_packet.sync = False
                 self._send_to_neighbours(n_packet)
 
             s_packet = operation_obj.process(packet)
             if s_packet:
                 s_packet.message_id = packet.message_id
-                self._send_to_sender(packet.sender, s_packet)
+
+            return s_packet
         except Exception, err:
             err_packet = FabnetPacketResponse(message_id=packet.message_id,
                             ret_code=1, ret_message= '[Operator.process] %s'%err)
-            self._send_to_sender(packet.sender, err_packet)
             logger.write = logger.debug
             traceback.print_exc(file=logger)
             logger.error('[Operator.process] %s'%err)
+            return err_packet
 
 
     def callback(self, packet):

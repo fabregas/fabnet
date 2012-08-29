@@ -44,6 +44,7 @@ class TestAbstractOperator(unittest.TestCase):
 
             packet = { 'message_id': 323232,
                         'method': 'ECHO',
+                        'sync': False,
                         'sender': '127.0.0.1:1987',
                         'parameters': {'message': 'test message'}}
             packet_obj = FabnetPacketRequest(**packet)
