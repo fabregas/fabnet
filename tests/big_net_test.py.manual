@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import unittest
 import time
 import os
@@ -7,46 +8,65 @@ import json
 import random
 import subprocess
 import signal
+import sqlite3
 from fabnet.utils.logger import logger
 
 logger.setLevel(logging.DEBUG)
 
-NODES_COUNT = 20
-
-PROCESSES = []
+NODES_COUNT = range(5, 6)
 
 class TestBigNework(unittest.TestCase):
     def test_00_create_network(self):
-        global PROCESSES
+        for count in NODES_COUNT:
+            print 'Starting %s nodes...'%count
+            self.create_net(count)
+            os.system('python ./tests/topology_to_tgf /tmp/fabnet_topology.db /tmp/fabnet_topology.%s.tgf'%count)
+
+    def create_net(self, nodes_count):
+        PROCESSES = []
         addresses = []
-        for i in range(1900, 1900+NODES_COUNT):
-            address = '127.0.0.1:%s'%i
-            if not addresses:
-                n_node = 'fake:9999'
-            else:
-                n_node = random.choice(addresses)
+        try:
+            for i in range(1900, 1900+nodes_count):
+                address = '127.0.0.1:%s'%i
+                if not addresses:
+                    n_node = 'fake:9999'
+                else:
+                    n_node = random.choice(addresses)
 
-            addresses.append(address)
+                addresses.append(address)
 
-            p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, 'node_%s'%i, '/tmp'])
+                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, 'node_%s'%i, '/tmp'])
+                time.sleep(1.5)
+
+                PROCESSES.append(p)
+
+            time.sleep(2)
+
+            p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', random.choice(addresses)])
+
             time.sleep(1)
+            conn = sqlite3.connect('/tmp/fabnet_topology.db')
+            curs = conn.cursor()
+            while True:
+                curs.execute("SELECT count(node_address) FROM fabnet_nodes")
+                rows = curs.fetchall()
+                if int(rows[0][0]) != nodes_count:
+                    time.sleep(1)
+                else:
+                    break
+            curs.close()
+            conn.close()
+        except Exception, err:
+            print 'ERROR: %s'%err
+        finally:
+            for process in PROCESSES:
+                process.send_signal(signal.SIGINT)
 
-            PROCESSES.append(p)
+            print 'SENDED SIGNALS'
+            for process in PROCESSES:
+                process.wait()
 
-        time.sleep(10)
-
-        p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', random.choice(addresses)])
-        time.sleep(10)
-
-    def test_99_stop_network(self):
-        for process in PROCESSES:
-            process.send_signal(signal.SIGINT)
-
-        print 'SENDED SIGNALS'
-        for process in PROCESSES:
-            process.wait()
-
-        print 'STOPPED'
+            print 'STOPPED'
 
 
 if __name__ == '__main__':

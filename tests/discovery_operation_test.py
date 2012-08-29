@@ -5,6 +5,7 @@ import logging
 import threading
 import json
 import random
+import  sqlite3
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
@@ -47,6 +48,7 @@ class TestServerThread(threading.Thread):
 
     def stop(self):
         self.stopped = True
+
 
 
 
@@ -125,11 +127,25 @@ class TestDiscoverytOperation(unittest.TestCase):
 
             time.sleep(1)
 
-            topology_file = '/tmp/fabnet_topology.info'
-            self.assertEqual(os.path.exists(topology_file), True)
-            top_info = open(topology_file).read()
+
+            conn = sqlite3.connect('/tmp/fabnet_topology.db')
+
+            curs = conn.cursor()
+            curs.execute("SELECT node_address, node_name, superiors, uppers FROM fabnet_nodes")
+            rows = curs.fetchall()
+            conn.commit()
+
+            curs.close()
+            conn.close()
+            nodes = {}
+            for row in rows:
+                nodes[row[0]] = row
+
+
             for i in range(1900, 1900+NODES_COUNT):
-                self.assertTrue('- address: 127.0.0.1:%s'%i in top_info)
+                address = '127.0.0.1:%s'%i
+                self.assertTrue(nodes.has_key(address))
+                self.assertEqual(nodes[address][1], 'node_%s'%i)
         finally:
             for server in servers:
                 if server:

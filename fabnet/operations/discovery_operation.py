@@ -39,6 +39,7 @@ class DiscoveryOperation(OperationBase):
                         self.operator.get_neighbours(NT_SUPERIOR)
 
         neighbours = dict(zip(neighbours, [0 for i in neighbours])).keys()
+        neighbours = [self.operator.self_address]#fixme
         return FabnetPacketResponse(ret_parameters={'neighbours': neighbours})
 
     def callback(self, packet, sender=None):
@@ -53,6 +54,18 @@ class DiscoveryOperation(OperationBase):
                 or None for disabling packet resending
         """
         neighbours = packet.ret_parameters.get('neighbours', [])
+
+        parameters = { 'neighbour_type': NT_UPPER, 'operation': MNO_APPEND,
+                        'node_address': self.operator.self_address }
+
+        self._init_operation(neighbours[0], 'ManageNeighbour', parameters)
+
+        parameters = { 'neighbour_type': NT_SUPERIOR, 'operation': MNO_APPEND,
+                        'node_address': self.operator.self_address }
+
+        self._init_operation(neighbours[0], 'ManageNeighbour', parameters)
+
+        '''
         uppers = self.operator.get_neighbours(NT_UPPER)
         superiors = self.operator.get_neighbours(NT_SUPERIOR)
 
@@ -62,6 +75,8 @@ class DiscoveryOperation(OperationBase):
 
         node_type = NT_UPPER
         for i in xrange(count):
+            if neighbours[i] in uppers:
+                continue
             parameters = { 'neighbour_type': node_type, 'operation': MNO_APPEND,
                         'node_address': self.operator.self_address }
 
@@ -75,8 +90,10 @@ class DiscoveryOperation(OperationBase):
 
         node_type = NT_SUPERIOR
         for i in xrange(count):
+            if neighbours[i] in superiors:
+                continue
             parameters = { 'neighbour_type': node_type, 'operation': MNO_APPEND,
                         'node_address': self.operator.self_address }
 
             self._init_operation(neighbours[i], 'ManageNeighbour', parameters)
-
+        '''

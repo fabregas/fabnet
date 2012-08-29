@@ -11,14 +11,15 @@ Copyright (C) 2012 Konstantin Andrusenko
 """
 import os
 import yaml
-from lockfile import FileLock
+import sqlite3
 
 from fabnet.core.operator_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
+from fabnet.utils.logger import logger
 
 
-TOPOLOGY_FILE = 'fabnet_topology.info'
+TOPOLOGY_DB = 'fabnet_topology.db'
 
 class TopologyCognition(OperationBase):
     def before_resend(self, packet):
@@ -30,12 +31,15 @@ class TopologyCognition(OperationBase):
                 or None for disabling packet resend to neigbours
         """
         if packet.sender is None:
-            lock = FileLock(os.path.join(self.operator.home_dir, TOPOLOGY_FILE))
-            lock.acquire()
-            try:
-                open(lock.path, 'w').write('')
-            finally:
-                lock.release()
+            conn = sqlite3.connect(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
+
+            curs = conn.cursor()
+            curs.execute("DROP TABLE IF EXISTS fabnet_nodes")
+            curs.execute("CREATE TABLE fabnet_nodes(node_address TEXT, node_name TEXT, superiors TEXT, uppers TEXT)")
+            conn.commit()
+
+            curs.close()
+            conn.close()
 
         return packet
 
@@ -82,21 +86,13 @@ class TopologyCognition(OperationBase):
         if (node_address is None) or (superior_neighbours is None) or (upper_neighbours is None):
             raise Exception('TopologyCognition response packet is invalid! Packet: %s'%str(packet.to_dict()))
 
-        lock = FileLock(os.path.join(self.operator.home_dir, TOPOLOGY_FILE))
-        lock.acquire()
-        try:
-            obj = yaml.load(open(lock.path))
-            if obj is None:
-                nodes = []
-            else:
-                nodes = obj.get('nodes', [])
-            nodes.append({'address': node_address,
-                            'superiors': superior_neighbours,
-                            'uppers': upper_neighbours,
-                            'name': node_name})
+        conn = sqlite3.connect(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
 
-            yaml.add_representer(unicode, lambda dumper, value: dumper.represent_scalar(u'tag:yaml.org,2002:str', value))
-            yaml.dump({'nodes': nodes}, open(lock.path, 'w'))
-        finally:
-            lock.release()
+        curs = conn.cursor()
+        curs.execute("INSERT INTO fabnet_nodes VALUES ('%s', '%s', '%s', '%s')"% \
+                (node_address, node_name, ','.join(superior_neighbours), ','.join(upper_neighbours)))
+        conn.commit()
+
+        curs.close()
+        conn.close()
 

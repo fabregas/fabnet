@@ -104,6 +104,7 @@ class Operator:
 
         return self.fri_client.call(node_address, packet.to_dict())
 
+
     def call_network(self, packet):
         packet.sender = None
 

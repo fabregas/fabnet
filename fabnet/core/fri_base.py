@@ -83,7 +83,7 @@ class FabnetPacketResponse:
 
 
 class FriServer:
-    def __init__(self, hostname, port,  operator_obj, workers_count=2, server_name='fri-node'):
+    def __init__(self, hostname, port,  operator_obj, max_workers_count=20, server_name='fri-node'):
         self.hostname = hostname
         self.port = port
 
@@ -92,11 +92,9 @@ class FriServer:
         self.operator.set_node_name(server_name)
         self.stopped = True
 
-        self.__workers = []
-        for i in xrange(workers_count):
-            thread = FriWorker(self.queue, self.operator)
-            thread.setName('%s-FriWorkerThread#%i'%(server_name,i))
-            self.__workers.append( thread )
+        self.__workers_manager_thread = FriWorkersManager(self.queue, self.operator, \
+                    max_count=max_workers_count, workers_name=server_name)
+        self.__workers_manager_thread.setName('%s-FriWorkersManager'%(server_name,))
 
         self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.queue)
         self.__conn_handler_thread.setName('%s-FriConnectionHandler'%(server_name,))
@@ -106,11 +104,11 @@ class FriServer:
 
     def start(self):
         self.stopped = False
-        for worker in self.__workers:
-            worker.start()
 
+        self.__workers_manager_thread.start()
         self.__conn_handler_thread.start()
         self.__check_neighbours_thread.start()
+
         while self.__conn_handler_thread.status == S_PENDING:
             time.sleep(.1)
 
@@ -128,10 +126,6 @@ class FriServer:
 
         self.__conn_handler_thread.stop()
         self.__check_neighbours_thread.stop()
-
-        for thread in self.__workers:
-            self.queue.put(STOP_THREAD_EVENT)
-
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(1.0)
@@ -148,7 +142,8 @@ class FriServer:
                 s.close()
 
         #waiting threads finishing... 
-        self.queue.join()
+        self.__workers_manager_thread.stop()
+        self.__workers_manager_thread.join()
         self.stopped = True
 
 
@@ -165,9 +160,9 @@ class FriConnectionHandler(threading.Thread):
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            #self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self.sock.bind((self.hostname, self.port))
-            self.sock.listen(2)
+            self.sock.listen(5)
         except Exception, err:
             self.status = S_ERROR
             logger.error('[__bind_socket] %s'%err)
@@ -199,6 +194,122 @@ class FriConnectionHandler(threading.Thread):
     def stop(self):
         self.stopped = True
 
+
+class FriWorkersManager(threading.Thread):
+    def __init__(self, queue, operator, min_count=2, max_count=20, workers_name='unnamed'):
+        threading.Thread.__init__(self)
+        self.queue = queue
+        self.operator = operator
+        self.min_count = min_count
+        self.max_count = max_count
+        self.workers_name = workers_name
+
+        self.__threads = []
+        self.__lock = threading.Lock()
+        self.stopped = True
+
+    def run(self):
+        self.stopped = False
+        self.__lock.acquire()
+        try:
+            for i in range(self.min_count):
+                thread = FriWorker(self.queue, self.operator)
+                thread.setName('%s-FriWorkerThread#%i'%(self.workers_name,i))
+                self.__threads.append(thread)
+
+            for thread in self.__threads:
+                thread.start()
+        finally:
+            self.__lock.release()
+
+        logger.info('Started work threads (min_count)!')
+        not_empty_queue_count = 0
+        empty_queue_count = 0
+
+        while not self.stopped:
+            try:
+                time.sleep(.2)
+                if self.queue.qsize() > 0:
+                    not_empty_queue_count += 1
+                    empty_queue_count = 0
+                else:
+                    not_empty_queue_count = 0
+                    empty_queue_count += 1
+
+                if not_empty_queue_count == 5:
+                    self.__spawn_work_threads()
+                elif empty_queue_count == 5:
+                    self.__stop_work_thread()
+                    pass
+            except Exception, err:
+                ret_message = '%s error: %s' % (self.getName(), err)
+                logger.error(ret_message)
+
+        logger.info('Workers manager is stopped!')
+
+    def __spawn_work_threads(self):
+        logger.debug('starting new work thread')
+        self.__lock.acquire()
+        try:
+            if len(self.__threads) == self.max_count:
+                logger.warning('Need more work threads! But max value is %s'%self.max_count)
+                return
+
+            thread = FriWorker(self.queue, self.operator)
+            thread.setName('%s-FriWorkerThread#%i'%(self.workers_name, len(self.__threads)))
+            thread.start()
+            self.__threads.append(thread)
+        finally:
+            self.__lock.release()
+
+    def __stop_work_thread(self):
+        self.__lock.acquire()
+        try:
+            for_delete = []
+            for i, thread in enumerate(self.__threads):
+                if not thread.is_alive():
+                    for_delete.append(i)
+
+                for i in for_delete:
+                    del self.__threads[i]
+
+            if len(self.__threads) == self.min_count:
+                logger.debug('trying stopping worker but min threads count occured')
+                return
+
+            self.queue.put(STOP_THREAD_EVENT)
+        finally:
+            self.__lock.release()
+
+        logger.debug('stopped one work thread')
+
+
+    def stop(self):
+        self.stopped = True
+        self.__lock.acquire()
+        try:
+            act_count = 0
+            for thread in self.__threads:
+                if thread.is_alive():
+                    act_count += 1
+
+            for i in xrange(act_count):
+                self.queue.put(STOP_THREAD_EVENT)
+
+            self.queue.join()
+
+            for thread in self.__threads:
+                if thread.is_alive():
+                    thread.join()
+        finally:
+            self.__lock.release()
+
+    def get_workers_count(self):
+        self.__lock.acquire()
+        try:
+            return len(self.__threads)
+        finally:
+            self.__lock.release()
 
 
 class FriWorker(threading.Thread):
@@ -233,7 +344,7 @@ class FriWorker(threading.Thread):
 
         try:
             if sock:
-                sock.send(json.dumps({'ret_code':ret_code, 'ret_message':ret_message}))
+                sock.sendall(json.dumps({'ret_code':ret_code, 'ret_message':ret_message}))
                 sock.close()
         except Exception, err:
             logger.error('Sending result error: %s' %  err)
@@ -242,9 +353,11 @@ class FriWorker(threading.Thread):
 
     def run(self):
         logger.info('%s started!'%self.getName())
+
         while True:
             ret_code = RC_OK
             ret_message = ''
+            data = ''
 
             try:
                 sock = self.queue.get()
@@ -256,6 +369,7 @@ class FriWorker(threading.Thread):
                 data = self.handle_connection(sock)
 
                 packet = self.parse_message(data)
+
                 if not packet.has_key('ret_code'):
                     self.operator.process(FabnetPacketRequest(**packet))
                 else:
@@ -343,7 +457,8 @@ class FriClient:
 
             sock.settimeout(None)
 
-            sock.send(data)
+            sock.sendall(data)
+            sock.shutdown(socket.SHUT_WR)
 
             resp = sock.recv(BUF_SIZE)
 
