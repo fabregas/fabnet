@@ -35,7 +35,7 @@ class TestBigNework(unittest.TestCase):
 
                 addresses.append(address)
 
-                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, 'node_%s'%i, '/tmp'])
+                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, '/tmp'])
                 time.sleep(1.5)
 
                 PROCESSES.append(p)

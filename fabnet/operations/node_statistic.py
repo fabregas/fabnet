@@ -13,10 +13,10 @@ import os
 import resource
 from datetime import datetime
 from fabnet.core.operator_base import  OperationBase
-from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, \
+from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
                         ONE_DIRECT_NEIGHBOURS_COUNT
 from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS
-from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_base import FabnetPacketResponse
 
 
 class NodeStatisticOperation(OperationBase):

@@ -10,14 +10,11 @@ Copyright (C) 2012 Konstantin Andrusenko
 @date September 7, 2012
 """
 import os
-import yaml
 import sqlite3
 
 from fabnet.core.operator_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
-from fabnet.utils.logger import logger
-
+from fabnet.core.constants import NT_SUPERIOR, NT_UPPER
 
 TOPOLOGY_DB = 'fabnet_topology.db'
 

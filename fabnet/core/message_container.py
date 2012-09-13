@@ -44,16 +44,14 @@ class MessageContainer:
         finally:
             self.__lock.release()
 
-    def get(self, message_id, default=None, delete=False):
+    def get(self, message_id, default=None):
         self.__lock.acquire()
         try:
             return self.__messages.get(message_id, default)
         finally:
             self.__lock.release()
 
-
-#------------------------------------------------------------------------------
-
+'''
 if __name__ == '__main__':
     mc = MessageContainer(2)
     mc.put(1, 'im first')
@@ -71,3 +69,4 @@ if __name__ == '__main__':
     print 'inserted 4:', mc.put_safe(4, 'im fourth')
     print '4: ', mc.get(4)
 
+'''

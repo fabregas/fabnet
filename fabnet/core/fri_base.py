@@ -133,19 +133,19 @@ class FriServer:
         self.__conn_handler_thread.stop()
         self.__check_neighbours_thread.stop()
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(1.0)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1.0)
 
             if self.hostname == '0.0.0.0':
                 hostname = '127.0.0.1'
             else:
                 hostname = self.hostname
 
-            s.connect((hostname, self.port))
-            s.close()
+            sock.connect((hostname, self.port))
+            sock.close()
         except socket.error:
-            if s:
-                s.close()
+            if sock:
+                sock.close()
 
         #waiting threads finishing... 
         self.__workers_manager_thread.stop()
@@ -161,6 +161,7 @@ class FriConnectionHandler(threading.Thread):
         self.port = port
         self.stopped = True
         self.status = S_PENDING
+        self.sock = None
 
     def __bind_socket(self):
         try:
@@ -220,7 +221,7 @@ class FriWorkersManager(threading.Thread):
         try:
             for i in range(self.min_count):
                 thread = FriWorker(self.queue, self.operator)
-                thread.setName('%s-FriWorkerThread#%i'%(self.workers_name,i))
+                thread.setName('%s-FriWorkerThread#%i' % (self.workers_name, i))
                 self.__threads.append(thread)
 
             for thread in self.__threads:
@@ -376,7 +377,7 @@ class FriWorker(threading.Thread):
 
                     if not is_sync:
                         if ret_packet:
-                            self.operator._send_to_sender(pack.sender, ret_packet)
+                            self.operator.send_to_sender(pack.sender, ret_packet)
                     else:
                         if not ret_packet:
                             ret_packet = FabnetPacketResponse()
@@ -426,7 +427,7 @@ class CheckNeighboursThread(threading.Thread):
 
         while not self.stopped:
             try:
-                self.operator._check_neighbours()
+                self.operator.check_neighbours()
 
                 for i in range(CHECK_NEIGHBOURS_TIMEOUT):
                     if self.stopped:
@@ -493,7 +494,7 @@ class FriClient:
 
             return json_object.get('ret_code', RC_UNEXPECTED), json_object.get('ret_message', '')
         except Exception, err:
-            return RC_ERROR, '[FriClient] %s'%err
+            return RC_ERROR, '[FriClient] %s' % err
 
 
     def call_sync(self, node_address, packet, timeout=3.0):

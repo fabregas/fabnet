@@ -10,7 +10,6 @@ Copyright (C) 2011 Konstantin Andrusenko
 
 This module contains the fabnet logger initialization
 """
-import sys
 import logging, logging.handlers
 
 def init_logger():

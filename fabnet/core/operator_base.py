@@ -123,7 +123,7 @@ class Operator:
         finally:
             self.__lock.release()
 
-    def _check_neighbours(self):
+    def check_neighbours(self):
         ka_packet = FabnetPacketRequest(method=KEEP_ALIVE_METHOD, sender=self.self_address)
         superiors = self.get_neighbours(NT_SUPERIOR)
 
@@ -153,11 +153,11 @@ class Operator:
         try:
             cur_dt = datetime.now()
             for upper in uppers:
-                dt = self.__upper_keep_alives.get(upper, None)
-                if dt == None:
+                ka_dt = self.__upper_keep_alives.get(upper, None)
+                if ka_dt == None:
                     self.__upper_keep_alives[upper] = datetime.now()
                     continue
-                delta = cur_dt - dt
+                delta = cur_dt - ka_dt
                 if delta.total_seconds() >= KEEP_ALIVE_MAX_WAIT_TIME:
                     logger.info('No keep alive packets from upper neighbour %s. removing it...'%upper)
                     self.remove_neighbour(NT_UPPER, upper)
@@ -226,7 +226,7 @@ class Operator:
         s_packet = operation_obj.callback(packet, msg_info['sender'])
 
         if s_packet:
-            self._send_to_sender(msg_info['sender'], s_packet)
+            self.send_to_sender(msg_info['sender'], s_packet)
 
 
     def _send_to_neighbours(self, packet):
@@ -236,12 +236,10 @@ class Operator:
         for neighbour in neighbours:
             ret, message = self.fri_client.call(neighbour, packet.to_dict())
             if ret != RC_OK:
-                #node does not respond
-                #TODO: implement node removing from network 
                 logger.info('Neighbour %s does not respond! Details: %s'%(neighbour, message))
 
 
-    def _send_to_sender(self, sender, packet):
+    def send_to_sender(self, sender, packet):
         if sender is None:
             self.callback(packet)
             return

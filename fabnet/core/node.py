@@ -27,7 +27,7 @@ class Node:
         self.server = None
 
     def start(self, neighbour):
-        address = '%s:%s'%(self.hostname, self.port)
+        address = '%s:%s' % (self.hostname, self.port)
         operator = Operator(address, self.home_dir)
 
         for (op_name, op_class) in OPERATIONS_MAP.items():
