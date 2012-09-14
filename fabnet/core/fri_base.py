@@ -505,9 +505,18 @@ class FriClient:
 
             sock.sendall(data)
 
-            resp = sock.recv(BUF_SIZE)
+            data = ''
+            while True:
+                received = sock.recv(BUF_SIZE)
+                if not received:
+                    break
 
-            return resp
+                data += received
+
+                if len(received) < BUF_SIZE:
+                    break
+
+            return data
         finally:
             if sock:
                 sock.close()
