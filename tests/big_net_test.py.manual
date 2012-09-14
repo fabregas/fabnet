@@ -13,7 +13,7 @@ from fabnet.utils.logger import logger
 
 logger.setLevel(logging.DEBUG)
 
-NODES_COUNT = range(25, 26)
+NODES_COUNT = range(30, 31)
 
 class TestBigNework(unittest.TestCase):
     def test_00_create_network(self):
@@ -40,7 +40,7 @@ class TestBigNework(unittest.TestCase):
 
                 PROCESSES.append(p)
 
-            time.sleep(2)
+            time.sleep(5)
 
             p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', random.choice(addresses)])
 

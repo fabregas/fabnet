@@ -29,7 +29,7 @@ class OperException(Exception):
 
 
 class Operator:
-    def __init__(self, self_address, home_dir='/tmp/'):
+    def __init__(self, self_address, home_dir='/tmp/', certfile=None):
         self.__operations = {}
         self.msg_container = MessageContainer(MC_SIZE)
 
@@ -41,7 +41,7 @@ class Operator:
 
         self.superior_neighbours = []
         self.upper_neighbours = []
-        self.fri_client = FriClient()
+        self.fri_client = FriClient(certfile)
 
         self.__upper_keep_alives = {}
         self.__superior_keep_alives = {}

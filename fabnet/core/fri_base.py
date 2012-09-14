@@ -10,7 +10,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 This module contains the implementation of FriServer and FriClient classes.
 """
-
+import ssl
 import uuid
 import socket
 import threading
@@ -85,9 +85,11 @@ class FabnetPacketResponse:
 
 
 class FriServer:
-    def __init__(self, hostname, port,  operator_obj, max_workers_count=20, server_name='fri-node'):
+    def __init__(self, hostname, port,  operator_obj, max_workers_count=20, server_name='fri-node',
+                    certfile=None, keyfile=None):
         self.hostname = hostname
         self.port = port
+        self.certfile = certfile
 
         self.queue = Queue()
         self.operator = operator_obj
@@ -99,7 +101,7 @@ class FriServer:
                     max_count=max_workers_count, workers_name=server_name)
         self.__workers_manager_thread.setName('%s-FriWorkersManager'%(server_name,))
 
-        self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.queue)
+        self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.queue, certfile, keyfile)
         self.__conn_handler_thread.setName('%s-FriConnectionHandler'%(server_name,))
 
         self.__check_neighbours_thread = CheckNeighboursThread(self.operator)
@@ -134,6 +136,9 @@ class FriServer:
         self.__check_neighbours_thread.stop()
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if self.certfile:
+                sock = ssl.wrap_socket(sock, ca_certs=self.certfile,
+                                    cert_reqs=ssl.CERT_REQUIRED)
             sock.settimeout(1.0)
 
             if self.hostname == '0.0.0.0':
@@ -154,7 +159,7 @@ class FriServer:
 
 
 class FriConnectionHandler(threading.Thread):
-    def __init__(self, host, port, queue):
+    def __init__(self, host, port, queue, certfile, keyfile):
         threading.Thread.__init__(self)
         self.queue = queue
         self.hostname = host
@@ -162,6 +167,8 @@ class FriConnectionHandler(threading.Thread):
         self.stopped = True
         self.status = S_PENDING
         self.sock = None
+        self.certfile = certfile
+        self.keyfile = keyfile
 
     def __bind_socket(self):
         try:
@@ -186,6 +193,15 @@ class FriConnectionHandler(threading.Thread):
         while not self.stopped:
             try:
                 (sock, addr) = self.sock.accept()
+
+                if self.certfile:
+                    try:
+                        sock = ssl.wrap_socket(sock, server_side=True,
+                                    certfile=self.certfile,
+                                    keyfile=self.keyfile)
+                    except Exception, err:
+                        sock.close()
+                        raise err
 
                 if self.stopped:
                     sock.close()
@@ -396,9 +412,15 @@ class FriWorker(threading.Thread):
                         sock.close()
                 except Exception, err:
                     logger.error("Can't send error message to socket: %s"%err)
+                    self._close_socket(sock)
             finally:
                 self.queue.task_done()
 
+    def _close_socket(self, sock):
+        try:
+            sock.close()
+        except Exception, err:
+            logger.error('Closing client socket error: %s'%err)
 
     def parse_message(self, data):
         raw_message = json.loads(data)
@@ -447,6 +469,8 @@ class CheckNeighboursThread(threading.Thread):
 
 class FriClient:
     """class for calling asynchronous operation over FRI protocol"""
+    def __init__(self, certfile=None):
+        self.certfile = certfile
 
     def __int_call(self, node_address, packet, timeout=3.0):
         sock = None
@@ -471,13 +495,15 @@ class FriClient:
                 data = json.dumps(packet)
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if self.certfile:
+                sock = ssl.wrap_socket(sock, ca_certs=self.certfile,
+                                    cert_reqs=ssl.CERT_REQUIRED)
             sock.settimeout(timeout)
             sock.connect((hostname, port))
 
             sock.settimeout(None)
 
             sock.sendall(data)
-            sock.shutdown(socket.SHUT_WR)
 
             resp = sock.recv(BUF_SIZE)
 
