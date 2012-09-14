@@ -1,0 +1,39 @@
+#!/usr/bin/python
+import sys
+import json
+from fabnet.core.fri_base import FriClient, FabnetPacketRequest
+
+def usage():
+    print('Usage: %s <operation> <node address> [parameters in json format]'%sys.argv[0])
+
+def call_operation(operation, node_address, params):
+    try:
+        params = json.loads(params)
+    except Exception, err:
+        print('Parameters are invalid! Details: %s'%err)
+        return 1
+    packet = FabnetPacketRequest(method=operation, sender=None, parameters=params)
+    client = FriClient()
+    rcode, rmsg = client.call(node_address, packet.to_dict())
+
+    if rcode == 0:
+        print('Operation "%s" is started over fabnet.'%operation)
+    else:
+        print('Operation "%s" does not started! Details: %s'%(operation, rmsg))
+
+    return rcode
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 3:
+        usage()
+        sys.exit(1)
+
+    operation = sys.argv[1]
+    node_address = sys.argv[2]
+    params = '{}'
+    if len(sys.argv) > 3:
+        params = sys.argv[3]
+
+    rcode = call_operation(operation, node_address, params)
+    sys.exit(rcode)

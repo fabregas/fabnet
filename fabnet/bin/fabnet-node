@@ -1,0 +1,51 @@
+#!/usr/bin/python
+
+import os
+import sys
+import signal
+import time
+
+from fabnet.core.node import Node
+from fabnet.utils.logger import logger
+
+fabnet_node = None
+started = True
+
+def stop(s, p):
+    global fabnet_node, started
+    try:
+        fabnet_node.stop()
+        started = False
+    except Exception, err:
+        logger.error('Stoping fabnet node error: %s'%err)
+
+
+def start(args):
+    try:
+        global fabnet_node, started
+        if len(args) != 4:
+            logger.error('Usage: fabnet-node <node address> <neighbour address> <node_name> <home_dir>')
+            sys.exit(1)
+
+        hostname, port = args[0].split(':')
+        port = int(port)
+        neighbour = args[1]
+        node_name = args[2]
+        home_dir = args[3]
+
+        fabnet_node = Node(hostname, port, home_dir, node_name)
+        started = fabnet_node.start(neighbour)
+        if not started:
+            logger.error('Node does not started!')
+            sys.exit(1)
+
+        signal.signal(signal.SIGINT, stop)
+        while started:
+            time.sleep(1)
+    except Exception, err:
+        logger.error('fabnet node error: %s. exit!'%err)
+        stop(None, None)
+        sys.exit(1)
+
+if __name__ == '__main__':
+    start(sys.argv[1:])
