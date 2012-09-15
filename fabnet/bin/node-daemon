@@ -1,0 +1,48 @@
+#!/usr/bin/python
+import os
+import sys
+
+NODE_SCRIPT = os.path.abspath(os.path.join(os.path.dirname(__file__), 'fabnet-node'))
+PYPATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
+GIT_SERVER = os.path.join(PYPATH, 'gitserver/git_server.py')
+
+DEFAULT_PORT = 1987
+DEFAULT_HOME = '~/fabnet_node_home'
+
+
+def usage():
+    print('Usage: %s start <neighbour node>[:port]'%sys.argv[0])
+    print('           or')
+    print('       %s stop'%sys.argv[0])
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        usage()
+        sys.exit(1)
+
+    if sys.argv[1] == 'start':
+        neighbour = sys.argv[2]
+        if ':' not in neighbour:
+            neighbour = '%s:%s'%(neighbour, DEFAULT_PORT)
+
+        ip_addr = os.environ.get('FABNET_NODE_HOST', '0.0.0.0')
+        port = os.environ.get('FABNET_NODE_PORT', DEFAULT_PORT)
+        node_name = os.environ.get('FABNET_NODE_NAME', 'unnamed-node')
+        home_dir = os.environ.get('FABNET_NODE_HOME', DEFAULT_HOME)
+        node_address = '%s:%s'%(ip_addr, port)
+
+        if not os.path.exists(home_dir):
+            os.makedirs(home_dir)
+
+        os.system('PYTHONPATH="%s" nohup %s %s %s %s %s > /dev/null &' \
+                 %(PYPATH, NODE_SCRIPT, node_address, neighbour, node_name, home_dir))
+
+        os.system('nohup python %s &'% GIT_SERVER)
+    elif sys.argv[1] == 'stop':
+        os.system('killall -s INT fabnet-node')
+        os.system('killall -s INT git_server.py')
+    else:
+        usage()
+        sys.exit(1)
+
