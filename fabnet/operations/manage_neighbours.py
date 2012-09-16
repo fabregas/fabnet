@@ -10,7 +10,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 @date September 7, 2012
 """
 
-from fabnet.core.operator_base import OperationBase
+from fabnet.core.operation_base import OperationBase
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
                         ONE_DIRECT_NEIGHBOURS_COUNT
 from fabnet.core.fri_base import FabnetPacketResponse

@@ -12,7 +12,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 import os
 import sqlite3
 
-from fabnet.core.operator_base import  OperationBase
+from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER
 

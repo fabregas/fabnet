@@ -12,7 +12,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 import os
 import resource
 from datetime import datetime
-from fabnet.core.operator_base import  OperationBase
+from fabnet.core.operation_base import  OperationBase
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
                         ONE_DIRECT_NEIGHBOURS_COUNT
 from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS

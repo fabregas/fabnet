@@ -4,12 +4,11 @@ Copyright (C) 2012 Konstantin Andrusenko
     See the documentation for further information on copyrights,
     or contact the author. All Rights Reserved.
 
-@package fabnet.core.operator_base
+@package fabnet.core.operator
 @author Konstantin Andrusenko
 @date August 22, 2012
 
-This module contains the Operator class implementation and
-base OperationBase interface
+This module contains the Operator class implementation
 """
 import copy
 import threading
@@ -17,6 +16,7 @@ import traceback
 import time
 from datetime import datetime
 
+from fabnet.core.operation_base import OperationBase
 from fabnet.core.message_container import MessageContainer
 from fabnet.core.constants import MC_SIZE
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest, FabnetPacketResponse
@@ -104,6 +104,9 @@ class Operator:
             self.__lock.release()
 
     def register_operation(self, op_name, op_class):
+        if not issubclass(op_class, OperationBase):
+            raise OperException('Class %s does not inherit OperationBase class'%op_class)
+
         self.__operations[op_name] = op_class(self)
 
     def call_node(self, node_address, packet):
@@ -298,63 +301,4 @@ class Operator:
             logger.error('[Operator.send_back] %s %s'%(rcode, rmsg))
 
 
-
-
-
-class OperationBase:
-    def __init__(self, operator):
-        self.operator = operator
-        self.__lock = threading.Lock()
-
-    def before_resend(self, packet):
-        """In this method should be implemented packet transformation
-        for resend it to neighbours
-
-        @params packet - object of FabnetPacketRequest class
-        @return object of FabnetPacketRequest class
-                or None for disabling packet resend to neigbours
-        """
-        pass
-
-    def process(self, packet):
-        """In this method should be implemented logic of processing
-        reuqest packet from sender node
-
-        @param packet - object of FabnetPacketRequest class
-        @return object of FabnetPacketResponse
-                or None for disabling packet response to sender
-        """
-        pass
-
-    def callback(self, packet, sender=None):
-        """In this method should be implemented logic of processing
-        response packet from requested node
-
-        @param packet - object of FabnetPacketResponse class
-        @param sender - address of sender node.
-        If sender == None then current node is operation initiator
-        @return object of FabnetPacketResponse
-                that should be resended to current node requestor
-                or None for disabling packet resending
-        """
-        pass
-
-    def _init_operation(self, node_address, operation, parameters):
-        """Initiate new operation"""
-        req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, parameters=parameters)
-        self.operator.call_node(node_address, req)
-
-    def _lock(self):
-        self.__lock.acquire()
-
-    def _unlock(self):
-        self.__lock.release()
-
-    def _cache_response(self, packet):
-        """Cache response from node for using it from other operations objects"""
-        self.operator.update_message(packet.message_id, packet.from_node, packet.ret_parameters)
-
-    def _get_cached_response(self, message_id, from_node):
-        """Get cached response from some node"""
-        return self.operator.get_message_item(message_id,from_node)
 
