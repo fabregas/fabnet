@@ -14,6 +14,7 @@ base OperationBase interface
 import copy
 import threading
 import traceback
+import time
 from datetime import datetime
 
 from fabnet.core.message_container import MessageContainer
@@ -25,6 +26,9 @@ from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, \
                 KEEP_ALIVE_MAX_WAIT_TIME
 
 class OperException(Exception):
+    pass
+
+class OperTimeoutException(OperException):
     pass
 
 
@@ -106,6 +110,7 @@ class Operator:
         self.msg_container.put(packet.message_id,
                         {'operation': packet.method,
                             'sender': None,
+                            'responses_count': 0,
                             'datetime': datetime.now()})
 
         return self.fri_client.call(node_address, packet.to_dict())
@@ -177,6 +182,7 @@ class Operator:
             inserted = self.msg_container.put_safe(packet.message_id,
                             {'operation': packet.method,
                              'sender': packet.sender,
+                             'responses_count': 0,
                              'datetime': datetime.now()})
 
             if not inserted:
@@ -200,10 +206,12 @@ class Operator:
             s_packet = operation_obj.process(packet)
             if s_packet:
                 s_packet.message_id = packet.message_id
+                s_packet.from_node = self.self_address
 
             return s_packet
         except Exception, err:
-            err_packet = FabnetPacketResponse(message_id=packet.message_id,
+            err_packet = FabnetPacketResponse(from_node=self.self_address,
+                            message_id=packet.message_id,
                             ret_code=1, ret_message= '[Operator.process] %s'%err)
             logger.write = logger.debug
             traceback.print_exc(file=logger)
@@ -216,17 +224,58 @@ class Operator:
         @param packet - object of FabnetPacketResponse class
         """
         msg_info = self.msg_container.get(packet.message_id)
-        if not msg_info:
-            raise OperException('Message with ID %s does not found!'%packet.message_id)
+        self.__lock.acquire()
+        try:
+            if not msg_info:
+                raise OperException('Message with ID %s does not found!'%packet.message_id)
 
-        operation_obj = self.__operations.get(msg_info['operation'], None)
+            msg_info['responses_count'] += 1
+            operation = msg_info['operation']
+            sender = msg_info['sender']
+        finally:
+            self.__lock.release()
+
+        operation_obj = self.__operations.get(operation, None)
         if operation_obj is None:
-            raise OperException('Method "%s" does not implemented!'%msg_info['operation'])
+            raise OperException('Method "%s" does not implemented!'%operation)
 
-        s_packet = operation_obj.callback(packet, msg_info['sender'])
+        s_packet = operation_obj.callback(packet, sender)
 
         if s_packet:
-            self.send_to_sender(msg_info['sender'], s_packet)
+            self.send_to_sender(sender, s_packet)
+
+    def wait_response(self, message_id, timeout, response_count=1):
+        for i in xrange(timeout*10):
+            msg_info = self.msg_container.get(message_id)
+            self.__lock.acquire()
+            try:
+                if msg_info['responses_count'] >= response_count:
+                    break
+            finally:
+                self.__lock.release()
+
+            time.sleep(.1)
+        else:
+            raise OperTimeoutException('Waiting %s response is timeouted'% message_id)
+
+
+    def update_message(self, message_id, key, value):
+        msg_info = self.msg_container.get(message_id)
+        self.__lock.acquire()
+        try:
+            msg_info[key] = value
+        finally:
+            self.__lock.release()
+
+
+    def get_message_item(self, message_id, key):
+        msg_info = self.msg_container.get(message_id)
+        self.__lock.acquire()
+        try:
+            item = msg_info.get(key, None)
+            return copy.copy(item)
+        finally:
+            self.__lock.release()
 
 
     def _send_to_neighbours(self, packet):
@@ -301,4 +350,11 @@ class OperationBase:
     def _unlock(self):
         self.__lock.release()
 
+    def _cache_response(self, packet):
+        """Cache response from node for using it from other operations objects"""
+        self.operator.update_message(packet.message_id, packet.from_node, packet.ret_parameters)
+
+    def _get_cached_response(self, message_id, from_node):
+        """Get cached response from some node"""
+        return self.operator.get_message_item(message_id,from_node)
 

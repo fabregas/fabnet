@@ -58,7 +58,7 @@ class TestAbstractOperator(unittest.TestCase):
             rcode, rmsg = operator.call_node('127.0.0.1:1986', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
 
-            time.sleep(1)
+            operator.wait_response(323232, 1)
 
             self.assertEqual(os.path.exists('/tmp/server1.out'), True)
             self.assertEqual(os.path.exists('/tmp/server2.out'), True)
@@ -66,7 +66,7 @@ class TestAbstractOperator(unittest.TestCase):
             request = json.loads(open('/tmp/server1.out').read())
             response = json.loads(open('/tmp/server2.out').read())
             self.assertEqual(request, packet)
-            good_resp = {'message_id': 323232,
+            good_resp = {'from_node': '127.0.0.1:1986','message_id': 323232,
                 'ret_code': 0,
                 'ret_message': 'ok',
                 'ret_parameters': {'message': 'test message'}}
@@ -105,7 +105,7 @@ class TestAbstractOperator(unittest.TestCase):
             rcode, rmsg = operator.call_node('127.0.0.1:1986', packet_obj)
             self.assertEqual(rcode, 1, rmsg)
 
-            time.sleep(1)
+            time.sleep(.1)
         finally:
             if server1:
                 server1.stop()

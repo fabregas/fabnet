@@ -75,12 +75,14 @@ class FabnetPacketResponse:
         self.ret_code = packet.get('ret_code', RC_OK)
         self.ret_message = packet.get('ret_message', '')
         self.ret_parameters = packet.get('ret_parameters', {})
+        self.from_node = packet.get('from_node', None)
 
     def to_dict(self):
         return {'message_id': self.message_id,
                 'ret_code': self.ret_code,
                 'ret_message': self.ret_message,
-                'ret_parameters': self.ret_parameters}
+                'ret_parameters': self.ret_parameters,
+                'from_node': self.from_node}
 
 
 

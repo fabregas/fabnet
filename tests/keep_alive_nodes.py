@@ -6,7 +6,7 @@ import json
 import random
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
-constants.KEEP_ALIVE_MAX_WAIT_TIME = 0.5
+constants.KEEP_ALIVE_MAX_WAIT_TIME = 0.2
 
 from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.operator_base import Operator, OperationBase
@@ -47,9 +47,9 @@ class TestKeepAlive(unittest.TestCase):
             rcode, rmsg = operator1.call_node('127.0.0.1:1986', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
 
-            time.sleep(1)
+            operator1.wait_response(323232, 1)
             server1.stop()
-            time.sleep(3.5)
+            time.sleep(3)
             server1 = None
 
             self.assertEqual(operator.upper_neighbours, ['127.0.0.1:1987'])
