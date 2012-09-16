@@ -18,23 +18,27 @@ from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
 
 class Node:
-    def __init__(self, hostname, port, home_dir, node_name='anonymous_node'):
+    def __init__(self, hostname, port, home_dir, node_name='anonymous_node', certfile=None, keyfile=None):
         self.hostname = hostname
         self.port = port
         self.home_dir = home_dir
         self.node_name = node_name
+        self.certfile = certfile
+        self.keyfile = keyfile
 
         self.server = None
 
     def start(self, neighbour):
         address = '%s:%s' % (self.hostname, self.port)
-        operator = Operator(address, self.home_dir)
+        operator = Operator(address, self.home_dir, self.certfile)
 
         for (op_name, op_class) in OPERATIONS_MAP.items():
             operator.register_operation(op_name, op_class)
 
         self.server = FriServer(self.hostname, self.port, operator, \
-                                    server_name=self.node_name)
+                                    server_name=self.node_name, \
+                                    certfile=self.certfile, \
+                                    keyfile=self.keyfile)
 
         started = self.server.start()
         if not started:

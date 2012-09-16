@@ -23,8 +23,8 @@ def stop(s, p):
 def start(args):
     try:
         global fabnet_node, started
-        if len(args) != 4:
-            logger.error('Usage: fabnet-node <node address> <neighbour address> <node_name> <home_dir>')
+        if len(args) < 4:
+            logger.error('Usage: fabnet-node <node address> <neighbour address> <node_name> <home_dir> [<cert file> <key file>]')
             sys.exit(1)
 
         hostname, port = args[0].split(':')
@@ -32,8 +32,12 @@ def start(args):
         neighbour = args[1]
         node_name = args[2]
         home_dir = args[3]
+        cert_file = key_file = None
+        if len(args) == 6:
+            cert_file = args[4]
+            key_file = args[5]
 
-        fabnet_node = Node(hostname, port, home_dir, node_name)
+        fabnet_node = Node(hostname, port, home_dir, node_name, cert_file, key_file)
         started = fabnet_node.start(neighbour)
         if not started:
             logger.error('Node does not started!')
