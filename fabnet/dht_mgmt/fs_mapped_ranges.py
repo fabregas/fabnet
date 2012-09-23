@@ -98,6 +98,8 @@ class FSHashRanges:
     def discovery_range(save_path):
         items = os.listdir(save_path)
 
+        discovered_ranges = []
+        max_range = None
         for item in items:
             parts = item.split('_')
             if len(parts) != 2:
@@ -114,10 +116,22 @@ class FSHashRanges:
                 continue
 
             hash_range = FSHashRanges(start_key, end_key, save_path)
-            #if hash_range.get_range_size() > 0:
-            return hash_range
+            if not max_range:
+                max_range = hash_range
+            elif hash_range.length() > max_range.length():
+                max_range = hash_range
 
-        return FSHashRanges(MIN_HASH, MAX_HASH, save_path)
+            discovered_ranges.append(hash_range)
+
+        if not max_range:
+            return FSHashRanges(MIN_HASH, MAX_HASH, save_path)
+
+        for h_range in discovered_ranges:
+            if h_range != max_range:
+                h_range.move_to_trash()
+
+        max_range.restore_from_trash()
+        return max_range
 
 
     def __init__(self, start, end, save_path):
@@ -153,10 +167,16 @@ class FSHashRanges:
     def get_end(self):
         return self.__end
 
+    def length(self):
+        return self.__end - self.__start
+
     def is_max_range(self):
         if self.__start == MIN_HASH and self.__end == MAX_HASH:
             return True
         return False
+
+    def get_range_dir(self):
+        return self.__range_dir
 
     def is_equal(self, another_range):
         if self.__start == another_range.get_start() and \
@@ -169,12 +189,11 @@ class FSHashRanges:
             return True
         return False
 
-    def _get_range_dir(self):
-        return self.__range_dir
-
-    def _move_from(self, file_path):
+    def _move_from(self, file_path, rewrite=True):
         dest = os.path.join(self.__range_dir, os.path.basename(file_path))
         if os.path.exists(dest):
+            if not rewrite:
+                return
             os.remove(dest)
 
         shutil.move(file_path, self.__range_dir)
@@ -247,7 +266,7 @@ class FSHashRanges:
 
     def __join_data(self, child_ranges):
         for child_range in child_ranges:
-            child_range_dir = child_range._get_range_dir()
+            child_range_dir = child_range.get_range_dir()
             if not os.path.exists(child_range_dir):
                 continue
             files = os.listdir(child_range_dir)
@@ -430,7 +449,7 @@ class FSHashRanges:
                 logger.info('Restore progress: %i'%(cnt/perc_part) + '0%...')
 
             if self._in_range(digest):
-                self._move_from(os.path.join(self.__trash_dir, digest))
+                self._move_from(os.path.join(self.__trash_dir, digest), rewrite=False)
 
         logger.info('Range is restored from trash!')
 

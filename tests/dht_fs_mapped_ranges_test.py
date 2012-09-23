@@ -52,6 +52,23 @@ class TestFSMappedRanges(unittest.TestCase):
         if os.path.exists(TEST_FS_RANGE_DIR):
             shutil.rmtree(TEST_FS_RANGE_DIR)
 
+    def test01_discovery_ranges(self):
+        fs_range = FSHashRanges(START_RANGE_HASH, END_RANGE_HASH, TEST_FS_RANGE_DIR)
+        fs_range.put(100, 'Test data #1')
+        fs_range.put(900, 'Test data #2')
+        fs_range.put(10005000, 'Test data #3')
+        fs_range.split_range(0, 100500)
+
+        discovered_range = FSHashRanges.discovery_range(TEST_FS_RANGE_DIR)
+        self.assertEqual(discovered_range.get_start(), long(START_RANGE_HASH, 16))
+        self.assertEqual(discovered_range.get_end(), long(END_RANGE_HASH, 16))
+
+        range_dir = discovered_range.get_range_dir()
+        self.assertTrue(os.path.exists(os.path.join(range_dir, '%040x'%100)))
+        self.assertTrue(os.path.exists(os.path.join(range_dir, '%040x'%900)))
+        self.assertTrue(os.path.exists(os.path.join(range_dir, '%040x'%10005000)))
+
+
     def test02_main(self):
         fs_ranges = FSHashRanges(START_RANGE_HASH, END_RANGE_HASH, TEST_FS_RANGE_DIR)
 
