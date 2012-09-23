@@ -53,10 +53,15 @@ class OperationBase:
         """
         pass
 
-    def _init_operation(self, node_address, operation, parameters):
+    def _init_operation(self, node_address, operation, parameters, sync=False):
         """Initiate new operation"""
+        req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, parameters=parameters, sync=sync)
+        return self.operator.call_node(node_address, req, sync)
+
+    def _init_network_operation(self, operation, parameters):
+        """Initiate new operation over fabnet network"""
         req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, parameters=parameters)
-        self.operator.call_node(node_address, req)
+        self.operator.call_network(req)
 
     def _lock(self):
         self.__lock.acquire()

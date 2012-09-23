@@ -12,8 +12,7 @@ This module contains the Node class implementation
 """
 
 from fabnet.core.fri_base import FriServer
-from fabnet.core.operator import Operator
-from fabnet.operations import OPERATIONS_MAP
+from fabnet.settings import OPERATOR, OPERATIONS_MAP
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
 
@@ -30,7 +29,7 @@ class Node:
 
     def start(self, neighbour):
         address = '%s:%s' % (self.hostname, self.port)
-        operator = Operator(address, self.home_dir, self.certfile)
+        operator = OPERATOR(address, self.home_dir, self.certfile)
 
         for (op_name, op_class) in OPERATIONS_MAP.items():
             operator.register_operation(op_name, op_class)

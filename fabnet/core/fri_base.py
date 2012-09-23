@@ -63,10 +63,10 @@ class FabnetPacketRequest:
                 'sync': self.sync}
 
     def __str__(self):
-        return str(self.to_dict())
+        return str(self.__repr__())
 
     def __repr__(self):
-        return str(self.to_dict())
+        return '{%s}[%s] %s'%(self.message_id, self.sender, self.method)
 
 
 class FabnetPacketResponse:

@@ -52,6 +52,12 @@ class Operator:
 
         self.start_datetime = datetime.now()
 
+    def _lock(self):
+        self.__lock.acquire()
+
+    def _unlock(self):
+        self.__lock.release()
+
     def set_node_name(self, node_name):
         self.node_name = node_name
 
@@ -109,14 +115,17 @@ class Operator:
 
         self.__operations[op_name] = op_class(self)
 
-    def call_node(self, node_address, packet):
+    def call_node(self, node_address, packet, sync=False):
         self.msg_container.put(packet.message_id,
                         {'operation': packet.method,
                             'sender': None,
                             'responses_count': 0,
                             'datetime': datetime.now()})
 
-        return self.fri_client.call(node_address, packet.to_dict())
+        if sync:
+            return self.fri_client.call_sync(node_address, packet.to_dict())
+        else:
+            return self.fri_client.call(node_address, packet.to_dict())
 
 
     def call_network(self, packet):

@@ -8,10 +8,4 @@ Copyright (C) 2012 Konstantin Andrusenko
 @author Konstantin Andrusenko
 @date September 7, 2012
 """
-from .manage_neighbours import ManageNeighbour
-from .discovery_operation import DiscoveryOperation
-from .topology_cognition import TopologyCognition
 
-OPERATIONS_MAP = {'ManageNeighbour': ManageNeighbour,
-                    'DiscoveryOperation': DiscoveryOperation,
-                    'TopologyCognition': TopologyCognition}
