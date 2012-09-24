@@ -9,6 +9,8 @@ import random
 from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.dht_mgmt import constants
 constants.WAIT_RANGE_TIMEOUT = 0.1
+constants.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT = 0.1
+constants.WAIT_RANGES_TIMEOUT = 0.3
 from fabnet.dht_mgmt.dht_operator import DHTOperator
 from fabnet.dht_mgmt import dht_operator
 from fabnet.dht_mgmt.operations import split_range_request
@@ -24,18 +26,20 @@ from fabnet.dht_mgmt.constants import DS_NORMALWORK
 
 logger.setLevel(logging.DEBUG)
 
+MAX_HASH = constants.MAX_HASH
 
 class TestServerThread(threading.Thread):
-    def __init__(self, port, home_dir):
+    def __init__(self, port, home_dir, init_node=False):
         threading.Thread.__init__(self)
         self.port = port
         self.home_dir = home_dir
         self.stopped = True
         self.operator = None
+        self.init_node = init_node
 
     def run(self):
         address = '127.0.0.1:%s'%self.port
-        operator = DHTOperator(address, self.home_dir)
+        operator = DHTOperator(address, self.home_dir, is_init_node=self.init_node)
         self.operator = operator
 
         operator.register_operation('GetRangeDataRequest', GetRangeDataRequestOperation)
@@ -75,7 +79,7 @@ class TestDHTInitProcedure(unittest.TestCase):
                 shutil.rmtree(home2)
             os.mkdir(home2)
 
-            server = TestServerThread(1986, home1)
+            server = TestServerThread(1986, home1, init_node=True)
             server.start()
 
             server1 = TestServerThread(1987, home2)
@@ -84,26 +88,24 @@ class TestDHTInitProcedure(unittest.TestCase):
             time.sleep(1)
             self.assertNotEqual(server1.operator.status, DS_NORMALWORK)
 
-            packet_obj = FabnetPacketRequest(message_id=100500, method='GetRangesTable', sender='127.0.0.1:1987')
-            rcode, rmsg = server1.operator.call_node('127.0.0.1:1986', packet_obj)
-            self.assertEqual(rcode, 0, rmsg)
-            server1.operator.wait_response(100500, 1)
-
+            server1.operator.set_neighbour(2, 'fake_node_addr:8080')
+            time.sleep(.1)
+            server1.operator.set_neighbour(1, '127.0.0.1:1986')
             time.sleep(1)
 
             node86_range = server.operator.get_dht_range()
             node87_range = server1.operator.get_dht_range()
             self.assertEqual(node86_range.get_start(), 0L)
-            self.assertEqual(node86_range.get_end(), pow(2, 128)/2-1)
-            self.assertEqual(node87_range.get_start(), pow(2, 128)/2)
-            self.assertEqual(node87_range.get_end(), pow(2, 128))
+            self.assertEqual(node86_range.get_end(), MAX_HASH/2-1)
+            self.assertEqual(node87_range.get_start(), MAX_HASH/2)
+            self.assertEqual(node87_range.get_end(), MAX_HASH)
 
             table = server.operator.ranges_table.copy()
             self.assertEqual(len(table), 2)
             self.assertEqual(table[0].start, 0)
-            self.assertEqual(table[0].end, pow(2, 128)/2-1)
-            self.assertEqual(table[1].start, pow(2, 128)/2)
-            self.assertEqual(table[1].end, pow(2, 128))
+            self.assertEqual(table[0].end, MAX_HASH/2-1)
+            self.assertEqual(table[1].start, MAX_HASH/2)
+            self.assertEqual(table[1].end, MAX_HASH)
 
             self.assertEqual(server1.operator.status, DS_NORMALWORK)
         finally:
@@ -126,7 +128,7 @@ class TestDHTInitProcedure(unittest.TestCase):
                 shutil.rmtree(home2)
             os.mkdir(home2)
 
-            server = TestServerThread(1986, home1)
+            server = TestServerThread(1986, home1, init_node=True)
             server.start()
 
             server1 = TestServerThread(1987, home2)
@@ -137,14 +139,11 @@ class TestDHTInitProcedure(unittest.TestCase):
             dht_range = server.operator.get_dht_range()
             dht_operator.DHT_CYCLE_TRY_COUNT = 10
             split_range_request.ALLOW_FREE_SIZE_PERCENTS = 0
-            dht_range.put(pow(2, 128)/2+100, 'Hello, fabregas! '*100)
+            dht_range.put(MAX_HASH/2+100, 'Hello, fabregas! '*100)
             dht_range.split_range(0, 100500)
 
 
-            packet_obj = FabnetPacketRequest(message_id=100500, method='GetRangesTable', sender='127.0.0.1:1987')
-            rcode, rmsg = server1.operator.call_node('127.0.0.1:1986', packet_obj)
-            self.assertEqual(rcode, 0, rmsg)
-            server1.operator.wait_response(100500, 1)
+            server1.operator.set_neighbour(2, '127.0.0.1:1986')
             time.sleep(.2)
             dht_range.join_subranges()
 
@@ -157,16 +156,16 @@ class TestDHTInitProcedure(unittest.TestCase):
             node86_range = server.operator.get_dht_range()
             node87_range = server1.operator.get_dht_range()
             self.assertEqual(node86_range.get_start(), 0L)
-            self.assertEqual(node86_range.get_end(), pow(2, 128)/2-1)
-            self.assertEqual(node87_range.get_start(), pow(2, 128)/2)
-            self.assertEqual(node87_range.get_end(), pow(2, 128))
+            self.assertEqual(node86_range.get_end(), MAX_HASH/2-1)
+            self.assertEqual(node87_range.get_start(), MAX_HASH/2)
+            self.assertEqual(node87_range.get_end(), MAX_HASH)
 
             table = server.operator.ranges_table.copy()
             self.assertEqual(len(table), 2)
             self.assertEqual(table[0].start, 0)
-            self.assertEqual(table[0].end, pow(2, 128)/2-1)
-            self.assertEqual(table[1].start, pow(2, 128)/2)
-            self.assertEqual(table[1].end, pow(2, 128))
+            self.assertEqual(table[0].end, MAX_HASH/2-1)
+            self.assertEqual(table[1].start, MAX_HASH/2)
+            self.assertEqual(table[1].end, MAX_HASH)
 
             self.assertEqual(server1.operator.status, DS_NORMALWORK)
         finally:

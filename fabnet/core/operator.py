@@ -33,7 +33,7 @@ class OperTimeoutException(OperException):
 
 
 class Operator:
-    def __init__(self, self_address, home_dir='/tmp/', certfile=None):
+    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False):
         self.__operations = {}
         self.msg_container = MessageContainer(MC_SIZE)
 
@@ -51,6 +51,10 @@ class Operator:
         self.__superior_keep_alives = {}
 
         self.start_datetime = datetime.now()
+        self.is_init_node = is_init_node
+
+    def stop(self):
+        pass
 
     def _lock(self):
         self.__lock.acquire()

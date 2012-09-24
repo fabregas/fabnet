@@ -24,12 +24,14 @@ def start(args):
     try:
         global fabnet_node, started
         if len(args) < 4:
-            logger.error('Usage: fabnet-node <node address> <neighbour address> <node_name> <home_dir> [<cert file> <key file>]')
+            logger.error('Usage: fabnet-node <node address> <neighbour address>|init-fabnet <node_name> <home_dir> [<cert file> <key file>]')
             sys.exit(1)
 
         hostname, port = args[0].split(':')
         port = int(port)
         neighbour = args[1]
+        if neighbour == 'init-fabnet':
+            neighbour = None
         node_name = args[2]
         home_dir = args[3]
         cert_file = key_file = None

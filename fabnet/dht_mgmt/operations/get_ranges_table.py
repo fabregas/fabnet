@@ -23,6 +23,9 @@ class GetRangesTableOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
+        #if sef.operator.status == DS_INITIALIZE:
+        #    return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Node is not initialized yet!')
+
         ranges_table = self.operator.ranges_table.dump()
 
         logger.debug('Sending ranges table to %s'%packet.sender)

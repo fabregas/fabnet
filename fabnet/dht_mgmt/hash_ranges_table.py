@@ -2,7 +2,6 @@ import threading
 import pickle
 import copy
 
-
 class RangeException(Exception):
     pass
 
@@ -24,6 +23,13 @@ class HashRangesTable:
     def __init__(self):
         self.__ranges = []
         self.__lock = threading.RLock()
+
+    def empty(self):
+        self.__lock.acquire()
+        try:
+            return not bool(self.__ranges)
+        finally:
+            self.__lock.release()
 
     def append(self, start, end, node_addr):
         self.__lock.acquire()

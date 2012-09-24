@@ -154,6 +154,7 @@ class FriServer:
             if sock:
                 sock.close()
 
+        self.operator.stop()
         #waiting threads finishing... 
         self.__workers_manager_thread.stop()
         self.__workers_manager_thread.join()

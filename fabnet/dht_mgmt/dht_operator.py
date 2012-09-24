@@ -1,22 +1,25 @@
 import os
 import time
+import threading
 from fabnet.core.operator import Operator
 from hash_ranges_table import HashRangesTable
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
 from fabnet.core.fri_base import FabnetPacketRequest
-from fabnet.core.constants import RC_OK
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_NORMALWORK, \
-            WAIT_RANGE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT
+            WAIT_RANGE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT, \
+            INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGES_TIMEOUT
+from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
 
 
 class DHTOperator(Operator):
-    def __init__(self, self_address, home_dir='/tmp/', certfile=None):
-        Operator.__init__(self, self_address, home_dir, certfile)
+    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False):
+        Operator.__init__(self, self_address, home_dir, certfile, is_init_node)
 
         self.status = DS_INITIALIZE
         self.ranges_table = HashRangesTable()
-        self.ranges_table.append(MIN_HASH, MAX_HASH, self.self_address)
+        if is_init_node:
+            self.ranges_table.append(MIN_HASH, MAX_HASH, self.self_address)
 
         self.save_path = os.path.join(home_dir, 'dht_range')
         if not os.path.exists(self.save_path):
@@ -25,6 +28,17 @@ class DHTOperator(Operator):
         self.__dht_range = FSHashRanges.discovery_range(self.save_path)
         self.__split_requests_cache = []
         self.__start_dht_try_count = 0
+        self.__init_dht_thread = None
+        if is_init_node:
+            self.status = DS_NORMALWORK
+        else:
+            self.__init_dht_thread = InitDHTThread(self)
+            self.__init_dht_thread.start()
+
+    def stop(self):
+        if self.__init_dht_thread and self.__init_dht_thread.is_alive():
+            self.__init_dht_thread.stop()
+            self.__init_dht_thread.join()
 
     def __get_next_max_range(self):
         max_range = None
@@ -68,6 +82,7 @@ class DHTOperator(Operator):
             if new_range and (new_range.start != curr_start or new_range.end != curr_end):
                 nochange = True
 
+        logger.debug('Selected range for split: %s'% new_range)
         if new_range is None:
             #wait and try again
             if self.__start_dht_try_count == DHT_CYCLE_TRY_COUNT:
@@ -90,6 +105,7 @@ class DHTOperator(Operator):
 
         self.__split_requests_cache.append(new_range.node_address)
 
+        logger.info('Call SplitRangeRequest to %s'%(new_range.node_address,))
         parameters = { 'start_key': new_dht_range.get_start(), 'end_key': new_dht_range.get_end() }
         req = FabnetPacketRequest(method='SplitRangeRequest', sender=self.self_address, parameters=parameters)
         ret_code, ret_msg = self.call_node(new_range.node_address, req)
@@ -112,4 +128,40 @@ class DHTOperator(Operator):
         self._unlock()
 
         old_dht_range.move_to_trash()
+
+
+class InitDHTThread(threading.Thread):
+    def __init__(self, operator):
+        threading.Thread.__init__(self)
+        self.operator = operator
+        self.stopped = True
+
+    def run(self):
+        self.stopped = False
+        try:
+            while not self.stopped:
+                if not self.operator.ranges_table.empty():
+                    break
+
+                neighbours = self.operator.get_neighbours(NT_UPPER) + \
+                         self.operator.get_neighbours(NT_SUPERIOR)
+
+                for neighbour in neighbours:
+                    logger.info('Requesting ranges table from %s'%neighbour)
+                    packet_obj = FabnetPacketRequest(method='GetRangesTable', sender=self.operator.self_address)
+                    rcode, rmsg = self.operator.call_node(neighbour, packet_obj)
+                    if rcode == RC_OK:
+                        time.sleep(WAIT_RANGES_TIMEOUT)
+                        break
+                    else:
+                        logger.error('Cant start GetRangesTable on %s. Details: %s'%(neighbour, rmsg))
+
+                time.sleep(INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
+        except Exception, err:
+            logger.error('[InitDHTThread] %s'%err)
+        finally:
+            logger.info('InitDHTThread finished')
+
+    def stop(self):
+        self.stopped = True
 
