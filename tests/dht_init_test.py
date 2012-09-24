@@ -10,7 +10,9 @@ from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketRes
 from fabnet.dht_mgmt import constants
 constants.WAIT_RANGE_TIMEOUT = 0.1
 constants.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT = 0.1
+constants.MONITOR_DHT_RANGES_TIMEOUT = 1
 constants.WAIT_RANGES_TIMEOUT = 0.3
+constants.RESERV_RANGE_FILE_MD_TIMEDELTA = 0.1
 from fabnet.dht_mgmt.dht_operator import DHTOperator
 from fabnet.dht_mgmt import dht_operator
 from fabnet.dht_mgmt.operations import split_range_request
@@ -95,6 +97,7 @@ class TestDHTInitProcedure(unittest.TestCase):
 
             node86_range = server.operator.get_dht_range()
             node87_range = server1.operator.get_dht_range()
+
             self.assertEqual(node86_range.get_start(), 0L)
             self.assertEqual(node86_range.get_end(), MAX_HASH/2-1)
             self.assertEqual(node87_range.get_start(), MAX_HASH/2)
@@ -108,6 +111,11 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(table[1].end, MAX_HASH)
 
             self.assertEqual(server1.operator.status, DS_NORMALWORK)
+
+            node86_range.put(MAX_HASH-100500, 'Hello, fabregas!') #should be appended into reservation range
+            time.sleep(1.5)
+            data = node87_range.get(MAX_HASH-100500)
+            self.assertEqual(data, 'Hello, fabregas!')
         finally:
             if server:
                 server.stop()

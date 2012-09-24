@@ -1,6 +1,7 @@
 import os
 import time
 import threading
+from datetime import datetime
 from fabnet.core.operator import Operator
 from hash_ranges_table import HashRangesTable
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
@@ -8,7 +9,8 @@ from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_NORMALWORK, \
             WAIT_RANGE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT, \
-            INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGES_TIMEOUT
+            INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGES_TIMEOUT, \
+            MONITOR_DHT_RANGES_TIMEOUT, RESERV_RANGE_FILE_MD_TIMEDELTA
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
 
 
@@ -33,12 +35,20 @@ class DHTOperator(Operator):
             self.status = DS_NORMALWORK
         else:
             self.__init_dht_thread = InitDHTThread(self)
+            self.__init_dht_thread.setName('InitDHTThread')
             self.__init_dht_thread.start()
+
+        self.__monitor_dht_ranges = MonitorDHTRanges(self)
+        self.__monitor_dht_ranges.setName('MonitorDHTRanges')
+        self.__monitor_dht_ranges.start()
 
     def stop(self):
         if self.__init_dht_thread and self.__init_dht_thread.is_alive():
             self.__init_dht_thread.stop()
             self.__init_dht_thread.join()
+
+        self.__monitor_dht_ranges.stop()
+        self.__monitor_dht_ranges.join()
 
     def __get_next_max_range(self):
         max_range = None
@@ -165,3 +175,97 @@ class InitDHTThread(threading.Thread):
     def stop(self):
         self.stopped = True
 
+
+class MonitorDHTRanges(threading.Thread):
+    def __init__(self, operator):
+        threading.Thread.__init__(self)
+        self.operator = operator
+        self.stopped = True
+
+    '''
+    def _check_range_free_size(self):
+        #FIXME: implement this routine after PullRangeRequest operation implemented
+        #need pull strategy design!
+        dht_range = self.operator.get_dht_range()
+
+        percents = dht_range.get_free_size_percents()
+        if percents >= MAX_FREE_SIZE_PERCENTS:
+            dht_range.clear_trash()
+
+            percents = dht_range.get_free_size_percents()
+            if percents >= MAX_FREE_SIZE_PERCENTS:
+                logger.info('Few free size for data range. Trying pull part of range to network')
+                pre_key = dht_range.get_start() - 1
+                #post_key = dht_range.get_end() + 1
+                self._pull_subrange(pre_key, dht_range.get_start(), dht_range.get_start()+dht_range.length()/2)
+                #self._pull_subrange(post_key, dht_range.get_start()+3*dht_range.length()/4, dht_range.get_end())
+
+    def _pull_subrange(self, dest_key, start_subrange, end_subrange):
+        k_range = self.operator.ranges_table.find(dest_key)
+        if not k_range:
+            logger.error('[_pull_subrange] No range found for key=%s in ranges table'%dest_key)
+
+        logger.info('Call PullRangeRequest to %s'%(k_range.node_address,))
+        parameters = { 'start_key': start_subrange, 'end_key': end_subrange }
+        req = FabnetPacketRequest(method='PullRangeRequest', sender=self.operator.self_address, parameters=parameters, sync=True)
+        resp = self.operator.call_node(k_range.node_address, req, sync=True)
+        if ret_code != RC_OK:
+            logger.error('PullRangeRequest operation failed on node %s. Details: %s'%(k_range.node_address, ret_msg))
+            return False
+
+        return True
+    '''
+
+    def _process_reservation_range(self):
+        dht_range = self.operator.get_dht_range()
+
+        cdt = datetime.now()
+        for digest, data, file_path in dht_range.iter_reservation():
+            logger.debug('Processing %s from reservation range'%digest)
+            f_dm = datetime.fromtimestamp(os.path.getmtime(file_path))
+            dt = cdt - f_dm
+
+            if dt.total_seconds() > RESERV_RANGE_FILE_MD_TIMEDELTA:
+                if self._put_data(digest, data):
+                    logger.debug('removing %s from reservation'%digest)
+                    os.remove(file_path)
+                else:
+                    logger.debug('data block with key=%s is send from reservation range'%digest)
+
+    def _put_data(self, key, data):
+        k_range = self.operator.ranges_table.find(long(key, 16))
+        if not k_range:
+            logger.debug('No range found for reservation key %s'%key)
+            return False
+
+        params = {'key': key, 'data': data}
+        req = FabnetPacketRequest(method='PutDataBlock', sender=self.operator.self_address, parameters=params, sync=True)
+        resp = self.operator.call_node(k_range.node_address, req, sync=True)
+
+        if resp.ret_code != RC_OK:
+            logger.error('PutDataBlock error on %s: %s'%(k_range.node_address, resp.ret_message))
+            return False
+
+        return True
+
+
+    def run(self):
+        logger.info('started')
+        self.stopped = False
+        while not self.stopped:
+            try:
+                #self._check_range_free_size()
+
+                self._process_reservation_range()
+            except Exception, err:
+                logger.error('[MonitorDHTRanges] %s'% err)
+            finally:
+                for i in xrange(MONITOR_DHT_RANGES_TIMEOUT):
+                    if self.stopped:
+                        break
+                    time.sleep(1)
+
+        logger.info('stopped')
+
+    def stop(self):
+        self.stopped = True

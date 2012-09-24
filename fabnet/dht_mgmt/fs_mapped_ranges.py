@@ -389,6 +389,12 @@ class FSHashRanges:
             raise err
 
 
+    def iter_reservation(self):
+        files = os.listdir(self.__reservation_dir)
+        for digest in files:
+            yield digest, self.__get_data(digest), os.path.join(self.__reservation_dir, digest)
+
+
     def join_subranges(self):
         child_ranges = self.__child_ranges.copy()
         if not child_ranges:
@@ -454,6 +460,12 @@ class FSHashRanges:
         logger.info('Range is restored from trash!')
 
 
+    def clear_trash(self):
+        if not os.path.exists(self.__trash_dir):
+            return
+        shutil.rmtree(self.__trash_dir)
+
+
     def get_range_size(self):
         return sum([os.stat(os.path.join(self.__range_dir, f)).st_size for f in os.listdir(self.__range_dir)])
 
@@ -463,4 +475,7 @@ class FSHashRanges:
         stat = os.statvfs(self.__range_dir)
         free_space = stat.f_bsize * stat.f_bavail
         return free_space + trash_size
+
+    def get_free_size_percents(self):
+        return (self.get_range_size() * 100.) / self.get_free_size()
 
