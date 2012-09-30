@@ -144,10 +144,21 @@ class Operator:
         finally:
             self.__lock.release()
 
+    def _rebalance_nodes(self):
+        operation_obj = self.__operations.get('ManageNeighbour', None)
+        if not operation_obj:
+            logger.error('ManageNeighbour does not found. Cant rebalance node!')
+            return
+
+        operation_obj.rebalance_append({'neighbour_type': NT_SUPERIOR})
+        operation_obj.rebalance_append({'neighbour_type': NT_UPPER})
+
+
     def check_neighbours(self):
         ka_packet = FabnetPacketRequest(method=KEEP_ALIVE_METHOD, sender=self.self_address)
         superiors = self.get_neighbours(NT_SUPERIOR)
 
+        removed = False
         for superior in superiors:
             code, msg = self.fri_client.call(superior, ka_packet.to_dict())
             cnt = 0
@@ -167,9 +178,11 @@ class Operator:
             if cnt == KEEP_ALIVE_TRY_COUNT:
                 logger.info('Neighbour %s does not respond. removing it...'%superior)
                 self.remove_neighbour(NT_SUPERIOR, superior)
+                removed = True
 
         #check upper nodes...
         uppers = self.get_neighbours(NT_UPPER)
+        remove_uppers = []
         self.__lock.acquire()
         try:
             cur_dt = datetime.now()
@@ -181,9 +194,17 @@ class Operator:
                 delta = cur_dt - ka_dt
                 if delta.total_seconds() >= KEEP_ALIVE_MAX_WAIT_TIME:
                     logger.info('No keep alive packets from upper neighbour %s. removing it...'%upper)
-                    self.remove_neighbour(NT_UPPER, upper)
+                    remove_uppers.append(upper)
+                    removed = True
         finally:
             self.__lock.release()
+
+        for upper in remove_uppers:
+            self.remove_neighbour(NT_UPPER, upper)
+
+        if removed:
+            self._rebalance_nodes()
+
 
 
 
@@ -255,7 +276,11 @@ class Operator:
         if operation_obj is None:
             raise OperException('Method "%s" does not implemented!'%operation)
 
-        s_packet = operation_obj.callback(packet, sender)
+        s_packet = None
+        try:
+            s_packet = operation_obj.callback(packet, sender)
+        except Exception, err:
+            logger.error('%s callback failed. Details: %s'%(operation, err))
 
         if s_packet:
             self.send_to_sender(sender, s_packet)

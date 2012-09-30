@@ -18,7 +18,7 @@ from fabnet.core.fri_base import FabnetPacketRequest
 class OperationBase:
     def __init__(self, operator):
         self.operator = operator
-        self.__lock = threading.Lock()
+        self.__lock = threading.RLock()
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation

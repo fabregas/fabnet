@@ -11,10 +11,14 @@ Copyright (C) 2012 Konstantin Andrusenko
 """
 import os
 import sqlite3
+import threading
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.core.constants import NT_SUPERIOR, NT_UPPER
+from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
+                        ONE_DIRECT_NEIGHBOURS_COUNT
+from fabnet.operations.constants import MNO_APPEND
+from fabnet.utils.logger import logger
 
 TOPOLOGY_DB = 'fabnet_topology.db'
 
@@ -28,6 +32,7 @@ class TopologyCognition(OperationBase):
                 or None for disabling packet resend to neigbours
         """
         if packet.sender is None:
+            self.__balanced = threading.Event()
             conn = sqlite3.connect(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
 
             curs = conn.cursor()
@@ -52,6 +57,7 @@ class TopologyCognition(OperationBase):
         upper_neighbours = self.operator.get_neighbours(NT_UPPER)
         superior_neighbours = self.operator.get_neighbours(NT_SUPERIOR)
 
+        ret_params.update(packet.parameters)
         ret_params['node_address'] = self.operator.self_address
         ret_params['node_name'] = self.operator.node_name
         ret_params['upper_neighbours'] = upper_neighbours
@@ -84,12 +90,52 @@ class TopologyCognition(OperationBase):
             raise Exception('TopologyCognition response packet is invalid! Packet: %s'%str(packet.to_dict()))
 
         conn = sqlite3.connect(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
-
         curs = conn.cursor()
-        curs.execute("INSERT INTO fabnet_nodes VALUES ('%s', '%s', '%s', '%s')"% \
-                (node_address, node_name, ','.join(superior_neighbours), ','.join(upper_neighbours)))
-        conn.commit()
 
-        curs.close()
-        conn.close()
+        self._lock()
+        try:
+            curs.execute("INSERT INTO fabnet_nodes VALUES ('%s', '%s', '%s', '%s')"% \
+                    (node_address, node_name, ','.join(superior_neighbours), ','.join(upper_neighbours)))
+            conn.commit()
+        finally:
+            self._unlock()
+            curs.close()
+            conn.close()
+
+        if packet.ret_parameters.get('need_rebalance', False):
+            self._lock()
+            self.smart_neighbours_rebalance(node_address, superior_neighbours, upper_neighbours)
+            self._unlock()
+
+
+    def smart_neighbours_rebalance(self, node_address, superior_neighbours, upper_neighbours):
+        if self.__balanced.is_set():
+            return
+
+        uppers = self.operator.get_neighbours(NT_UPPER)
+        superiors = self.operator.get_neighbours(NT_SUPERIOR)
+
+        intersec_count = len(set(uppers) & set(superiors))
+        if intersec_count == 0:
+            #good neighbours connections
+            self.__balanced.set()
+            return
+
+        if (node_address in uppers) or (node_address in superiors):
+            return
+
+        if ONE_DIRECT_NEIGHBOURS_COUNT > len(superiors) >= (ONE_DIRECT_NEIGHBOURS_COUNT+1):
+            return
+
+        if node_address == self.operator.self_address:
+            return
+
+        intersec_count = len(set(superior_neighbours) & set(upper_neighbours))
+        if intersec_count > 0 and (len(upper_neighbours) <= ONE_DIRECT_NEIGHBOURS_COUNT):
+            parameters = { 'neighbour_type': NT_UPPER, 'operation': MNO_APPEND,
+                            'node_address': self.operator.self_address }
+            rcode, rmsg = self._init_operation(node_address, 'ManageNeighbour', parameters)
+            if not rcode:
+                self.__balanced.set()
+
 

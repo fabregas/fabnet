@@ -11,6 +11,10 @@ from fabnet.dht_mgmt.dht_operator import DHTOperator
 from fabnet.dht_mgmt import dht_operator
 
 dht_operator.WAIT_RANGE_TIMEOUT = 0.5
+dht_operator.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT = 0.1
+dht_operator.MONITOR_DHT_RANGES_TIMEOUT = 1
+dht_operator.WAIT_RANGES_TIMEOUT = 0.3
+dht_operator.RESERV_RANGE_FILE_MD_TIMEDELTA = 0.1
 
 logger.setLevel(logging.DEBUG)
 
@@ -35,7 +39,6 @@ class TestFSMappedRanges(unittest.TestCase):
 
         operator = DHTOperator('127.0.0.1:1987', home_dir=TEST_FS_RANGE_DIR)
 
-        operator.ranges_table.remove(0)
         operator.ranges_table.append(0, 99, 'first_range_holder')
         operator.ranges_table.append(100, 149, 'second_range_holder')
         operator.ranges_table.append(300, 499, 'third_range_holder')
@@ -62,6 +65,7 @@ class TestFSMappedRanges(unittest.TestCase):
         self.assertEqual(call_stack[3][0], 'second_range_holder')
         self.assertEqual(call_stack[3][1], 124)
         self.assertEqual(call_stack[3][2], 149)
+        operator.stop()
 
     def test03_discovery_range(self):
         shutil.rmtree(TEST_FS_RANGE_DIR)
@@ -75,7 +79,6 @@ class TestFSMappedRanges(unittest.TestCase):
 
         operator = DHTOperator('127.0.0.1:1987', home_dir=TEST_FS_RANGE_DIR)
 
-        operator.ranges_table.remove(0)
         operator.ranges_table.append(0, 99, 'first_range_holder')
         operator.ranges_table.append(100, 149, 'second_range_holder')
         operator.ranges_table.append(300, 499, 'third_range_holder')
@@ -109,6 +112,7 @@ class TestFSMappedRanges(unittest.TestCase):
         self.assertEqual(call_stack[3][0], 'third_range_holder')
         self.assertEqual(call_stack[3][1], 399)
         self.assertEqual(call_stack[3][2], 499)
+        operator.stop()
 
 
 

@@ -28,7 +28,6 @@ class EchoOperation(OperationBase):
 class TestAbstractOperator(unittest.TestCase):
     def test_big_data_test(self):
         cert = './tests/cert/server.crt'
-        bad_cert = './tests/cert/server.crt'
         key = './tests/cert/server.key'
         try:
             operator = Operator('127.0.0.1:1986', certfile=cert)
@@ -38,7 +37,7 @@ class TestAbstractOperator(unittest.TestCase):
             ret = server1.start()
             self.assertEqual(ret, True)
 
-            operator = Operator('127.0.0.1:1987', certfile=bad_cert)
+            operator = Operator('127.0.0.1:1987', certfile=cert)
             operator.neighbours = ['127.0.0.1:1986']
             operator.register_operation('ECHO', EchoOperation)
             server2 = FriServer('0.0.0.0', 1987, operator, 10, 'node_2', cert, key)

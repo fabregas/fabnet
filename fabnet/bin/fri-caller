@@ -4,24 +4,33 @@ import json
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest
 
 def usage():
-    print('Usage: %s <operation> <node address> [parameters in json format]'%sys.argv[0])
+    print('Usage: %s <operation> <node address> [parameters in json format] [sync]'%sys.argv[0])
 
-def call_operation(operation, node_address, params):
+def call_operation(operation, node_address, params, sync):
     try:
         params = json.loads(params)
     except Exception, err:
         print('Parameters are invalid! Details: %s'%err)
         return 1
-    packet = FabnetPacketRequest(method=operation, sender=None, parameters=params)
+
+    packet = FabnetPacketRequest(method=operation, sender=None, parameters=params, sync=sync)
     client = FriClient()
-    rcode, rmsg = client.call(node_address, packet.to_dict())
+    if not sync:
+        rcode, rmsg = client.call(node_address, packet.to_dict())
 
-    if rcode == 0:
-        print('Operation "%s" is started over fabnet.'%operation)
+        if rcode == 0:
+            print('Operation "%s" is started over fabnet.'%operation)
+        else:
+            print('Operation "%s" does not started! Details: %s'%(operation, rmsg))
+
+        return rcode
     else:
-        print('Operation "%s" does not started! Details: %s'%(operation, rmsg))
-
-    return rcode
+        resp = client.call_sync(node_address, packet.to_dict())
+        print 'RET CODE: %s'% resp.ret_code
+        print 'RET MESSAGE: %s'% (resp.ret_message or 'ok')
+        for key, value in resp.ret_parameters.items():
+            print '%s: %s'%(key, value)
+        return resp.ret_code
 
 
 if __name__ == '__main__':
@@ -35,5 +44,10 @@ if __name__ == '__main__':
     if len(sys.argv) > 3:
         params = sys.argv[3]
 
-    rcode = call_operation(operation, node_address, params)
+    if 'sync' in sys.argv:
+        sync = True
+    else:
+        sync = False
+
+    rcode = call_operation(operation, node_address, params, sync)
     sys.exit(rcode)

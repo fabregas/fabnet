@@ -62,13 +62,22 @@ class ManageNeighbour(OperationBase):
 
             new_node = None
             for node in ret_parameters.get('neighbours', []):
-                if (node in self.__discovered_nodes[n_type]) or (node in neighbours) or (node == self.operator.self_address):
+                #trying find new node...
+                if (node in self.__discovered_nodes[n_type]) or (node in neighbours) \
+                        or (node in other_neighbours) or (node == self.operator.self_address):
                     continue
                 new_node = node
                 break
-            else:
+
+            if new_node == None:
+                for node in neighbours:
+                    if node not in self.__discovered_nodes[n_type]:
+                        new_node = node
+                        break
+
+            if new_node == None:
                 for node in other_neighbours:
-                    if (node not in self.__discovered_nodes[n_type]) and (node not in neighbours) and (node != self.operator.self_address):
+                    if node not in self.__discovered_nodes[n_type]:
                         new_node = node
                         break
 
@@ -86,7 +95,6 @@ class ManageNeighbour(OperationBase):
         upper_neighbours = self.operator.get_neighbours(NT_UPPER)
         superior_neighbours = self.operator.get_neighbours(NT_SUPERIOR)
 
-
         if ret_parameters['neighbour_type'] == NT_UPPER:
             self._check_neighbours_count(NT_UPPER, upper_neighbours, NT_SUPERIOR, superior_neighbours, ret_parameters)
         else:
@@ -94,19 +102,26 @@ class ManageNeighbour(OperationBase):
 
 
     def _get_for_delete(self, neighbours, n_type, other_neighbours):
-        for_delete = None
-        if len(neighbours) > ONE_DIRECT_NEIGHBOURS_COUNT:
-            for neighbour in neighbours:
-                if neighbour in self.__cache[n_type]:
-                    continue
+        if len(neighbours) <= ONE_DIRECT_NEIGHBOURS_COUNT:
+            return
 
-                for_delete = neighbour
-                if neighbour in other_neighbours:
-                    break
-            else:
-                self.__cache[n_type] = []
+        intersec_neighbours = list(set(neighbours) & set(other_neighbours))
 
-        return for_delete
+        for neighbour in intersec_neighbours:
+            if neighbour in self.__cache[n_type]:
+                continue
+
+            self.__cache[n_type].append(neighbour)
+            return neighbour
+
+        rest_neighbours = list(set(neighbours) ^ set(intersec_neighbours))
+        for neighbour in rest_neighbours:
+            if neighbour in self.__cache[n_type]:
+                continue
+            self.__cache[n_type].append(neighbour)
+            return neighbour
+
+        return None
 
 
     def rebalance_remove(self):
@@ -121,14 +136,16 @@ class ManageNeighbour(OperationBase):
             if for_delete:
                 parameters['neighbour_type'] = NT_UPPER
             else:
-                for_delete = self._get_for_delete(superior_neighbours, NT_SUPERIOR, upper_neighbours)
+                for_delete = self._get_for_delete(superior_neighbours, NT_UPPER, upper_neighbours)
                 parameters['neighbour_type'] = NT_SUPERIOR
-
         finally:
             self._unlock()
 
         if for_delete:
             self._init_operation(for_delete, 'ManageNeighbour', parameters)
+        else:
+            self.__cache[NT_UPPER] = []
+            self.__cache[NT_SUPERIOR] = []
 
 
     def process(self, packet):
@@ -154,7 +171,7 @@ class ManageNeighbour(OperationBase):
 
             self.rebalance_remove()
         elif operation == MNO_REMOVE:
-            if len(neighbours) > ONE_DIRECT_NEIGHBOURS_COUNT:
+            if len(neighbours)  > ONE_DIRECT_NEIGHBOURS_COUNT:
                 self.operator.remove_neighbour(n_type, node_address)
             else:
                 ret_params['dont_remove'] = True
@@ -198,7 +215,6 @@ class ManageNeighbour(OperationBase):
                 if not dont_append:
                     self.operator.set_neighbour(n_type, node_address)
 
-
             elif operation == MNO_REMOVE:
                 dont_remove = packet.ret_parameters.get('dont_remove', False)
                 if not dont_remove:
@@ -208,6 +224,7 @@ class ManageNeighbour(OperationBase):
         finally:
             self._unlock()
 
+        self.rebalance_remove()
         self.rebalance_append(packet.ret_parameters)
 
 

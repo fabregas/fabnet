@@ -56,7 +56,9 @@ class NodeStatisticOperation(OperationBase):
         else:
             ret_params['superiors_balance'] = NB_LESS
 
-        ret_params['workers_count'] = self.operator.server.workers_count()
+        count, busy = self.operator.server.workers_stat()
+        ret_params['workers_count'] = count
+        ret_params['workers_busy'] = busy
 
         loadavgstr = open('/proc/loadavg', 'r').readline().strip()
         data = loadavgstr.split()

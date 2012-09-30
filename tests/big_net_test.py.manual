@@ -11,9 +11,10 @@ import signal
 import sqlite3
 from fabnet.utils.logger import logger
 
+from fabnet.core.fri_base import FriClient, FabnetPacketRequest
 logger.setLevel(logging.DEBUG)
 
-NODES_COUNT = range(30, 31)
+NODES_COUNT = range(40, 41)
 
 class TestBigNework(unittest.TestCase):
     def test_00_create_network(self):
@@ -36,28 +37,49 @@ class TestBigNework(unittest.TestCase):
                 addresses.append(address)
 
                 p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, '/tmp'])
-                time.sleep(1.5)
+                time.sleep(1)
 
                 PROCESSES.append(p)
 
             time.sleep(5)
 
-            p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', random.choice(addresses)])
+            self._check_stat(addresses)
 
-            time.sleep(1)
-            conn = sqlite3.connect('/tmp/fabnet_topology.db')
-            curs = conn.cursor()
-            while True:
-                curs.execute("SELECT count(node_address) FROM fabnet_nodes")
-                rows = curs.fetchall()
-                if int(rows[0][0]) != nodes_count:
-                    time.sleep(1)
-                else:
-                    break
-            curs.close()
-            conn.close()
-        except Exception, err:
-            print 'ERROR: %s'%err
+            p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address])
+            time.sleep(1.5)
+            self._wait_topology(nodes_count)
+            os.system('python ./tests/topology_to_tgf /tmp/fabnet_topology.db /tmp/fabnet_topology.%s-orig.tgf'%nodes_count)
+            for address in addresses:
+                print 'Collecting topology from %s ...'%address
+                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address, '{"need_rebalance": 1}'])
+                time.sleep(1.5)
+                self._wait_topology(nodes_count)
+
+            print 'TOPOLOGY REBALANCED'
+            os.system('python ./tests/topology_to_tgf /tmp/fabnet_topology.db /tmp/fabnet_topology.%s-balanced.tgf'%(nodes_count,))
+
+            #self._check_stat(addresses)
+
+            for i in xrange(3):
+                process = random.choice(PROCESSES)
+                idx = PROCESSES.index(process)
+                del_address = addresses[idx]
+                print 'STOPPING %s'%del_address
+                del PROCESSES[idx]
+                del addresses[idx]
+                process.send_signal(signal.SIGINT)
+                process.wait()
+
+                time.sleep(80)
+
+                address = random.choice(addresses)
+                print 'Collecting topology from %s ...'%address
+                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address])
+                time.sleep(1)
+                nodes_count -= 1
+                self._wait_topology(nodes_count)
+                os.system('python ./tests/topology_to_tgf /tmp/fabnet_topology.db /tmp/fabnet_topology.%s-%s.tgf'%(nodes_count, del_address.split(':')[-1]))
+
         finally:
             for process in PROCESSES:
                 process.send_signal(signal.SIGINT)
@@ -67,6 +89,36 @@ class TestBigNework(unittest.TestCase):
                 process.wait()
 
             print 'STOPPED'
+
+    def _check_stat(self, addresses):
+            packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+            client = FriClient()
+
+            for address in addresses:
+                ret_packet = client.call_sync(address, packet_obj.to_dict())
+
+                self.assertEqual(ret_packet.ret_code, 0, ret_packet.ret_message)
+                #print 'WORKERS COUNT: ', ret_packet.ret_parameters['workers_count']
+                busy = int(ret_packet.ret_parameters['workers_busy'])
+                #print '[STAT] %s node has %s busy thread(s)'%(address, busy)
+                #self.assertEqual(busy, 1, '%s node has %s busy thread(s)'%(address, busy))
+
+
+    def _wait_topology(self, nodes_count):
+        while True:
+            try:
+                conn = sqlite3.connect('/tmp/fabnet_topology.db')
+                curs = conn.cursor()
+                curs.execute("SELECT count(node_address) FROM fabnet_nodes")
+                rows = curs.fetchall()
+                print 'nodes discovered: %s'%rows[0][0]
+                if int(rows[0][0]) != nodes_count:
+                    time.sleep(.5)
+                else:
+                    break
+            finally:
+                curs.close()
+                conn.close()
 
 
 if __name__ == '__main__':
