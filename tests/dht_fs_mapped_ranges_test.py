@@ -48,7 +48,7 @@ class TestFSMappedRanges(unittest.TestCase):
             shutil.rmtree(TEST_FS_RANGE_DIR)
         os.mkdir(TEST_FS_RANGE_DIR)
 
-    def test99_destroy(self):
+    def _test99_destroy(self):
         if os.path.exists(TEST_FS_RANGE_DIR):
             shutil.rmtree(TEST_FS_RANGE_DIR)
 
@@ -119,6 +119,16 @@ class TestFSMappedRanges(unittest.TestCase):
         data = new_range.get('%040x'%100500)
         self.assertEqual(data, 'final data test')
 
+        try:
+            new_range.extend('%040x'%0, '%040x'%100)
+        except:
+            pass
+        else:
+            raise Exception('Expected error in this case.')
+
+        extended_range = new_range.extend('%040x'%0, '%040x'%((45000)*100-1))
+        data = extended_range.get('%040x'%100500)
+        self.assertNotEqual(data, 'final data test')
 
 
 if __name__ == '__main__':

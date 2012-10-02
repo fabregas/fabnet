@@ -9,7 +9,7 @@ out_path = sys.argv[2]
 conn = sqlite3.connect(f_path)
 
 curs = conn.cursor()
-curs.execute("SELECT node_address, node_name, superiors, uppers FROM fabnet_nodes")
+curs.execute("SELECT node_address, node_name, superiors, uppers FROM fabnet_nodes WHERE old_data=0")
 rows = curs.fetchall()
 
 curs.close()

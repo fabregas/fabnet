@@ -11,7 +11,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 """
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-
+import hashlib
 
 class PutDataBlockOperation(OperationBase):
     def process(self, packet):
@@ -24,9 +24,13 @@ class PutDataBlockOperation(OperationBase):
         """
         key = packet.parameters.get('key', None)
         data = packet.parameters.get('data', None)
+        checksum = packet.parameters.get('checksum', None)
 
-        if key is None or data is None:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='key or/and data does not found!')
+        if key is None or data is None or checksum is None:
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='key or/and data or/and checksum does not found!')
+
+        if hashlib.sha1(data).hexdigest() != checksum:
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='data is corrupted!')
 
         dht_range = self.operator.get_dht_range()
         dht_range.put(key, data)

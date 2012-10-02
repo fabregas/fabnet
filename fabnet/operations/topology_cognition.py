@@ -23,6 +23,25 @@ from fabnet.utils.logger import logger
 TOPOLOGY_DB = 'fabnet_topology.db'
 
 class TopologyCognition(OperationBase):
+    def get_discovered_nodes(self):
+        db = os.path.join(self.operator.home_dir, TOPOLOGY_DB)
+        if not os.path.exists(db):
+            return {}
+        conn = sqlite3.connect(db)
+
+        curs = conn.cursor()
+        curs.execute("SELECT node_address, superiors, uppers, old_data FROM fabnet_nodes")
+        rows = curs.fetchall()
+
+        curs.close()
+        conn.close()
+
+        nodes = {}
+        for row in rows:
+            nodes[row[0]] = (row[1].split(','), row[2].split(','), int(row[3]))
+
+        return nodes
+
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
         for resend it to neighbours
@@ -36,8 +55,8 @@ class TopologyCognition(OperationBase):
             conn = sqlite3.connect(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
 
             curs = conn.cursor()
-            curs.execute("DROP TABLE IF EXISTS fabnet_nodes")
-            curs.execute("CREATE TABLE fabnet_nodes(node_address TEXT, node_name TEXT, superiors TEXT, uppers TEXT)")
+            curs.execute("CREATE TABLE IF NOT EXISTS fabnet_nodes(node_address TEXT, node_name TEXT, superiors TEXT, uppers TEXT, old_data INT)")
+            curs.execute("UPDATE fabnet_nodes SET old_data=1")
             conn.commit()
 
             curs.close()
@@ -94,8 +113,14 @@ class TopologyCognition(OperationBase):
 
         self._lock()
         try:
-            curs.execute("INSERT INTO fabnet_nodes VALUES ('%s', '%s', '%s', '%s')"% \
-                    (node_address, node_name, ','.join(superior_neighbours), ','.join(upper_neighbours)))
+            curs.execute("SELECT old_data FROM fabnet_nodes WHERE node_address='%s'" % node_address)
+            rows = curs.fetchall()
+            if rows:
+                curs.execute("UPDATE fabnet_nodes SET node_name='%s', superiors='%s', uppers='%s', old_data=0 WHERE node_address='%s'"% \
+                    (node_name, ','.join(superior_neighbours), ','.join(upper_neighbours), node_address))
+            else:
+                curs.execute("INSERT INTO fabnet_nodes VALUES ('%s', '%s', '%s', '%s', 0)"% \
+                        (node_address, node_name, ','.join(superior_neighbours), ','.join(upper_neighbours)))
             conn.commit()
         finally:
             self._unlock()

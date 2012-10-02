@@ -13,7 +13,7 @@ This module contains the OperationBase interface
 
 import threading
 from fabnet.core.fri_base import FabnetPacketRequest
-
+from fabnet.utils.logger import logger
 
 class OperationBase:
     def __init__(self, operator):
@@ -40,6 +40,16 @@ class OperationBase:
         """
         pass
 
+    def after_process(self, packet, ret_packet):
+        """In this method should be implemented logic that should be
+        executed after response send
+        If ret_packet is None this method is not called
+
+        @param packet - object of FabnetPacketRequest class
+        @param ret_packet - object of FabnetPacketResponse class
+        """
+        pass
+
     def callback(self, packet, sender=None):
         """In this method should be implemented logic of processing
         response packet from requested node
@@ -56,7 +66,14 @@ class OperationBase:
     def _init_operation(self, node_address, operation, parameters, sync=False):
         """Initiate new operation"""
         req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, parameters=parameters, sync=sync)
-        return self.operator.call_node(node_address, req, sync)
+        resp = self.operator.call_node(node_address, req, sync)
+        if sync:
+            return resp
+        else:
+            rcode, rmsg = resp
+            if rcode:
+                logger.error('Operation %s failed on %s. Details: %s'%(operation, node_address, rmsg))
+            return rcode, rmsg
 
     def _init_network_operation(self, operation, parameters):
         """Initiate new operation over fabnet network"""

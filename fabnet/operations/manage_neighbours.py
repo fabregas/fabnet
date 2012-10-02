@@ -16,6 +16,7 @@ from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.operations.constants import MNO_APPEND, MNO_REMOVE
 from fabnet.utils.logger import logger
+from fabnet.operations.topology_cognition import TopologyCognition
 
 
 class ManageNeighbour(OperationBase):
@@ -69,6 +70,16 @@ class ManageNeighbour(OperationBase):
                 new_node = node
                 break
 
+            d_nodes = TopologyCognition(self.operator).get_discovered_nodes()
+            for node_addr, node_info in d_nodes.items():
+                if (node_addr in self.__discovered_nodes[n_type]) or (node_addr in neighbours) \
+                        or (node_addr in other_neighbours) or (node_addr == self.operator.self_address):
+                    continue
+                new_node = node_addr
+                if len(set(node_info[0]) & set(node_info[1])):
+                    #node with interset neighbours
+                    break
+
             if new_node == None:
                 for node in neighbours:
                     if node not in self.__discovered_nodes[n_type]:
@@ -88,7 +99,10 @@ class ManageNeighbour(OperationBase):
 
         parameters = { 'neighbour_type': other_n_type, 'operation': MNO_APPEND,
                     'node_address': self.operator.self_address }
-        self._init_operation(new_node, 'ManageNeighbour', parameters)
+        ret_code, msg = self._init_operation(new_node, 'ManageNeighbour', parameters)
+        if ret_code:
+            self.__discovered_nodes[n_type].append(new_node)
+            self._check_neighbours_count(n_type, neighbours, other_n_type, other_neighbours, ret_parameters)
 
 
     def rebalance_append(self, ret_parameters):
@@ -168,15 +182,11 @@ class ManageNeighbour(OperationBase):
                 self.operator.set_neighbour(n_type, node_address)
 
             self.__discovered_nodes[n_type].append(node_address)
-
-            self.rebalance_remove()
         elif operation == MNO_REMOVE:
             if len(neighbours)  > ONE_DIRECT_NEIGHBOURS_COUNT:
                 self.operator.remove_neighbour(n_type, node_address)
             else:
                 ret_params['dont_remove'] = True
-
-        self.rebalance_append(packet.parameters)
 
         if operation == MNO_APPEND:
             r_neighbours = self.operator.get_neighbours(NT_UPPER) + \
@@ -192,6 +202,16 @@ class ManageNeighbour(OperationBase):
         ret_params['neighbour_type'] = n_type
 
         return FabnetPacketResponse(ret_parameters=ret_params)
+
+    def after_process(self, packet, ret_packet):
+        """In this method should be implemented logic that should be
+        executed after response send
+
+        @param packet - object of FabnetPacketRequest class
+        @param ret_packet - object of FabnetPacketResponse class
+        """
+        self.rebalance_remove()
+        self.rebalance_append(packet.parameters)
 
 
     def callback(self, packet, sender=None):

@@ -1,15 +1,28 @@
+#!/usr/bin/python
+"""
+Copyright (C) 2012 Konstantin Andrusenko
+    See the documentation for further information on copyrights,
+    or contact the author. All Rights Reserved.
+
+@package fabnet.dht_mgmt.dht_operator
+
+@author Konstantin Andrusenko
+@date September 15, 2012
+"""
 import os
 import time
 import threading
+import hashlib
 from datetime import datetime
+
 from fabnet.core.operator import Operator
 from hash_ranges_table import HashRangesTable
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_NORMALWORK, \
-            WAIT_RANGE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT, \
-            INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGES_TIMEOUT, \
+            CHECK_HASH_TABLE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT, \
+            INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGE_TIMEOUT, \
             MONITOR_DHT_RANGES_TIMEOUT, RESERV_RANGE_FILE_MD_TIMEDELTA
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
 
@@ -33,21 +46,37 @@ class DHTOperator(Operator):
         self.__init_dht_thread = None
         if is_init_node:
             self.status = DS_NORMALWORK
-        else:
-            self.__init_dht_thread = InitDHTThread(self)
-            self.__init_dht_thread.setName('InitDHTThread')
-            self.__init_dht_thread.start()
+
+        self.__check_hash_table_thread = CheckLocalHashTableThread(self)
+        self.__check_hash_table_thread.setName('CheckLocalHashTableThread')
+        self.__check_hash_table_thread.start()
 
         self.__monitor_dht_ranges = MonitorDHTRanges(self)
         self.__monitor_dht_ranges.setName('MonitorDHTRanges')
         self.__monitor_dht_ranges.start()
 
-    def stop(self):
-        if self.__init_dht_thread and self.__init_dht_thread.is_alive():
-            self.__init_dht_thread.stop()
-            self.__init_dht_thread.join()
 
+    def on_neigbour_not_respond(self, neighbour_type, neighbour_address):
+        for range_obj in self.ranges_table.iter_table():
+            if range_obj.node_address == neighbour_address:
+                self._move_range(range_obj)
+                break
+
+
+    def _move_range(self, range_obj):
+        logger.info('Node %s does not respond. Updating hash range table on network...'%range_obj.node_address)
+        rm_lst = [(range_obj.start, range_obj.end, range_obj.node_address)]
+        parameters = {'append': [], 'remove': rm_lst}
+
+        req = FabnetPacketRequest(method='UpdateHashRangeTable', sender=self.self_address, parameters=parameters)
+        self.call_network(req)
+
+
+    def stop(self):
+        self.__check_hash_table_thread.stop()
         self.__monitor_dht_ranges.stop()
+
+        self.__check_hash_table_thread.join()
         self.__monitor_dht_ranges.join()
 
     def __get_next_max_range(self):
@@ -77,8 +106,15 @@ class DHTOperator(Operator):
 
         return None
 
+    def set_status_to_normalwork(self):
+        logger.info('Changing node status to NORMALWORK')
+        self.status = DS_NORMALWORK
+        self.__split_requests_cache = []
+        self.__start_dht_try_count = 0
+
 
     def start_as_dht_member(self):
+        self.status = DS_INITIALIZE
         dht_range = self.get_dht_range()
 
         nochange = False
@@ -89,10 +125,14 @@ class DHTOperator(Operator):
             new_range = self.__get_next_max_range()
         else:
             new_range = self.__get_next_range_near(curr_start, curr_end)
-            if new_range and (new_range.start != curr_start or new_range.end != curr_end):
-                nochange = True
+            if new_range:
+                if (new_range.start != curr_start or new_range.end != curr_end):
+                    nochange = True
+                elif new_range.node_address == self.self_address:
+                    self.set_status_to_normalwork()
+                    return
 
-        logger.debug('Selected range for split: %s'% new_range)
+
         if new_range is None:
             #wait and try again
             if self.__start_dht_try_count == DHT_CYCLE_TRY_COUNT:
@@ -139,8 +179,22 @@ class DHTOperator(Operator):
 
         old_dht_range.move_to_trash()
 
+    def check_dht_range(self):
+        if self.status == DS_INITIALIZE:
+            return
+        dht_range = self.get_dht_range()
+        start = dht_range.get_start()
+        end = dht_range.get_end()
 
-class InitDHTThread(threading.Thread):
+        range_obj = self.ranges_table.find(start)
+        if not range_obj or range_obj.start != start or range_obj.end != end or range_obj.node_address != self.self_address:
+            logger.error('DHT range on this node is not found in ranges_table')
+            logger.info('Trying reinit node as DHT member...')
+            self.start_as_dht_member()
+
+
+
+class CheckLocalHashTableThread(threading.Thread):
     def __init__(self, operator):
         threading.Thread.__init__(self)
         self.operator = operator
@@ -148,33 +202,44 @@ class InitDHTThread(threading.Thread):
 
     def run(self):
         self.stopped = False
-        try:
-            while not self.stopped:
-                if not self.operator.ranges_table.empty():
-                    break
+        block_trigger = True
+        logger.info('Thread started!')
 
-                neighbours = self.operator.get_neighbours(NT_UPPER) + \
-                         self.operator.get_neighbours(NT_SUPERIOR)
+        while not self.stopped:
+            try:
+                neighbours = self.operator.get_neighbours(NT_SUPERIOR)
+                if not neighbours:
+                    time.sleep(INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
+                    continue
 
                 for neighbour in neighbours:
-                    logger.info('Requesting ranges table from %s'%neighbour)
-                    packet_obj = FabnetPacketRequest(method='GetRangesTable', sender=self.operator.self_address)
-                    rcode, rmsg = self.operator.call_node(neighbour, packet_obj)
-                    if rcode == RC_OK:
-                        time.sleep(WAIT_RANGES_TIMEOUT)
-                        break
-                    else:
-                        logger.error('Cant start GetRangesTable on %s. Details: %s'%(neighbour, rmsg))
+                    logger.info('Checking range table at %s'%neighbour)
+                    checksum, last_dm = self.operator.ranges_table.get_checksum()
+                    params = {'checksum': checksum, 'last_dm': last_dm.isoformat()}
 
-                time.sleep(INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
-        except Exception, err:
-            logger.error('[InitDHTThread] %s'%err)
-        finally:
-            logger.info('InitDHTThread finished')
+                    packet_obj = FabnetPacketRequest(method='CheckHashRangeTable',
+                                sender=self.operator.self_address, parameters=params)
+                    rcode, rmsg = self.operator.call_node(neighbour, packet_obj)
+            except Exception, err:
+                logger.error(str(err))
+            finally:
+                for i in xrange(CHECK_HASH_TABLE_TIMEOUT):
+                    if self.stopped:
+                        break
+
+                    blocked = self.operator.ranges_table.is_blocked()
+                    if not blocked:
+                        block_trigger = True
+                    elif block_trigger:
+                        block_trigger = False
+                        break
+
+                    time.sleep(1)
+
+        logger.info('Thread stopped!')
 
     def stop(self):
         self.stopped = True
-
 
 class MonitorDHTRanges(threading.Thread):
     def __init__(self, operator):
@@ -232,13 +297,15 @@ class MonitorDHTRanges(threading.Thread):
                 else:
                     logger.debug('data block with key=%s is send from reservation range'%digest)
 
+
     def _put_data(self, key, data):
         k_range = self.operator.ranges_table.find(long(key, 16))
         if not k_range:
             logger.debug('No range found for reservation key %s'%key)
             return False
 
-        params = {'key': key, 'data': data}
+        checksum = hashlib.sha1(data).hexdigest()
+        params = {'key': key, 'data': data, 'checksum': checksum}
         req = FabnetPacketRequest(method='PutDataBlock', sender=self.operator.self_address, parameters=params, sync=True)
         resp = self.operator.call_node(k_range.node_address, req, sync=True)
 

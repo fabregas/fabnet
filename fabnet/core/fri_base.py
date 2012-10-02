@@ -22,7 +22,8 @@ import json
 from fabnet.utils.logger import logger
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_UNEXPECTED, STOP_THREAD_EVENT, \
                         S_ERROR, S_PENDING, S_INWORK, \
-                        BUF_SIZE, CHECK_NEIGHBOURS_TIMEOUT
+                        BUF_SIZE, CHECK_NEIGHBOURS_TIMEOUT, FRI_CLIENT_TIMEOUT, \
+                        MIN_WORKERS_COUNT, MAX_WORKERS_COUNT
 
 class FriException(Exception):
     pass
@@ -66,7 +67,7 @@ class FabnetPacketRequest:
         return str(self.__repr__())
 
     def __repr__(self):
-        return '{%s}[%s] %s'%(self.message_id, self.sender, self.method)
+        return '{%s}[%s] %s %s'%(self.message_id, self.sender, self.method, str(self.parameters))
 
 
 class FabnetPacketResponse:
@@ -227,7 +228,8 @@ class FriConnectionHandler(threading.Thread):
 
 
 class FriWorkersManager(threading.Thread):
-    def __init__(self, queue, operator, min_count=2, max_count=20, workers_name='unnamed'):
+    def __init__(self, queue, operator, min_count=MIN_WORKERS_COUNT, \
+                    max_count=MAX_WORKERS_COUNT, workers_name='unnamed'):
         threading.Thread.__init__(self)
         self.queue = queue
         self.operator = operator
@@ -285,13 +287,13 @@ class FriWorkersManager(threading.Thread):
                     not_empty_queue_count = 0
                     empty_queue_count += 1
 
+                act, busy = self.get_workers_stat()
                 if not_empty_queue_count >= 5:
-                    act, busy = self.get_workers_stat()
                     if act == busy:
                         self.__spawn_work_threads()
-                elif empty_queue_count >= 5:
-                    self.__stop_work_thread()
-                    pass
+                elif empty_queue_count >= 15:
+                    if (act - busy) > self.min_count:
+                        self.__stop_work_thread()
             except Exception, err:
                 ret_message = '%s error: %s' % (self.getName(), err)
                 logger.error(ret_message)
@@ -430,15 +432,20 @@ class FriWorker(threading.Thread):
 
                     ret_packet = self.operator.process(pack)
 
-                    if not is_sync:
+                    try:
+                        if not is_sync:
+                            if ret_packet:
+                                self.operator.send_to_sender(pack.sender, ret_packet)
+                        else:
+                            if not ret_packet:
+                                ret_packet = FabnetPacketResponse()
+                            sock.sendall(json.dumps(ret_packet.to_dict()))
+                            sock.shutdown(socket.SHUT_WR)
+                            sock.close()
+                            sock = None
+                    finally:
                         if ret_packet:
-                            self.operator.send_to_sender(pack.sender, ret_packet)
-                    else:
-                        if not ret_packet:
-                            ret_packet = FabnetPacketResponse()
-                        sock.sendall(json.dumps(ret_packet.to_dict()))
-                        sock.shutdown(socket.SHUT_WR)
-                        sock.close()
+                            self.operator.after_process(pack, ret_packet)
                 else:
                     self.operator.callback(FabnetPacketResponse(**packet))
             except Exception, err:
@@ -564,7 +571,7 @@ class FriClient:
             if sock:
                 sock.close()
 
-    def call(self, node_address, packet, timeout=5.0):
+    def call(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
             data = self.__int_call(node_address, packet, timeout)
 
@@ -575,7 +582,7 @@ class FriClient:
             return RC_ERROR, '[FriClient] %s' % err
 
 
-    def call_sync(self, node_address, packet, timeout=3.0):
+    def call_sync(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
             data = self.__int_call(node_address, packet, timeout)
 

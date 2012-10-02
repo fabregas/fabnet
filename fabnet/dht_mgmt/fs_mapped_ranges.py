@@ -1,3 +1,14 @@
+#!/usr/bin/python
+"""
+Copyright (C) 2012 Konstantin Andrusenko
+    See the documentation for further information on copyrights,
+    or contact the author. All Rights Reserved.
+
+@package fabnet.dht_mgmt.fs_mapped_ranges
+
+@author Konstantin Andrusenko
+@date September 15, 2012
+"""
 import os
 import shutil
 import threading
@@ -348,6 +359,31 @@ class FSHashRanges:
 
         return self.__get_data(key)
 
+    def extend(self, start_key, end_key):
+        start = self.__start
+        end = self.__end
+        start_key = self._long_key(start_key)
+        end_key = self._long_key(end_key)
+        if self.__start == end_key+1:
+            start = start_key
+        elif self.__end == start_key-1:
+            end = end_key
+        else:
+            raise FSHashRangesException('Bad range for extend [%040x-%040x]'%(start_key, end_key))
+
+        self._block_range()
+        self._wait_write_buffers()
+        h_range = FSHashRanges(start, end, self.__save_path)
+        try:
+            self.move_to_trash()
+        except Exception, err:
+            self.restore_from_trash()
+            self._unblock_range()
+            raise err
+
+        h_range.restore_from_trash()
+        return h_range
+
 
     def split_range(self, start_key, end_key):
         start_key = self._long_key(start_key)
@@ -359,10 +395,10 @@ class FSHashRanges:
             split_key = start_key
             self.__ret_range_i = 1
         else:
-            raise FSHashRangesException('Bad subrange [%s-%s]'%(start_key, end_key))
+            raise FSHashRangesException('Bad subrange [%040x-%040x]'%(start_key, end_key))
 
         if not self._in_range(split_key):
-            FSHashRangesNotFound('No key %s found in range'%split_key)
+            FSHashRangesNotFound('No key %040x found in range'%split_key)
 
         key_long = split_key
         first_rg = FSHashRanges(self.__start, key_long-1, self.__save_path)
@@ -425,6 +461,9 @@ class FSHashRanges:
 
 
     def move_to_trash(self):
+        if not os.path.exists(self.__range_dir):
+            return
+
         if not os.path.exists(self.__trash_dir):
             os.mkdir(self.__trash_dir)
 

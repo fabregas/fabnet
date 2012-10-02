@@ -21,7 +21,7 @@ from fabnet.core.message_container import MessageContainer
 from fabnet.core.constants import MC_SIZE
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.utils.logger import logger
-from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, \
+from fabnet.core.constants import RC_OK, RC_ERROR, NT_SUPERIOR, NT_UPPER, \
                 KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, \
                 KEEP_ALIVE_MAX_WAIT_TIME
 
@@ -75,10 +75,12 @@ class Operator:
                 if address in self.superior_neighbours:
                     return
                 self.superior_neighbours.append(address)
+                logger.info('Superior neighbour %s appended'%address)
             elif neighbour_type == NT_UPPER:
                 if address in self.upper_neighbours:
                     return
                 self.upper_neighbours.append(address)
+                logger.info('Upper neighbour %s appended'%address)
             else:
                 raise OperException('Neigbour type "%s" is invalid!'%neighbour_type)
         finally:
@@ -92,10 +94,12 @@ class Operator:
                 if address not in self.superior_neighbours:
                     return
                 del self.superior_neighbours[self.superior_neighbours.index(address)]
+                logger.info('Superior neighbour %s removed'%address)
             elif neighbour_type == NT_UPPER:
                 if address not in self.upper_neighbours:
                     return
                 del self.upper_neighbours[self.upper_neighbours.index(address)]
+                logger.info('Upper neighbour %s removed'%address)
             else:
                 raise OperException('Neigbour type "%s" is invalid!'%neighbour_type)
         finally:
@@ -112,6 +116,11 @@ class Operator:
                 raise OperException('Neigbour type "%s" is invalid!'%neighbour_type)
         finally:
             self.__lock.release()
+
+    def on_neigbour_not_respond(self, neighbour_type, neighbour_address):
+        """This method can be implemented in inherited class
+        for some logic execution on not responsed neighbour"""
+        pass
 
     def register_operation(self, op_name, op_class):
         if not issubclass(op_class, OperationBase):
@@ -138,11 +147,18 @@ class Operator:
         return self.fri_client.call(self.self_address, packet.to_dict())
 
     def _process_keep_alive(self, packet):
-        self.__lock.acquire()
-        try:
-            self.__upper_keep_alives[packet.sender] = datetime.now()
-        finally:
-            self.__lock.release()
+        if packet.sender not in self.get_neighbours(NT_UPPER):
+            rcode = RC_ERROR
+        else:
+            rcode = RC_OK
+            self.__lock.acquire()
+            try:
+                self.__upper_keep_alives[packet.sender] = datetime.now()
+            finally:
+                self.__lock.release()
+
+        return FabnetPacketResponse(from_node=self.self_address,
+                        message_id=packet.message_id, ret_code=rcode)
 
     def _rebalance_nodes(self):
         operation_obj = self.__operations.get('ManageNeighbour', None)
@@ -155,21 +171,22 @@ class Operator:
 
 
     def check_neighbours(self):
-        ka_packet = FabnetPacketRequest(method=KEEP_ALIVE_METHOD, sender=self.self_address)
+        ka_packet = FabnetPacketRequest(method=KEEP_ALIVE_METHOD, sender=self.self_address, sync=True)
         superiors = self.get_neighbours(NT_SUPERIOR)
 
-        removed = False
+        remove_nodes = []
         for superior in superiors:
-            code, msg = self.fri_client.call(superior, ka_packet.to_dict())
+            resp = self.fri_client.call_sync(superior, ka_packet.to_dict())
             cnt = 0
             self.__lock.acquire()
             try:
                 if self.__superior_keep_alives.get(superior, None) is None:
                     self.__superior_keep_alives[superior] = 0
-                if code:
-                    self.__superior_keep_alives[superior] += 1
-                else:
+                if resp.ret_code == RC_OK:
                     self.__superior_keep_alives[superior] = 0
+                else:
+                    self.__superior_keep_alives[superior] += 1
+
 
                 cnt = self.__superior_keep_alives[superior]
             finally:
@@ -177,12 +194,14 @@ class Operator:
 
             if cnt == KEEP_ALIVE_TRY_COUNT:
                 logger.info('Neighbour %s does not respond. removing it...'%superior)
-                self.remove_neighbour(NT_SUPERIOR, superior)
-                removed = True
+                remove_nodes.append((NT_SUPERIOR, superior))
+                self.__lock.acquire()
+                del self.__superior_keep_alives[superior]
+                self.__lock.release()
+
 
         #check upper nodes...
         uppers = self.get_neighbours(NT_UPPER)
-        remove_uppers = []
         self.__lock.acquire()
         try:
             cur_dt = datetime.now()
@@ -194,15 +213,17 @@ class Operator:
                 delta = cur_dt - ka_dt
                 if delta.total_seconds() >= KEEP_ALIVE_MAX_WAIT_TIME:
                     logger.info('No keep alive packets from upper neighbour %s. removing it...'%upper)
-                    remove_uppers.append(upper)
-                    removed = True
+                    remove_nodes.append((NT_UPPER, upper))
+
+                    del self.__upper_keep_alives[upper]
         finally:
             self.__lock.release()
 
-        for upper in remove_uppers:
-            self.remove_neighbour(NT_UPPER, upper)
+        for n_type, nodeaddr in remove_nodes:
+            self.remove_neighbour(n_type, nodeaddr)
+            self.on_neigbour_not_respond(n_type, nodeaddr)
 
-        if removed:
+        if remove_nodes:
             self._rebalance_nodes()
 
 
@@ -254,6 +275,30 @@ class Operator:
             traceback.print_exc(file=logger)
             logger.error('[Operator.process] %s'%err)
             return err_packet
+
+    def after_process(self, packet, ret_packet):
+        """process some logic after response send"""
+        if packet.method == KEEP_ALIVE_METHOD:
+            return
+
+        msg_info = self.msg_container.get(ret_packet.message_id)
+        self.__lock.acquire()
+        try:
+            if not msg_info:
+                raise OperException('Message with ID %s does not found!'%packet.message_id)
+
+            operation = msg_info['operation']
+        finally:
+            self.__lock.release()
+
+        operation_obj = self.__operations.get(operation, None)
+        if operation_obj is None:
+            raise OperException('Method "%s" does not implemented!'%operation)
+
+        try:
+            operation_obj.after_process(packet, ret_packet)
+        except Exception, err:
+            logger.error('%s after_process routine failed. Details: %s'%(operation, err))
 
 
     def callback(self, packet):

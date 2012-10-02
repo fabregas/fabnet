@@ -51,5 +51,7 @@ class GetRangesTableOperation(OperationBase):
         if self.operator.status == DS_INITIALIZE:
             logger.debug('Starting node as DHT member')
             self.operator.start_as_dht_member()
+        else:
+            self.operator.check_dht_range()
 
 

@@ -9,19 +9,20 @@ import random
 import subprocess
 import signal
 import sqlite3
+import shutil
 from fabnet.utils.logger import logger
 
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest
 logger.setLevel(logging.DEBUG)
 
-NODES_COUNT = range(40, 41)
+NODES_COUNT = range(30, 31)
 
 class TestBigNework(unittest.TestCase):
     def test_00_create_network(self):
         for count in NODES_COUNT:
             print 'Starting %s nodes...'%count
             self.create_net(count)
-            os.system('python ./tests/topology_to_tgf /tmp/fabnet_topology.db /tmp/fabnet_topology.%s.tgf'%count)
+            #os.system('python ./tests/topology_to_tgf /tmp/fabnet_topology.db /tmp/fabnet_topology.%s.tgf'%count)
 
     def create_net(self, nodes_count):
         PROCESSES = []
@@ -36,31 +37,35 @@ class TestBigNework(unittest.TestCase):
 
                 addresses.append(address)
 
-                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, '/tmp'])
-                time.sleep(1)
+                home = '/tmp/node_%s'%i
+                if os.path.exists(home):
+                    shutil.rmtree(home)
+                os.mkdir(home)
+                logger.warning('{SNP} STARTING NODE %s'%address)
+                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home])
+                logger.warning('{SNP} PROCESS STARTED')
+                time.sleep(.5)
 
                 PROCESSES.append(p)
-
-            time.sleep(5)
-
-            self._check_stat(addresses)
+                if len(addresses) > 10:
+                    self._check_stat(address)
 
             p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address])
-            time.sleep(1.5)
-            self._wait_topology(nodes_count)
-            os.system('python ./tests/topology_to_tgf /tmp/fabnet_topology.db /tmp/fabnet_topology.%s-orig.tgf'%nodes_count)
+            node_i = address.split(':')[-1]
+            self._wait_topology(node_i, nodes_count)
+            os.system('python ./tests/topology_to_tgf /tmp/node_%s/fabnet_topology.db /tmp/fabnet_topology.%s-orig.tgf'%(node_i, nodes_count))
             for address in addresses:
                 print 'Collecting topology from %s ...'%address
                 p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address, '{"need_rebalance": 1}'])
-                time.sleep(1.5)
-                self._wait_topology(nodes_count)
+                node_i = address.split(':')[-1]
+                self._wait_topology(node_i, nodes_count)
+
+                os.system('python ./tests/topology_to_tgf /tmp/node_%s/fabnet_topology.db /tmp/fabnet_topology.%s-balanced.tgf'%(node_i, nodes_count,))
 
             print 'TOPOLOGY REBALANCED'
-            os.system('python ./tests/topology_to_tgf /tmp/fabnet_topology.db /tmp/fabnet_topology.%s-balanced.tgf'%(nodes_count,))
 
-            #self._check_stat(addresses)
-
-            for i in xrange(3):
+            del_count = nodes_count/3
+            for i in xrange(del_count):
                 process = random.choice(PROCESSES)
                 idx = PROCESSES.index(process)
                 del_address = addresses[idx]
@@ -70,15 +75,16 @@ class TestBigNework(unittest.TestCase):
                 process.send_signal(signal.SIGINT)
                 process.wait()
 
-                time.sleep(80)
+            time.sleep(80)
 
-                address = random.choice(addresses)
-                print 'Collecting topology from %s ...'%address
-                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address])
-                time.sleep(1)
-                nodes_count -= 1
-                self._wait_topology(nodes_count)
-                os.system('python ./tests/topology_to_tgf /tmp/fabnet_topology.db /tmp/fabnet_topology.%s-%s.tgf'%(nodes_count, del_address.split(':')[-1]))
+            address = random.choice(addresses)
+            print 'Collecting topology from %s ...'%address
+            p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address])
+            time.sleep(1)
+            node_i = address.split(':')[-1]
+            self._wait_topology(node_i, nodes_count-del_count)
+            os.system('python ./tests/topology_to_tgf /tmp/node_%s/fabnet_topology.db /tmp/fabnet_topology.%s-%s.tgf'% \
+                        (node_i, nodes_count, del_count))
 
         finally:
             for process in PROCESSES:
@@ -90,26 +96,43 @@ class TestBigNework(unittest.TestCase):
 
             print 'STOPPED'
 
-    def _check_stat(self, addresses):
-            packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
-            client = FriClient()
+    def _check_stat(self, address):
+        client = FriClient()
 
-            for address in addresses:
-                ret_packet = client.call_sync(address, packet_obj.to_dict())
-
-                self.assertEqual(ret_packet.ret_code, 0, ret_packet.ret_message)
-                #print 'WORKERS COUNT: ', ret_packet.ret_parameters['workers_count']
-                busy = int(ret_packet.ret_parameters['workers_busy'])
-                #print '[STAT] %s node has %s busy thread(s)'%(address, busy)
-                #self.assertEqual(busy, 1, '%s node has %s busy thread(s)'%(address, busy))
-
-
-    def _wait_topology(self, nodes_count):
         while True:
             try:
-                conn = sqlite3.connect('/tmp/fabnet_topology.db')
+                packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+                ret_packet = client.call_sync(address, packet_obj.to_dict())
+                if ret_packet.ret_code:
+                    time.sleep(.5)
+                    continue
+
+                uppers_balance = int(ret_packet.ret_parameters[u'uppers_balance'])
+                superiors_balance = int(ret_packet.ret_parameters[u'superiors_balance'])
+                if uppers_balance >= 0 and superiors_balance >= 0:
+                    break
+                print 'Node %s is not balanced yet! Waiting...'%address
+                time.sleep(.5)
+            except Exception, err:
+                logger.error('ERROR: %s'%err)
+                raise err
+
+
+
+    def _wait_topology(self, node_i, nodes_count):
+        conn = None
+        while True:
+            try:
+                db = '/tmp/node_%s/fabnet_topology.db'%node_i
+
+                while not os.path.exists(db):
+                    print '%s not exists!'%db
+                    time.sleep(0.1)
+
+                time.sleep(.5)
+                conn = sqlite3.connect(db)
                 curs = conn.cursor()
-                curs.execute("SELECT count(node_address) FROM fabnet_nodes")
+                curs.execute("SELECT count(node_address) FROM fabnet_nodes WHERE old_data=0")
                 rows = curs.fetchall()
                 print 'nodes discovered: %s'%rows[0][0]
                 if int(rows[0][0]) != nodes_count:
@@ -117,8 +140,9 @@ class TestBigNework(unittest.TestCase):
                 else:
                     break
             finally:
-                curs.close()
-                conn.close()
+                if conn:
+                    curs.close()
+                    conn.close()
 
 
 if __name__ == '__main__':

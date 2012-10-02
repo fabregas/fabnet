@@ -11,9 +11,9 @@ Copyright (C) 2012 Konstantin Andrusenko
 """
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.dht_mgmt.constants import DS_NORMALWORK
 from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.utils.logger import logger
+import hashlib
 
 class GetRangeDataRequestOperation(OperationBase):
     def process(self, packet):
@@ -36,7 +36,8 @@ class GetRangeDataRequestOperation(OperationBase):
             node_address = packet.sender
             logger.debug('Starting subrange data transfering to %s'% node_address)
             for key, data in ret_range.iter_range():
-                params = {'key': key, 'data': data}
+                checksum = hashlib.sha1(data).hexdigest()
+                params = {'key': key, 'data': data, 'checksum': checksum}
                 resp = self._init_operation(node_address, 'PutDataBlock', params, sync=True)
                 if resp.ret_code:
                     raise Exception('Init PutDataBlock operation on %s error. Details: %s'%(node_address, resp.ret_message))
@@ -46,6 +47,7 @@ class GetRangeDataRequestOperation(OperationBase):
             logger.error('GetRangeDataRequestOperation error: %s'%err)
             dht_range.join_subranges()
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Send range data failed: %s'%err)
+
 
         ret_range.move_to_trash()
         append_lst = [(ret_range.get_start(), ret_range.get_end(), node_address)]
@@ -71,5 +73,4 @@ class GetRangeDataRequestOperation(OperationBase):
             logger.info('Trying select other hash range...')
             self.operator.start_as_dht_member()
         else:
-            logger.info('Changing node status to NORMALWORK')
-            self.operator.status = DS_NORMALWORK
+            self.operator.set_status_to_normalwork()

@@ -41,7 +41,7 @@ class TestServerThread(threading.Thread):
 
 def _init_operation_mock(node_address, operation, parameters):
     print node_address, operation, parameters
-    pass
+    return 0, 'ok'
 
 
 class TestManageMeighbours(unittest.TestCase):
