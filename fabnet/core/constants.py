@@ -14,6 +14,10 @@ This module contains the fabnet core constants
 #socket buffer size
 BUF_SIZE = 1024
 
+#fri binary packet constants 
+FRI_PROTOCOL_IDENTIFIER = 'FRI0'
+FRI_PACKET_INFO_LEN = 20
+
 #message container size
 MC_SIZE = 10000
 
@@ -46,3 +50,4 @@ FRI_CLIENT_TIMEOUT = 10
 
 MIN_WORKERS_COUNT = 5
 MAX_WORKERS_COUNT = 40
+

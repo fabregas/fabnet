@@ -4,6 +4,7 @@ import os
 import sys
 import signal
 import time
+import logging
 
 from fabnet.core.node import Node
 from fabnet.utils.logger import logger
@@ -38,6 +39,9 @@ def start(args):
         if len(args) == 6:
             cert_file = args[4]
             key_file = args[5]
+
+        if '--debug' in args:
+            logger.setLevel(logging.DEBUG)
 
         fabnet_node = Node(hostname, port, home_dir, node_name, cert_file, key_file)
         started = fabnet_node.start(neighbour)

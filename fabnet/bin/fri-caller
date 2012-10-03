@@ -16,7 +16,7 @@ def call_operation(operation, node_address, params, sync):
     packet = FabnetPacketRequest(method=operation, sender=None, parameters=params, sync=sync)
     client = FriClient()
     if not sync:
-        rcode, rmsg = client.call(node_address, packet.to_dict())
+        rcode, rmsg = client.call(node_address, packet)
 
         if rcode == 0:
             print('Operation "%s" is started over fabnet.'%operation)

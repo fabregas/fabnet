@@ -15,6 +15,7 @@ import uuid
 import socket
 import threading
 import time
+import struct
 from Queue import Queue
 
 import json
@@ -23,10 +24,62 @@ from fabnet.utils.logger import logger
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_UNEXPECTED, STOP_THREAD_EVENT, \
                         S_ERROR, S_PENDING, S_INWORK, \
                         BUF_SIZE, CHECK_NEIGHBOURS_TIMEOUT, FRI_CLIENT_TIMEOUT, \
-                        MIN_WORKERS_COUNT, MAX_WORKERS_COUNT
+                        MIN_WORKERS_COUNT, MAX_WORKERS_COUNT, \
+                        FRI_PROTOCOL_IDENTIFIER, FRI_PACKET_INFO_LEN
 
 class FriException(Exception):
     pass
+
+
+class FriBinaryProcessor:
+    @classmethod
+    def get_expected_len(cls, data):
+        p_info = data[:FRI_PACKET_INFO_LEN]
+        if len(p_info) != FRI_PACKET_INFO_LEN:
+            return None
+
+        try:
+            prot, packet_len, header_len = struct.unpack('<4sqq', p_info)
+        except Exception, err:
+            raise FriException('Invalid FRI packet! Packet information is corrupted: %s'%err)
+
+        if prot != FRI_PROTOCOL_IDENTIFIER:
+            raise FriException('Invalid FRI packet! Protocol is mismatch')
+
+        return packet_len, header_len
+
+
+    @classmethod
+    def from_binary(cls, data, packet_len, header_len):
+        if len(data) != int(packet_len):
+            raise FriException('Invalid FRI packet! Packet length %s is differ to expected %s'%(len(data), packet_len))
+
+        header = data[FRI_PACKET_INFO_LEN:FRI_PACKET_INFO_LEN+header_len]
+        if len(header) != int(header_len):
+            raise FriException('Invalid FRI packet! Header length %s is differ to expected %s'%(len(header), header_len))
+
+        try:
+            json_header = json.loads(header)
+        except Exception, err:
+            raise FriException('Invalid FRI packet! Header is corrupted: %s'%err)
+
+        bin_data = data[header_len+FRI_PACKET_INFO_LEN:]
+
+        return json_header, bin_data
+
+    @classmethod
+    def to_binary(cls, header_obj, bin_data=''):
+        try:
+            header = json.dumps(header_obj)
+        except Exception, err:
+            raise FriException('Cant form FRI packet! Header is corrupted: %s'%err)
+
+        h_len = len(header)
+        packet_data = header + bin_data
+        p_len = len(packet_data) + FRI_PACKET_INFO_LEN
+        p_info = struct.pack('<4sqq', FRI_PROTOCOL_IDENTIFIER, p_len, h_len)
+
+        return p_info + packet_data
 
 
 class FabnetPacketRequest:
@@ -38,6 +91,7 @@ class FabnetPacketRequest:
         self.method = packet.get('method', None)
         self.sender = packet.get('sender', None)
         self.parameters = packet.get('parameters', {})
+        self.binary_data = packet.get('binary_data', '')
 
         self.validate()
 
@@ -48,20 +102,24 @@ class FabnetPacketRequest:
         if self.message_id is None:
             raise FriException('Invalid packet: message_id does not exists')
 
-        #if self.sender is None:
-        #    raise FriException('Invalid packet: sender does not exists')
-
         if self.method is None:
             raise FriException('Invalid packet: method does not exists')
 
 
+    def dump(self):
+        header_json = self.to_dict()
+        data = FriBinaryProcessor.to_binary(header_json, self.binary_data)
+        return data
 
     def to_dict(self):
-        return {'message_id': self.message_id, \
+        ret_dict = {'message_id': self.message_id, \
                 'method': self.method, \
                 'sender': self.sender, \
-                'parameters': self.parameters, \
                 'sync': self.sync}
+
+        if self.parameters:
+            ret_dict['parameters'] = self.parameters
+        return ret_dict
 
     def __str__(self):
         return str(self.__repr__())
@@ -77,13 +135,33 @@ class FabnetPacketResponse:
         self.ret_message = packet.get('ret_message', '')
         self.ret_parameters = packet.get('ret_parameters', {})
         self.from_node = packet.get('from_node', None)
+        self.binary_data = packet.get('binary_data', '')
+
+    def dump(self):
+        header_json = self.to_dict()
+        data = FriBinaryProcessor.to_binary(header_json, self.binary_data)
+        return data
 
     def to_dict(self):
-        return {'message_id': self.message_id,
-                'ret_code': self.ret_code,
-                'ret_message': self.ret_message,
-                'ret_parameters': self.ret_parameters,
-                'from_node': self.from_node}
+        ret_dict = {'ret_code': self.ret_code,
+                'ret_message': self.ret_message}
+
+        if self.message_id:
+            ret_dict['message_id'] = self.message_id
+        if self.ret_parameters:
+            ret_dict['ret_parameters'] = self.ret_parameters
+        if self.from_node:
+            ret_dict['from_node'] = self.from_node
+
+        return ret_dict
+
+
+    def __str__(self):
+        return str(self.__repr__())
+
+    def __repr__(self):
+        return '{%s}[%s] %s %s %s'%(self.message_id, self.from_node,
+                    self.ret_code, self.ret_message, str(self.ret_parameters)[:100])
 
 
 
@@ -381,6 +459,8 @@ class FriWorker(threading.Thread):
 
     def handle_connection(self, sock):
         data = ''
+        exp_len = None
+        header_len = 0
 
         while True:
             received = sock.recv(BUF_SIZE)
@@ -390,17 +470,24 @@ class FriWorker(threading.Thread):
 
             data += received
 
-            if len(received) < BUF_SIZE:
+            if exp_len is None:
+                exp_len, header_len = FriBinaryProcessor.get_expected_len(data)
+            if exp_len and len(data) >= exp_len:
                 break
 
         if not data:
             raise FriException('empty data block')
 
-        return data
+        header, bin_data = FriBinaryProcessor.from_binary(data, exp_len, header_len)
+        header['binary_data'] = bin_data
+
+        return header
+
 
     def run(self):
         logger.info('%s started!'%self.getName())
-        ok_msg = json.dumps({'ret_code': RC_OK, 'ret_message': 'ok'})
+        ok_packet = FabnetPacketResponse(ret_code=RC_OK, ret_message='ok')
+        ok_msg = ok_packet.dump()
 
         while True:
             ret_code = RC_OK
@@ -417,9 +504,9 @@ class FriWorker(threading.Thread):
                     break
 
                 self.__busy_flag.set()
-                data = self.handle_connection(sock)
 
-                packet = self.parse_message(data)
+                packet = self.handle_connection(sock)
+
                 is_sync = packet.get('sync', False)
                 if not is_sync:
                     sock.sendall(ok_msg)
@@ -439,7 +526,7 @@ class FriWorker(threading.Thread):
                         else:
                             if not ret_packet:
                                 ret_packet = FabnetPacketResponse()
-                            sock.sendall(json.dumps(ret_packet.to_dict()))
+                            sock.sendall(ret_packet.dump())
                             sock.shutdown(socket.SHUT_WR)
                             sock.close()
                             sock = None
@@ -453,7 +540,8 @@ class FriWorker(threading.Thread):
                 logger.error(ret_message)
                 try:
                     if sock:
-                        sock.sendall(json.dumps({'ret_code': RC_ERROR, 'ret_message': ret_message}))
+                        err_packet = FabnetPacketResponse(ret_code=RC_ERROR, ret_message=ret_message)
+                        sock.sendall(err_packet.dump())
                         sock.shutdown(socket.SHUT_WR)
                         sock.close()
                 except Exception, err:
@@ -468,19 +556,6 @@ class FriWorker(threading.Thread):
         except Exception, err:
             logger.error('Closing client socket error: %s'%err)
 
-    def parse_message(self, data):
-        raw_message = json.loads(data)
-
-        if not raw_message.has_key('message_id'):
-            raise FriException('[FriWorker.parse_message] message_id does not found in FRI message {%s}'%str(raw_message))
-
-        if (not raw_message.has_key('method')) and (not raw_message.has_key('ret_code')):
-            raise FriException('[FriWorker.parse_message] invalid FRI message {%s}'%str(raw_message))
-
-        if raw_message.has_key('method') and (not raw_message.has_key('sender')):
-            raise FriException('[FriWorker.parse_message] sender does not found in FRI message {%s}'%str(raw_message))
-
-        return raw_message
 
 
 class CheckNeighboursThread(threading.Thread):
@@ -539,7 +614,7 @@ class FriClient:
             if type(packet) == str:
                 data = packet
             else:
-                data = json.dumps(packet)
+                data = packet.dump()
 
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -556,26 +631,34 @@ class FriClient:
             #sock.shutdown(socket.SHUT_WR)
 
             data = ''
+            exp_len = None
+            header_len = 0
             while True:
                 received = sock.recv(BUF_SIZE)
+
                 if not received:
                     break
 
                 data += received
 
-                if len(received) < BUF_SIZE:
+                if exp_len is None:
+                    exp_len, header_len = FriBinaryProcessor.get_expected_len(data)
+                if exp_len and len(data) >= exp_len:
                     break
 
-            return data
+            if not data:
+                raise FriException('empty data block')
+
+            header, bin_data = FriBinaryProcessor.from_binary(data, exp_len, header_len)
+            header['binary_data'] = bin_data
+            return header
         finally:
             if sock:
                 sock.close()
 
     def call(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
-            data = self.__int_call(node_address, packet, timeout)
-
-            json_object = json.loads(data)
+            json_object = self.__int_call(node_address, packet, timeout)
 
             return json_object.get('ret_code', RC_UNEXPECTED), json_object.get('ret_message', '')
         except Exception, err:
@@ -584,9 +667,7 @@ class FriClient:
 
     def call_sync(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
-            data = self.__int_call(node_address, packet, timeout)
-
-            json_object = json.loads(data)
+            json_object = self.__int_call(node_address, packet, timeout)
 
             return FabnetPacketResponse(**json_object)
         except Exception, err:
