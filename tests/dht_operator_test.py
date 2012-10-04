@@ -53,20 +53,20 @@ class TestFSMappedRanges(unittest.TestCase):
 
         self.assertEqual(len(call_stack), 3)
         self.assertEqual(call_stack[0][0], 'third_range_holder')
-        self.assertEqual(call_stack[0][1], 399)
+        self.assertEqual(call_stack[0][1], 400)
         self.assertEqual(call_stack[0][2], 499)
 
         self.assertEqual(call_stack[1][0], 'first_range_holder')
-        self.assertEqual(call_stack[1][1], 49)
+        self.assertEqual(call_stack[1][1], 50)
         self.assertEqual(call_stack[1][2], 99)
 
         self.assertEqual(call_stack[2][0], 'second_range_holder')
-        self.assertEqual(call_stack[2][1], 124)
+        self.assertEqual(call_stack[2][1], 125)
         self.assertEqual(call_stack[2][2], 149)
 
         operator.start_as_dht_member() #wait timeout
         self.assertEqual(call_stack[3][0], 'second_range_holder')
-        self.assertEqual(call_stack[3][1], 124)
+        self.assertEqual(call_stack[3][1], 125)
         self.assertEqual(call_stack[3][2], 149)
         operator.stop()
 
@@ -104,15 +104,15 @@ class TestFSMappedRanges(unittest.TestCase):
 
             self.assertEqual(len(call_stack), 3)
             self.assertEqual(call_stack[0][0], 'first_range_holder')
-            self.assertEqual(call_stack[0][1], 49)
+            self.assertEqual(call_stack[0][1], 50)
             self.assertEqual(call_stack[0][2], 99)
 
             self.assertEqual(call_stack[1][0], 'third_range_holder')
-            self.assertEqual(call_stack[1][1], 399)
+            self.assertEqual(call_stack[1][1], 400)
             self.assertEqual(call_stack[1][2], 499)
 
             self.assertEqual(call_stack[2][0], 'second_range_holder')
-            self.assertEqual(call_stack[2][1], 124)
+            self.assertEqual(call_stack[2][1], 125)
             self.assertEqual(call_stack[2][2], 149)
 
             def call_node_error_simulator(nodeaddr, request):
@@ -124,7 +124,7 @@ class TestFSMappedRanges(unittest.TestCase):
             operator.call_node = call_node_error_simulator
             operator.start_as_dht_member()
             self.assertEqual(call_stack[3][0], 'third_range_holder')
-            self.assertEqual(call_stack[3][1], 399)
+            self.assertEqual(call_stack[3][1], 400)
             self.assertEqual(call_stack[3][2], 499)
         finally:
             operator.stop()

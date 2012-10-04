@@ -19,10 +19,10 @@ class EchoOperation(OperationBase):
         pass
 
     def process(self, packet):
-        return FabnetPacketResponse(ret_code=0, ret_message='ok', ret_parameters={'message': packet.parameters['message']})
+        return FabnetPacketResponse(ret_code=0, ret_message='ok', binary_data=packet.binary_data)
 
     def callback(self, packet, sender):
-        open('/tmp/big_message.out', 'w').write(packet.ret_parameters['message'])
+        open('/tmp/big_message.out', 'w').write(packet.binary_data)
 
 
 class TestAbstractOperator(unittest.TestCase):
@@ -44,20 +44,24 @@ class TestAbstractOperator(unittest.TestCase):
             ret = server2.start()
             self.assertEqual(ret, True)
 
-            data = '0123456789'*1000000
+            data = '0123456789'*4000000
+            data += ''
             packet = { 'message_id': 323232,
                         'method': 'ECHO',
                         'sync': False,
                         'sender': '127.0.0.1:1987',
-                        'parameters': {'message': data}}
+                        'binary_data': data}
+            t0 = datetime.now()
             packet_obj = FabnetPacketRequest(**packet)
             rcode, rmsg = operator.call_node('127.0.0.1:1986', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
 
             operator.wait_response(323232, 20)
+            print 'Echo big data time: %s'%(datetime.now()-t0)
             time.sleep(1)
             rcv_data = open('/tmp/big_message.out').read()
             self.assertEqual(len(rcv_data), len(data))
+            os.remove('/tmp/big_message.out')
         finally:
             if server1:
                 server1.stop()

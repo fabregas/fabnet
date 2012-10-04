@@ -37,8 +37,8 @@ class GetRangeDataRequestOperation(OperationBase):
             logger.debug('Starting subrange data transfering to %s'% node_address)
             for key, data in ret_range.iter_range():
                 checksum = hashlib.sha1(data).hexdigest()
-                params = {'key': key, 'data': data, 'checksum': checksum}
-                resp = self._init_operation(node_address, 'PutDataBlock', params, sync=True)
+                params = {'key': key, 'checksum': checksum}
+                resp = self._init_operation(node_address, 'PutDataBlock', params, binary_data=data, sync=True)
                 if resp.ret_code:
                     raise Exception('Init PutDataBlock operation on %s error. Details: %s'%(node_address, resp.ret_message))
 

@@ -20,16 +20,16 @@ from hash_ranges_table import HashRangesTable
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
-from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_NORMALWORK, \
+from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_DESTROYING, DS_NORMALWORK, \
             CHECK_HASH_TABLE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT, \
             INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGE_TIMEOUT, \
-            MONITOR_DHT_RANGES_TIMEOUT, RESERV_RANGE_FILE_MD_TIMEDELTA
+            MONITOR_DHT_RANGES_TIMEOUT
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
 
 
 class DHTOperator(Operator):
-    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False):
-        Operator.__init__(self, self_address, home_dir, certfile, is_init_node)
+    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown'):
+        Operator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name)
 
         self.status = DS_INITIALIZE
         self.ranges_table = HashRangesTable()
@@ -48,15 +48,31 @@ class DHTOperator(Operator):
             self.status = DS_NORMALWORK
 
         self.__check_hash_table_thread = CheckLocalHashTableThread(self)
-        self.__check_hash_table_thread.setName('CheckLocalHashTableThread')
+        self.__check_hash_table_thread.setName('%s-CheckLocalHashTableThread'%self.node_name)
         self.__check_hash_table_thread.start()
 
         self.__monitor_dht_ranges = MonitorDHTRanges(self)
-        self.__monitor_dht_ranges.setName('MonitorDHTRanges')
+        self.__monitor_dht_ranges.setName('%s-MonitorDHTRanges'%self.node_name)
         self.__monitor_dht_ranges.start()
 
 
+    def get_statistic(self):
+        stat = Operator.get_statistic(self)
+        dht_range = self.get_dht_range()
+
+        stat['status'] = self.status
+        stat['range_start'] = '%040x'% dht_range.get_start()
+        stat['range_end'] = '%040x'% dht_range.get_end()
+        stat['range_size'] = dht_range.get_range_size()
+        stat['replicas_size'] = dht_range.get_replicas_size()
+        stat['free_size'] = dht_range.get_free_size()
+        return stat
+
+
     def on_neigbour_not_respond(self, neighbour_type, neighbour_address):
+        if neighbour_type != NT_SUPERIOR:
+            return
+
         for range_obj in self.ranges_table.iter_table():
             if range_obj.node_address == neighbour_address:
                 self._move_range(range_obj)
@@ -64,7 +80,7 @@ class DHTOperator(Operator):
 
 
     def _move_range(self, range_obj):
-        logger.info('Node %s does not respond. Updating hash range table on network...'%range_obj.node_address)
+        logger.info('Node %s went from DHT. Updating hash range table on network...'%range_obj.node_address)
         rm_lst = [(range_obj.start, range_obj.end, range_obj.node_address)]
         parameters = {'append': [], 'remove': rm_lst}
 
@@ -73,6 +89,14 @@ class DHTOperator(Operator):
 
 
     def stop(self):
+        self.status = DS_DESTROYING
+        for range_obj in self.ranges_table.iter_table():
+            if range_obj.node_address == self.self_address:
+                self._move_range(range_obj)
+                break
+
+        Operator.stop(self)
+
         self.__check_hash_table_thread.stop()
         self.__monitor_dht_ranges.stop()
 
@@ -114,6 +138,9 @@ class DHTOperator(Operator):
 
 
     def start_as_dht_member(self):
+        if self.status == DS_DESTROYING:
+            return
+
         self.status = DS_INITIALIZE
         dht_range = self.get_dht_range()
 
@@ -128,7 +155,7 @@ class DHTOperator(Operator):
             if new_range:
                 if (new_range.start != curr_start or new_range.end != curr_end):
                     nochange = True
-                elif new_range.node_address == self.self_address:
+                if new_range.node_address == self.self_address:
                     self.set_status_to_normalwork()
                     return
 
@@ -149,7 +176,7 @@ class DHTOperator(Operator):
         if nochange:
             new_dht_range = dht_range
         else:
-            new_dht_range = FSHashRanges(long(new_range.start + new_range.length()/2), long(new_range.end), self.save_path)
+            new_dht_range = FSHashRanges(long(new_range.start + new_range.length()/2+1), long(new_range.end), self.save_path)
             self.update_dht_range(new_dht_range)
             new_dht_range.restore_from_trash() #try getting new range data from trash
 
@@ -179,9 +206,13 @@ class DHTOperator(Operator):
 
         old_dht_range.move_to_trash()
 
+        dht_range = self.get_dht_range()
+        logger.info('New node range: %040x-%040x'%(dht_range.get_start(), dht_range.get_end()))
+
     def check_dht_range(self):
         if self.status == DS_INITIALIZE:
             return
+
         dht_range = self.get_dht_range()
         start = dht_range.get_start()
         end = dht_range.get_end()
@@ -202,7 +233,6 @@ class CheckLocalHashTableThread(threading.Thread):
 
     def run(self):
         self.stopped = False
-        block_trigger = True
         logger.info('Thread started!')
 
         while not self.stopped:
@@ -213,28 +243,22 @@ class CheckLocalHashTableThread(threading.Thread):
                     continue
 
                 for neighbour in neighbours:
-                    logger.info('Checking range table at %s'%neighbour)
-                    checksum, last_dm = self.operator.ranges_table.get_checksum()
-                    params = {'checksum': checksum, 'last_dm': last_dm.isoformat()}
+                    logger.debug('Checking range table at %s'%neighbour)
+                    mod_index = self.operator.ranges_table.get_mod_index()
+                    params = {'mod_index': mod_index}
 
                     packet_obj = FabnetPacketRequest(method='CheckHashRangeTable',
                                 sender=self.operator.self_address, parameters=params)
                     rcode, rmsg = self.operator.call_node(neighbour, packet_obj)
+
+                    for i in xrange(CHECK_HASH_TABLE_TIMEOUT):
+                        if self.stopped:
+                            break
+
+                        time.sleep(1)
             except Exception, err:
                 logger.error(str(err))
-            finally:
-                for i in xrange(CHECK_HASH_TABLE_TIMEOUT):
-                    if self.stopped:
-                        break
 
-                    blocked = self.operator.ranges_table.is_blocked()
-                    if not blocked:
-                        block_trigger = True
-                    elif block_trigger:
-                        block_trigger = False
-                        break
-
-                    time.sleep(1)
 
         logger.info('Thread stopped!')
 
@@ -247,7 +271,7 @@ class MonitorDHTRanges(threading.Thread):
         self.operator = operator
         self.stopped = True
 
-    '''
+    """
     def _check_range_free_size(self):
         #FIXME: implement this routine after PullRangeRequest operation implemented
         #need pull strategy design!
@@ -279,34 +303,41 @@ class MonitorDHTRanges(threading.Thread):
             return False
 
         return True
-    '''
+    """
 
     def _process_reservation_range(self):
         dht_range = self.operator.get_dht_range()
 
-        cdt = datetime.now()
         for digest, data, file_path in dht_range.iter_reservation():
-            logger.debug('Processing %s from reservation range'%digest)
-            f_dm = datetime.fromtimestamp(os.path.getmtime(file_path))
-            dt = cdt - f_dm
+            logger.info('Processing %s from reservation range'%digest)
+            if self._put_data(digest, data):
+                logger.debug('removing %s from reservation'%digest)
+                os.remove(file_path)
+            else:
+                logger.debug('data block with key=%s is send from reservation range'%digest)
 
-            if dt.total_seconds() > RESERV_RANGE_FILE_MD_TIMEDELTA:
-                if self._put_data(digest, data):
-                    logger.debug('removing %s from reservation'%digest)
-                    os.remove(file_path)
-                else:
-                    logger.debug('data block with key=%s is send from reservation range'%digest)
+    def _process_replicas(self):
+        dht_range = self.operator.get_dht_range()
+        for digest, data, file_path in dht_range.iter_replicas():
+            logger.info('Processing replica %s'%digest)
+            if self._put_data(digest, data, is_replica=True):
+                logger.debug('Removing %s from local replicas'%digest)
+                os.remove(file_path)
+            else:
+                logger.debug('data block with key=%s is send from reservation range'%digest)
 
 
-    def _put_data(self, key, data):
+    def _put_data(self, key, data, is_replica=False):
         k_range = self.operator.ranges_table.find(long(key, 16))
         if not k_range:
             logger.debug('No range found for reservation key %s'%key)
             return False
 
         checksum = hashlib.sha1(data).hexdigest()
-        params = {'key': key, 'data': data, 'checksum': checksum}
-        req = FabnetPacketRequest(method='PutDataBlock', sender=self.operator.self_address, parameters=params, sync=True)
+        params = {'key': key, 'checksum': checksum, 'is_replica': is_replica}
+        req = FabnetPacketRequest(method='PutDataBlock', sender=self.operator.self_address,\
+                parameters=params, binary_data=data, sync=True)
+
         resp = self.operator.call_node(k_range.node_address, req, sync=True)
 
         if resp.ret_code != RC_OK:
@@ -322,8 +353,10 @@ class MonitorDHTRanges(threading.Thread):
         while not self.stopped:
             try:
                 #self._check_range_free_size()
+                logger.debug('MonitorDHTRanges iteration...')
 
                 self._process_reservation_range()
+                self._process_replicas()
             except Exception, err:
                 logger.error('[MonitorDHTRanges] %s'% err)
             finally:

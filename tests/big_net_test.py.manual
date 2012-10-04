@@ -102,7 +102,7 @@ class TestBigNework(unittest.TestCase):
         while True:
             try:
                 packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
-                ret_packet = client.call_sync(address, packet_obj.to_dict())
+                ret_packet = client.call_sync(address, packet_obj)
                 if ret_packet.ret_code:
                     time.sleep(.5)
                     continue

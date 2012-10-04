@@ -16,6 +16,8 @@ import socket
 import threading
 import time
 import struct
+import zlib
+from datetime import datetime
 from Queue import Queue
 
 import json
@@ -64,6 +66,8 @@ class FriBinaryProcessor:
             raise FriException('Invalid FRI packet! Header is corrupted: %s'%err)
 
         bin_data = data[header_len+FRI_PACKET_INFO_LEN:]
+        if bin_data:
+            bin_data = zlib.decompress(bin_data)
 
         return json_header, bin_data
 
@@ -73,6 +77,9 @@ class FriBinaryProcessor:
             header = json.dumps(header_obj)
         except Exception, err:
             raise FriException('Cant form FRI packet! Header is corrupted: %s'%err)
+
+        if bin_data:
+            bin_data = zlib.compress(bin_data)
 
         h_len = len(header)
         packet_data = header + bin_data
@@ -215,6 +222,7 @@ class FriServer:
         if self.stopped:
             return
 
+        self.operator.stop()
         self.__conn_handler_thread.stop()
         self.__check_neighbours_thread.stop()
         try:
@@ -235,7 +243,6 @@ class FriServer:
             if sock:
                 sock.close()
 
-        self.operator.stop()
         self.__workers_manager_thread.stop()
 
         #waiting threads finishing... 
@@ -531,8 +538,7 @@ class FriWorker(threading.Thread):
                             sock.close()
                             sock = None
                     finally:
-                        if ret_packet:
-                            self.operator.after_process(pack, ret_packet)
+                        self.operator.after_process(pack, ret_packet)
                 else:
                     self.operator.callback(FabnetPacketResponse(**packet))
             except Exception, err:
@@ -570,11 +576,16 @@ class CheckNeighboursThread(threading.Thread):
 
         while not self.stopped:
             try:
+                t0 = datetime.now()
+
                 self.operator.check_neighbours()
+
+                proc_dt = datetime.now() - t0
             except Exception, err:
                 logger.error('[CheckNeighboursThread] %s'%err)
             finally:
-                for i in range(CHECK_NEIGHBOURS_TIMEOUT):
+                wait_seconds = CHECK_NEIGHBOURS_TIMEOUT - proc_dt.seconds
+                for i in range(wait_seconds):
                     if self.stopped:
                         break
                     time.sleep(1)

@@ -14,9 +14,10 @@ import shutil
 import threading
 import copy
 import time
+from datetime import datetime
 
 from fabnet.utils.logger import logger
-from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH
+from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH, WAIT_FILE_MD_TIMEDELTA
 
 class FSHashRangesException(Exception):
     pass
@@ -166,6 +167,12 @@ class FSHashRanges:
                 raise FSHashRangesException('Cant create directory for range: %s'%self.__reservation_dir)
 
         self.__trash_dir = os.path.join(save_path, 'trash')
+        if not os.path.exists(self.__trash_dir):
+            os.mkdir(self.__trash_dir)
+
+        self.__replica_dir = os.path.join(save_path, 'replica_data')
+        if not os.path.exists(self.__replica_dir):
+            os.mkdir(self.__replica_dir)
 
         self.__child_ranges = SafeList()
         self.__parallel_writes = SafeCounter()
@@ -227,6 +234,27 @@ class FSHashRanges:
             return '%040x'%key
         return key
 
+    def __write_data(self, f_name, data):
+        try:
+            f_obj = open(f_name, 'wb')
+            try:
+                f_obj.write(data)
+            finally:
+                f_obj.close()
+        except IOError, err:
+            raise FSHashRangesException('Cant save data to file system. Details: %s'%err)
+
+    def __read_data(self, file_path):
+        f_obj = open(file_path, 'rb')
+        try:
+            data = f_obj.read()
+        except IOError, err:
+            raise FSHashRangesException('Cant read data from file system. Details: %s'%err)
+        finally:
+            f_obj.close()
+
+        return data
+
     def __put_data(self, key, data, save_to_reservation=False):
         key = self._str_key(key)
         if self.__block_flag.is_set():
@@ -242,13 +270,7 @@ class FSHashRanges:
             is_reserv = False
 
         try:
-            f_obj = open(os.path.join(range_dir, key), 'wb')
-            try:
-                f_obj.write(data)
-            finally:
-                f_obj.close()
-        except IOError, err:
-            raise FSHashRangesException('Cant save data to file system. Details: %s'%err)
+            self.__write_data(os.path.join(range_dir, key), data)
         finally:
             if not is_reserv:
                 self.__parallel_writes.dec()
@@ -265,15 +287,7 @@ class FSHashRanges:
                 if not os.path.exists(file_path):
                     raise FSHashRangesNoData('No data found for key %s'% key)
 
-        f_obj = open(file_path, 'rb')
-        try:
-            data = f_obj.read()
-        except IOError, err:
-            raise FSHashRangesException('Cant read data from file system. Details: %s'%err)
-        finally:
-            f_obj.close()
-
-        return data
+        return self.__read_data(file_path)
 
     def __join_data(self, child_ranges):
         for child_range in child_ranges:
@@ -359,6 +373,22 @@ class FSHashRanges:
 
         return self.__get_data(key)
 
+
+    def put_replica(self, key, data):
+        key = self._str_key(key)
+        f_name = os.path.join(self.__replica_dir, key)
+        self.__write_data(f_name, data)
+
+
+    def get_replica(self, key):
+        key = self._str_key(key)
+        f_name = os.path.join(self.__replica_dir, key)
+        if not os.path.exists(f_name):
+            raise FSHashRangesNoData('No replica data found for key %s'% key)
+
+        return self.__read_data(f_name)
+
+
     def extend(self, start_key, end_key):
         start = self.__start
         end = self.__end
@@ -427,8 +457,26 @@ class FSHashRanges:
 
     def iter_reservation(self):
         files = os.listdir(self.__reservation_dir)
+        cdt = datetime.now()
         for digest in files:
-            yield digest, self.__get_data(digest), os.path.join(self.__reservation_dir, digest)
+            file_path = os.path.join(self.__reservation_dir, digest)
+            f_dm = datetime.fromtimestamp(os.path.getmtime(file_path))
+            dt = cdt - f_dm
+            if dt.total_seconds() > WAIT_FILE_MD_TIMEDELTA:
+                yield digest, self.__get_data(digest), file_path
+
+
+    def iter_replicas(self, foreign_only=True):
+        files = os.listdir(self.__replica_dir)
+        cdt = datetime.now()
+        for digest in files:
+            if foreign_only and self._in_range(digest):
+                continue
+            file_path = os.path.join(self.__replica_dir, digest)
+            f_dm = datetime.fromtimestamp(os.path.getmtime(file_path))
+            dt = cdt - f_dm
+            if dt.total_seconds() > WAIT_FILE_MD_TIMEDELTA:
+                yield digest, self.__read_data(file_path), file_path
 
 
     def join_subranges(self):
@@ -508,6 +556,9 @@ class FSHashRanges:
     def get_range_size(self):
         return sum([os.stat(os.path.join(self.__range_dir, f)).st_size for f in os.listdir(self.__range_dir)])
 
+    def get_replicas_size(self):
+        return sum([os.stat(os.path.join(self.__replica_dir, f)).st_size for f in os.listdir(self.__replica_dir)])
+
     def get_free_size(self):
         trash_size = sum([os.stat(os.path.join(self.__trash_dir, f)).st_size for f in os.listdir(self.__trash_dir)])
 
@@ -517,4 +568,5 @@ class FSHashRanges:
 
     def get_free_size_percents(self):
         return (self.get_range_size() * 100.) / self.get_free_size()
+
 

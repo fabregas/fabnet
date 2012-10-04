@@ -10,14 +10,24 @@ Copyright (C) 2012 Konstantin Andrusenko
 @date October 3, 2012
 """
 from datetime import datetime
+import time
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.dht_mgmt.constants import RC_NEED_UPDATE
+from fabnet.core.constants import RC_ERROR
+from fabnet.dht_mgmt.constants import RC_NEED_UPDATE, DS_INITIALIZE, \
+                                RANGES_TABLE_FLAPPING_TIMEOUT
 from fabnet.utils.logger import logger
 
 class CheckHashRangeTableOperation(OperationBase):
-    def _get_ranges_table(self, from_addr):
+    def _get_ranges_table(self, from_addr, mod_index):
+        if not self.operator.ranges_table.empty():
+            for i in xrange(RANGES_TABLE_FLAPPING_TIMEOUT):
+                time.sleep(1)
+                c_mod_index = self.operator.ranges_table.get_mod_index()
+                if c_mod_index == mod_index:
+                    return
+
         logger.info('Ranges table is invalid! Requesting table from %s'% from_addr)
         self._init_operation(from_addr, 'GetRangesTable', {})
 
@@ -29,22 +39,21 @@ class CheckHashRangeTableOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        f_checksum = packet.parameters.get('checksum', None)
-        f_last_dm = packet.parameters.get('last_dm', None)
-        if f_last_dm is None or f_checksum is None:
-            raise Exception('Checksum and Last DM expected for CheckHashRangeTable operation')
-        f_last_dm = datetime.strptime(f_last_dm, '%Y-%m-%dT%H:%M:%S.%f')
+        f_mod_index = packet.parameters.get('mod_index', None)
+        if f_mod_index is None:
+            raise Exception('Mod index parameter is expected for CheckHashRangeTable operation')
 
-        c_checksum, c_last_dm = self.operator.ranges_table.get_checksum()
-        if c_checksum == f_checksum:
+        c_mod_index = self.operator.ranges_table.get_mod_index()
+
+        if c_mod_index == f_mod_index:
             return FabnetPacketResponse()
 
-        logger.info('f_last_dm=%s c_last_dm=%s'%(f_last_dm, c_last_dm))
-        if f_last_dm > c_last_dm:
-            self._get_ranges_table(packet.sender)
+        logger.debug('f_mod_index=%s c_mod_index=%s'%(f_mod_index, c_mod_index))
+        if f_mod_index > c_mod_index:
+            #self._get_ranges_table(packet.sender, c_mod_index)
             return FabnetPacketResponse()
         else:
-            return FabnetPacketResponse(ret_code=RC_NEED_UPDATE)
+            return FabnetPacketResponse(ret_code=RC_NEED_UPDATE, ret_parameters={'mod_index': c_mod_index})
 
 
     def callback(self, packet, sender=None):
@@ -58,5 +67,7 @@ class CheckHashRangeTableOperation(OperationBase):
                 that should be resended to current node requestor
                 or None for disabling packet resending
         """
-        if packet.ret_code == RC_NEED_UPDATE:
-            self._get_ranges_table(packet.from_node)
+        if packet.ret_code == RC_ERROR:
+            logger.error('CheckHashRangeTable failed on %s. Details: %s %s'%(packet.from_node, packet.ret_code, packet.ret_message))
+        elif packet.ret_code == RC_NEED_UPDATE:
+            self._get_ranges_table(packet.from_node, packet.ret_parameters['mod_index'])

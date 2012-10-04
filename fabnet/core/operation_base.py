@@ -63,9 +63,10 @@ class OperationBase:
         """
         pass
 
-    def _init_operation(self, node_address, operation, parameters, sync=False):
+    def _init_operation(self, node_address, operation, parameters, sync=False, binary_data=''):
         """Initiate new operation"""
-        req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, parameters=parameters, sync=sync)
+        req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, \
+                parameters=parameters, binary_data=binary_data, sync=sync)
         resp = self.operator.call_node(node_address, req, sync)
         if sync:
             return resp

@@ -14,6 +14,7 @@ import copy
 import threading
 import traceback
 import time
+import random
 from datetime import datetime
 
 from fabnet.core.operation_base import OperationBase
@@ -21,9 +22,13 @@ from fabnet.core.message_container import MessageContainer
 from fabnet.core.constants import MC_SIZE
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.utils.logger import logger
-from fabnet.core.constants import RC_OK, RC_ERROR, NT_SUPERIOR, NT_UPPER, \
+from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPERIOR, NT_UPPER, \
                 KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, \
-                KEEP_ALIVE_MAX_WAIT_TIME
+                KEEP_ALIVE_MAX_WAIT_TIME, ONE_DIRECT_NEIGHBOURS_COUNT, \
+                NO_TOPOLOGY_DYSCOVERY_WINDOW, DISCOVERY_TOPOLOGY_TIMEOUT, \
+                MIN_TOPOLOGY_DISCOVERY_WAIT, MAX_TOPOLOGY_DISCOVERY_WAIT
+
+from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS, MNO_REMOVE
 
 class OperException(Exception):
     pass
@@ -33,14 +38,14 @@ class OperTimeoutException(OperException):
 
 
 class Operator:
-    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False):
+    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown-node'):
         self.__operations = {}
         self.msg_container = MessageContainer(MC_SIZE)
 
         self.__lock = threading.RLock()
         self.self_address = self_address
         self.home_dir = home_dir
-        self.node_name = 'unknown-node'
+        self.node_name = node_name
         self.server = None
 
         self.superior_neighbours = []
@@ -53,8 +58,54 @@ class Operator:
         self.start_datetime = datetime.now()
         self.is_init_node = is_init_node
 
+        self.__discovery_topology_thrd = DiscoverTopologyThread(self)
+        self.__discovery_topology_thrd.setName('%s-DiscoverTopologyThread'%node_name)
+        self.__discovery_topology_thrd.start()
+
+    def __unbind_neighbours(self, neighbours, n_type):
+        for neighbour in neighbours:
+            parameters = { 'neighbour_type': n_type, 'operation': MNO_REMOVE, 'force': True,
+                    'node_address': self.self_address }
+            req = FabnetPacketRequest(method='ManageNeighbour', sender=self.self_address, parameters=parameters)
+            self.call_node(neighbour, req)
+
     def stop(self):
-        pass
+        try:
+            self.__discovery_topology_thrd.stop()
+            self.__discovery_topology_thrd.join()
+
+            uppers = self.get_neighbours(NT_UPPER)
+            superiors = self.get_neighbours(NT_SUPERIOR)
+
+            self.__unbind_neighbours(uppers, NT_SUPERIOR)
+            self.__unbind_neighbours(superiors, NT_UPPER)
+        except Exception, err:
+            logger.write('Operator stopping failed. Details: %s'%err)
+
+    def get_statistic(self):
+        ret_params = {}
+        uppers = self.get_neighbours(NT_UPPER)
+        superiors = self.get_neighbours(NT_SUPERIOR)
+
+        if len(uppers) == ONE_DIRECT_NEIGHBOURS_COUNT:
+            ret_params['uppers_balance'] = NB_NORMAL
+        elif len(uppers) > ONE_DIRECT_NEIGHBOURS_COUNT:
+            ret_params['uppers_balance'] = NB_MORE
+        else:
+            ret_params['uppers_balance'] = NB_LESS
+
+        if len(superiors) == ONE_DIRECT_NEIGHBOURS_COUNT:
+            ret_params['superiors_balance'] = NB_NORMAL
+        elif len(superiors) > ONE_DIRECT_NEIGHBOURS_COUNT:
+            ret_params['superiors_balance'] = NB_MORE
+        else:
+            ret_params['superiors_balance'] = NB_LESS
+
+        count, busy = self.server.workers_stat()
+        ret_params['workers_count'] = count
+        ret_params['workers_busy'] = busy
+
+        return ret_params
 
     def _lock(self):
         self.__lock.acquire()
@@ -67,6 +118,13 @@ class Operator:
 
     def set_server(self, server):
         self.server = server
+
+    def get_operation_instance(self, method_name):
+        operation_obj = self.__operations.get(method_name, None)
+        if operation_obj is None:
+            raise OperException('Method "%s" does not implemented!'%method_name)
+
+        return operation_obj
 
     def set_neighbour(self, neighbour_type, address):
         self.__lock.acquire()
@@ -129,26 +187,27 @@ class Operator:
         self.__operations[op_name] = op_class(self)
 
     def call_node(self, node_address, packet, sync=False):
-        self.msg_container.put(packet.message_id,
-                        {'operation': packet.method,
-                            'sender': None,
-                            'responses_count': 0,
-                            'datetime': datetime.now()})
+        if node_address != self.self_address:
+            self.msg_container.put(packet.message_id,
+                            {'operation': packet.method,
+                                'sender': None,
+                                'responses_count': 0,
+                                'datetime': datetime.now()})
 
         if sync:
-            return self.fri_client.call_sync(node_address, packet.to_dict())
+            return self.fri_client.call_sync(node_address, packet)
         else:
-            return self.fri_client.call(node_address, packet.to_dict())
+            return self.fri_client.call(node_address, packet)
 
 
     def call_network(self, packet):
         packet.sender = None
 
-        return self.fri_client.call(self.self_address, packet.to_dict())
+        return self.fri_client.call(self.self_address, packet)
 
     def _process_keep_alive(self, packet):
         if packet.sender not in self.get_neighbours(NT_UPPER):
-            rcode = RC_ERROR
+            rcode = RC_NOT_MY_NEIGHBOUR
         else:
             rcode = RC_OK
             self.__lock.acquire()
@@ -176,7 +235,7 @@ class Operator:
 
         remove_nodes = []
         for superior in superiors:
-            resp = self.fri_client.call_sync(superior, ka_packet.to_dict())
+            resp = self.fri_client.call_sync(superior, ka_packet)
             cnt = 0
             self.__lock.acquire()
             try:
@@ -184,6 +243,9 @@ class Operator:
                     self.__superior_keep_alives[superior] = 0
                 if resp.ret_code == RC_OK:
                     self.__superior_keep_alives[superior] = 0
+                elif resp.ret_code == RC_NOT_MY_NEIGHBOUR:
+                    del self.__superior_keep_alives[superior]
+                    remove_nodes.append((NT_SUPERIOR, superior, False))
                 else:
                     self.__superior_keep_alives[superior] += 1
 
@@ -194,7 +256,7 @@ class Operator:
 
             if cnt == KEEP_ALIVE_TRY_COUNT:
                 logger.info('Neighbour %s does not respond. removing it...'%superior)
-                remove_nodes.append((NT_SUPERIOR, superior))
+                remove_nodes.append((NT_SUPERIOR, superior, True))
                 self.__lock.acquire()
                 del self.__superior_keep_alives[superior]
                 self.__lock.release()
@@ -213,15 +275,16 @@ class Operator:
                 delta = cur_dt - ka_dt
                 if delta.total_seconds() >= KEEP_ALIVE_MAX_WAIT_TIME:
                     logger.info('No keep alive packets from upper neighbour %s. removing it...'%upper)
-                    remove_nodes.append((NT_UPPER, upper))
+                    remove_nodes.append((NT_UPPER, upper, True))
 
                     del self.__upper_keep_alives[upper]
         finally:
             self.__lock.release()
 
-        for n_type, nodeaddr in remove_nodes:
+        for n_type, nodeaddr, is_not_respond in remove_nodes:
             self.remove_neighbour(n_type, nodeaddr)
-            self.on_neigbour_not_respond(n_type, nodeaddr)
+            if is_not_respond:
+                self.on_neigbour_not_respond(n_type, nodeaddr)
 
         if remove_nodes:
             self._rebalance_nodes()
@@ -245,7 +308,7 @@ class Operator:
 
             if not inserted:
                 #this message is already processing/processed
-                logger.debug('packet is already processing/processed: %s'%packet)
+                #logger.debug('packet is already processing/processed: %s'%packet)
                 return
 
             operation_obj = self.__operations.get(packet.method, None)
@@ -254,10 +317,10 @@ class Operator:
 
             logger.debug('processing packet %s'%packet)
 
-            n_packet = packet.copy()
-            n_packet = operation_obj.before_resend(n_packet)
+            message_id = packet.message_id
+            n_packet = operation_obj.before_resend(packet)
             if n_packet:
-                n_packet.message_id = packet.message_id
+                n_packet.message_id = message_id
                 n_packet.sync = False
                 self._send_to_neighbours(n_packet)
 
@@ -281,11 +344,11 @@ class Operator:
         if packet.method == KEEP_ALIVE_METHOD:
             return
 
-        msg_info = self.msg_container.get(ret_packet.message_id)
+        msg_info = self.msg_container.get(packet.message_id)
         self.__lock.acquire()
         try:
             if not msg_info:
-                raise OperException('Message with ID %s does not found!'%packet.message_id)
+                raise OperException('Message with ID %s does not found in after_process! {Packet: %s}'%(packet.message_id, packet))
 
             operation = msg_info['operation']
         finally:
@@ -309,7 +372,7 @@ class Operator:
         self.__lock.acquire()
         try:
             if not msg_info:
-                raise OperException('Message with ID %s does not found!'%packet.message_id)
+                raise OperException('Message with ID %s does not found! {Packet: %s}'%(packet.message_id, packet))
 
             msg_info['responses_count'] += 1
             operation = msg_info['operation']
@@ -369,7 +432,7 @@ class Operator:
         neighbours = self.get_neighbours(NT_SUPERIOR)
 
         for neighbour in neighbours:
-            ret, message = self.fri_client.call(neighbour, packet.to_dict())
+            ret, message = self.fri_client.call(neighbour, packet)
             if ret != RC_OK:
                 logger.info('Neighbour %s does not respond! Details: %s'%(neighbour, message))
 
@@ -379,9 +442,56 @@ class Operator:
             self.callback(packet)
             return
 
-        rcode, rmsg = self.fri_client.call(sender, packet.to_dict())
+        rcode, rmsg = self.fri_client.call(sender, packet)
         if rcode:
-            logger.error('[Operator.send_back] %s %s'%(rcode, rmsg))
+            logger.error('[Operator.send_back to %s] %s %s.'%(sender, rcode, rmsg))
 
 
 
+
+class DiscoverTopologyThread(threading.Thread):
+    def __init__(self, operator):
+        threading.Thread.__init__(self)
+        self.operator = operator
+        self.stopped = True
+
+    def run(self):
+        self.stopped = False
+        logger.info('Thread started!')
+
+        while not self.stopped:
+            try:
+                try:
+                    tc_oper = self.operator.get_operation_instance('TopologyCognition')
+                except OperException, err:
+                    time.sleep(1)
+                    continue
+
+                while True:
+                    last_processed_dt = tc_oper.get_last_processed_dt()
+                    dt = datetime.now() - last_processed_dt
+                    if dt.total_seconds() < NO_TOPOLOGY_DYSCOVERY_WINDOW:
+                        w_seconds = random.randint(MIN_TOPOLOGY_DISCOVERY_WAIT, MAX_TOPOLOGY_DISCOVERY_WAIT)
+                        for i in xrange(w_seconds):
+                            time.sleep(1)
+                            if self.stopped:
+                                return
+                    else:
+                        break
+
+                logger.info('Starting topology discovery...')
+                packet = FabnetPacketRequest(method='TopologyCognition', parameters={"need_rebalance": 1})
+                self.operator.call_network(packet)
+
+                for i in xrange(DISCOVERY_TOPOLOGY_TIMEOUT):
+                    time.sleep(1)
+                    if self.stopped:
+                        return
+            except Exception, err:
+                logger.error(str(err))
+
+        logger.info('Thread stopped!')
+
+
+    def stop(self):
+        self.stopped = True

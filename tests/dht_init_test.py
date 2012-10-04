@@ -13,7 +13,7 @@ constants.WAIT_RANGE_TIMEOUT = 0.1
 constants.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT = 0.1
 constants.MONITOR_DHT_RANGES_TIMEOUT = 1
 constants.CHECK_HASH_TABLE_TIMEOUT = 1
-constants.RESERV_RANGE_FILE_MD_TIMEDELTA = 0.1
+constants.WAIT_FILE_MD_TIMEDELTA = 0.1
 constants.WAIT_DHT_TABLE_UPDATE = .2
 from fabnet.dht_mgmt.dht_operator import DHTOperator
 from fabnet.dht_mgmt import dht_operator
@@ -47,7 +47,7 @@ class TestServerThread(threading.Thread):
 
     def run(self):
         address = '127.0.0.1:%s'%self.port
-        operator = DHTOperator(address, self.home_dir, is_init_node=self.init_node)
+        operator = DHTOperator(address, self.home_dir, is_init_node=self.init_node, node_name=self.port)
         self.operator = operator
 
         operator.register_operation('ManageNeighbour', ManageNeighbour)
@@ -101,32 +101,47 @@ class TestDHTInitProcedure(unittest.TestCase):
             time.sleep(1)
             self.assertNotEqual(server1.operator.status, DS_NORMALWORK)
 
-            server1.operator.set_neighbour(NT_SUPERIOR, 'fake_node_addr:8080')
+            server1.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:8080')
             time.sleep(.1)
             server1.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1986')
-            time.sleep(2)
+            for i in range(10):
+                if server1.operator.status == DS_NORMALWORK:
+                    break
+                time.sleep(1)
+            else:
+                raise Exception('Server1 does not started!')
 
             node86_range = server.operator.get_dht_range()
             node87_range = server1.operator.get_dht_range()
 
             self.assertEqual(node86_range.get_start(), 0L)
-            self.assertEqual(node86_range.get_end(), MAX_HASH/2-1)
-            self.assertEqual(node87_range.get_start(), MAX_HASH/2)
+            self.assertEqual(node86_range.get_end(), MAX_HASH/2)
+            self.assertEqual(node87_range.get_start(), MAX_HASH/2+1)
             self.assertEqual(node87_range.get_end(), MAX_HASH)
 
             table = server.operator.ranges_table.copy()
             self.assertEqual(len(table), 2)
             self.assertEqual(table[0].start, 0)
-            self.assertEqual(table[0].end, MAX_HASH/2-1)
-            self.assertEqual(table[1].start, MAX_HASH/2)
+            self.assertEqual(table[0].end, MAX_HASH/2)
+            self.assertEqual(table[1].start, MAX_HASH/2+1)
             self.assertEqual(table[1].end, MAX_HASH)
 
             self.assertEqual(server1.operator.status, DS_NORMALWORK)
 
             node86_range.put(MAX_HASH-100500, 'Hello, fabregas!') #should be appended into reservation range
+            node87_range.put_replica(100, 'This is replica data!')
             time.sleep(1.5)
             data = node87_range.get(MAX_HASH-100500)
             self.assertEqual(data, 'Hello, fabregas!')
+            data = node86_range.get_replica(100)
+            self.assertEqual(data, 'This is replica data!')
+            try:
+                node87_range.get_replica(100)
+            except Exception, err:
+                pass
+            else:
+                raise Exception('should be exception in this case')
+
         finally:
             if server:
                 server.stop()
@@ -173,15 +188,15 @@ class TestDHTInitProcedure(unittest.TestCase):
             node86_range = server.operator.get_dht_range()
             node87_range = server1.operator.get_dht_range()
             self.assertEqual(node86_range.get_start(), 0L)
-            self.assertEqual(node86_range.get_end(), MAX_HASH/2-1)
-            self.assertEqual(node87_range.get_start(), MAX_HASH/2)
+            self.assertEqual(node86_range.get_end(), MAX_HASH/2)
+            self.assertEqual(node87_range.get_start(), MAX_HASH/2+1)
             self.assertEqual(node87_range.get_end(), MAX_HASH)
 
             table = server.operator.ranges_table.copy()
             self.assertEqual(len(table), 2)
             self.assertEqual(table[0].start, 0)
-            self.assertEqual(table[0].end, MAX_HASH/2-1)
-            self.assertEqual(table[1].start, MAX_HASH/2)
+            self.assertEqual(table[0].end, MAX_HASH/2)
+            self.assertEqual(table[1].start, MAX_HASH/2+1)
             self.assertEqual(table[1].end, MAX_HASH)
 
             self.assertEqual(server1.operator.status, DS_NORMALWORK)
@@ -229,15 +244,15 @@ class TestDHTInitProcedure(unittest.TestCase):
             node86_range = server.operator.get_dht_range()
             node87_range = server1.operator.get_dht_range()
             self.assertEqual(node86_range.get_start(), 0L)
-            self.assertEqual(node86_range.get_end(), MAX_HASH/2-1)
-            self.assertEqual(node87_range.get_start(), MAX_HASH/2)
+            self.assertEqual(node86_range.get_end(), MAX_HASH/2)
+            self.assertEqual(node87_range.get_start(), MAX_HASH/2+1)
             self.assertEqual(node87_range.get_end(), MAX_HASH)
 
             table = server.operator.ranges_table.copy()
             self.assertEqual(len(table), 2)
             self.assertEqual(table[0].start, 0)
-            self.assertEqual(table[0].end, MAX_HASH/2-1)
-            self.assertEqual(table[1].start, MAX_HASH/2)
+            self.assertEqual(table[0].end, MAX_HASH/2)
+            self.assertEqual(table[1].start, MAX_HASH/2+1)
             self.assertEqual(table[1].end, MAX_HASH)
 
             self.assertEqual(server1.operator.status, DS_NORMALWORK)

@@ -33,7 +33,7 @@ class Node:
             is_init_node = True
         else:
             is_init_node = False
-        operator = OPERATOR(address, self.home_dir, self.certfile, is_init_node)
+        operator = OPERATOR(address, self.home_dir, self.certfile, is_init_node, self.node_name)
 
         for (op_name, op_class) in OPERATIONS_MAP.items():
             operator.register_operation(op_name, op_class)
@@ -48,7 +48,7 @@ class Node:
             return started
 
         if is_init_node:
-            return
+            return True
 
         packet = FabnetPacketRequest(method='DiscoveryOperation', sender=address)
 

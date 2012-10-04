@@ -171,6 +171,7 @@ class ManageNeighbour(OperationBase):
                 or None for disabling packet response to sender
         """
         n_type, operation, node_address = self._valiadate_packet(packet.parameters)
+        is_force = packet.parameters.get('force', False)
 
         ret_params = packet.parameters
 
@@ -183,10 +184,13 @@ class ManageNeighbour(OperationBase):
 
             self.__discovered_nodes[n_type].append(node_address)
         elif operation == MNO_REMOVE:
-            if len(neighbours)  > ONE_DIRECT_NEIGHBOURS_COUNT:
+            if (len(neighbours)  > ONE_DIRECT_NEIGHBOURS_COUNT) or is_force:
                 self.operator.remove_neighbour(n_type, node_address)
             else:
                 ret_params['dont_remove'] = True
+
+        if is_force:
+            return
 
         if operation == MNO_APPEND:
             r_neighbours = self.operator.get_neighbours(NT_UPPER) + \
@@ -210,7 +214,15 @@ class ManageNeighbour(OperationBase):
         @param packet - object of FabnetPacketRequest class
         @param ret_packet - object of FabnetPacketResponse class
         """
-        self.rebalance_remove()
+        if ret_packet:
+            if packet.parameters.get('operation', MNO_APPEND) == MNO_APPEND \
+                    and ret_packet.ret_parameters.get('dont_append', False) == False:
+                self.rebalance_remove()
+
+            if packet.parameters.get('operation', MNO_APPEND) == MNO_REMOVE \
+                    and ret_packet.ret_parameters.get('dont_remove', False) == True:
+                self.rebalance_remove()
+
         self.rebalance_append(packet.parameters)
 
 

@@ -13,7 +13,8 @@ import time
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.dht_mgmt.constants import DS_NORMALWORK, MAX_HASH, MIN_HASH, WAIT_DHT_TABLE_UPDATE
+from fabnet.dht_mgmt.constants import DS_NORMALWORK, DS_INITIALIZE, \
+                            MAX_HASH, MIN_HASH, WAIT_DHT_TABLE_UPDATE
 from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.dht_mgmt.hash_ranges_table import HashRange
 from fabnet.utils.logger import logger
@@ -75,6 +76,10 @@ class UpdateHashRangeTableOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
+        if self.operator.ranges_table.empty():
+            logger.debug('Received update for hash ranges table, but it is not initialized yet. Skip operation...')
+            return
+
         append_lst = packet.parameters.get('append', [])
         rm_lst = packet.parameters.get('remove', [])
 
@@ -82,29 +87,21 @@ class UpdateHashRangeTableOperation(OperationBase):
         ap_obj_list = [HashRange(a[0], a[1], a[2]) for a in append_lst]
         self._lock()
         try:
-            self.operator.ranges_table.validate_changes(rm_obj_list, ap_obj_list)
+            self.operator.ranges_table.apply_changes(rm_obj_list, ap_obj_list)
 
-            for rm_range in rm_obj_list:
-                range_obj = self.operator.ranges_table.find(rm_range.start)
-                if range_obj:
-                    self.operator.ranges_table.remove(rm_range.start)
-
-            for app_range in ap_obj_list:
-                self.operator.ranges_table.append(app_range.start, app_range.end, app_range.node_address)
+            logger.debug('RM RANGE: %s'%', '.join([r.to_str() for r in rm_obj_list]))
+            logger.debug('APP RANGE: %s'%', '.join([a.to_str() for a in ap_obj_list]))
         except Exception, err:
             logger.error('UpdateHashRangeTable error: %s'%err)
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message=str(err))
         finally:
             self._unlock()
 
-        self.operator.check_dht_range()
         self._lock()
         try:
             self._check_near_range()
         finally:
             self._unlock()
 
-        return FabnetPacketResponse()
 
 
     def callback(self, packet, sender=None):

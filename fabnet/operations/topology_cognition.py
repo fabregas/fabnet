@@ -12,6 +12,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 import os
 import sqlite3
 import threading
+from datetime import datetime
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
@@ -23,6 +24,17 @@ from fabnet.utils.logger import logger
 TOPOLOGY_DB = 'fabnet_topology.db'
 
 class TopologyCognition(OperationBase):
+    def __init__(self, operator):
+        OperationBase.__init__(self, operator)
+        self.__last_dt = datetime.now()
+
+    def get_last_processed_dt(self):
+        self._lock()
+        try:
+            return self.__last_dt
+        finally:
+            self._unlock()
+
     def get_discovered_nodes(self):
         db = os.path.join(self.operator.home_dir, TOPOLOGY_DB)
         if not os.path.exists(db):
@@ -41,6 +53,7 @@ class TopologyCognition(OperationBase):
             nodes[row[0]] = (row[1].split(','), row[2].split(','), int(row[3]))
 
         return nodes
+
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
@@ -72,6 +85,12 @@ class TopologyCognition(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
+        self._lock()
+        try:
+            self.__last_dt = datetime.now()
+        finally:
+            self._unlock()
+
         ret_params = {}
         upper_neighbours = self.operator.get_neighbours(NT_UPPER)
         superior_neighbours = self.operator.get_neighbours(NT_SUPERIOR)
@@ -137,22 +156,22 @@ class TopologyCognition(OperationBase):
         if self.__balanced.is_set():
             return
 
-        uppers = self.operator.get_neighbours(NT_UPPER)
-        superiors = self.operator.get_neighbours(NT_SUPERIOR)
-
-        intersec_count = len(set(uppers) & set(superiors))
-        if intersec_count == 0:
-            #good neighbours connections
-            self.__balanced.set()
+        if node_address == self.operator.self_address:
             return
 
+        uppers = self.operator.get_neighbours(NT_UPPER)
+        superiors = self.operator.get_neighbours(NT_SUPERIOR)
         if (node_address in uppers) or (node_address in superiors):
             return
 
         if ONE_DIRECT_NEIGHBOURS_COUNT > len(superiors) >= (ONE_DIRECT_NEIGHBOURS_COUNT+1):
             return
 
-        if node_address == self.operator.self_address:
+
+        intersec_count = len(set(uppers) & set(superiors))
+        if intersec_count == 0:
+            #good neighbours connections
+            self.__balanced.set()
             return
 
         intersec_count = len(set(superior_neighbours) & set(upper_neighbours))

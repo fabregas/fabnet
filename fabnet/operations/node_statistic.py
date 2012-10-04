@@ -13,9 +13,6 @@ import os
 import resource
 from datetime import datetime
 from fabnet.core.operation_base import  OperationBase
-from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
-                        ONE_DIRECT_NEIGHBOURS_COUNT
-from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS
 from fabnet.core.fri_base import FabnetPacketResponse
 
 
@@ -38,27 +35,9 @@ class NodeStatisticOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        uppers = self.operator.get_neighbours(NT_UPPER)
-        superiors = self.operator.get_neighbours(NT_SUPERIOR)
         ret_params = {}
-
-        if len(uppers) == ONE_DIRECT_NEIGHBOURS_COUNT:
-            ret_params['uppers_balance'] = NB_NORMAL
-        elif len(uppers) > ONE_DIRECT_NEIGHBOURS_COUNT:
-            ret_params['uppers_balance'] = NB_MORE
-        else:
-            ret_params['uppers_balance'] = NB_LESS
-
-        if len(superiors) == ONE_DIRECT_NEIGHBOURS_COUNT:
-            ret_params['superiors_balance'] = NB_NORMAL
-        elif len(superiors) > ONE_DIRECT_NEIGHBOURS_COUNT:
-            ret_params['superiors_balance'] = NB_MORE
-        else:
-            ret_params['superiors_balance'] = NB_LESS
-
-        count, busy = self.operator.server.workers_stat()
-        ret_params['workers_count'] = count
-        ret_params['workers_busy'] = busy
+        operator_stat = self.operator.get_statistic()
+        ret_params.update(operator_stat)
 
         loadavgstr = open('/proc/loadavg', 'r').readline().strip()
         data = loadavgstr.split()

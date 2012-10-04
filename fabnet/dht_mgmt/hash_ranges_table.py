@@ -44,6 +44,7 @@ class HashRangesTable:
         self.__lock = threading.RLock()
         self.__last_dm = datetime(1, 1, 1, 1, 1, 1, 1)
         self.__blocked = threading.Event()
+        self.__mod_index = 0
 
     def is_blocked(self):
         return self.__blocked.is_set()
@@ -54,12 +55,23 @@ class HashRangesTable:
             checksum = sha()
             for range_obj in self.__ranges:
                 checksum.update(range_obj.to_str())
-            return checksum.hexdigest(), self.__last_dm
+            return checksum.hexdigest()
         finally:
             self.__lock.release()
 
     def get_last_dm(self):
-        return self.__last_dm
+        self.__lock.acquire()
+        try:
+            return self.__last_dm
+        finally:
+            self.__lock.release()
+
+    def get_mod_index(self):
+        self.__lock.acquire()
+        try:
+            return self.__mod_index
+        finally:
+            self.__lock.release()
 
     def empty(self):
         self.__lock.acquire()
@@ -76,19 +88,20 @@ class HashRangesTable:
 
             r_obj = self.find(start)
             if r_obj:
-                err_msg = 'Cant append range [%s-%s], it is crossed by existing [%s-%s] range' \
+                err_msg = 'Cant append range [%040x-%040x], it is crossed by existing [%040x-%040x] range' \
                             % (start, end, r_obj.start, r_obj.end)
                 raise RangeException(err_msg)
 
             r_obj = self.find(end)
             if r_obj:
-                err_msg = 'Cant append range [%s-%s], it is crossed by existing [%s-%s] range' \
+                err_msg = 'Cant append range [%040x-%040x], it is crossed by existing [%040x-%040x] range' \
                             % (start, end, r_obj.start, r_obj.end)
                 raise RangeException(err_msg)
 
             h_range = HashRange(start, end, node_addr)
             self.__sorted_insert(h_range)
             self.__last_dm = datetime.utcnow()
+            self.__mod_index += 1
         finally:
             self.__lock.release()
 
@@ -105,6 +118,7 @@ class HashRangesTable:
 
             del self.__ranges[self.__ranges.index(r_obj)]
             self.__last_dm = datetime.utcnow()
+            self.__mod_index += 1
         finally:
             self.__lock.release()
 
@@ -167,19 +181,59 @@ class HashRangesTable:
     def dump(self):
         self.__lock.acquire()
         try:
-            return pickle.dumps([self.__ranges, self.__last_dm])
+            return pickle.dumps([self.__ranges, self.__last_dm, self.__mod_index])
         finally:
             self.__lock.release()
 
     def load(self, ranges_dump):
         self.__lock.acquire()
         try:
-            self.__ranges, self.__last_dm = pickle.loads(ranges_dump)
+            is_old_ex = False
+            if self.__ranges:
+                is_old_ex = self.__ranges
+
+            self.__ranges, self.__last_dm, self.__mod_index = pickle.loads(ranges_dump)
+
+            if is_old_ex:
+                s = 'OLD(-)/NEW(+) HASHES IN TABLES:\n'
+                for range_o in self.iter_table():
+                    for old_range in is_old_ex:
+                        if old_range.to_str() == range_o.to_str():
+                            break
+                    else:
+                        s += '+ %s\n'%range_o.to_str()
+
+                for old_range in is_old_ex:
+                    for range_o in self.iter_table():
+                        if old_range.to_str() == range_o.to_str():
+                            break
+                    else:
+                        s += '- %s\n'%old_range.to_str()
+
+                logger.info(s)
+
             self.__blocked.clear()
         finally:
             self.__lock.release()
 
-    def validate_changes(self, rm_obj_list, ap_obj_list):
+    def block(self):
+        self.__lock.acquire()
+        try:
+            if not self.__blocked.is_set():
+                self.__blocked.set()
+        finally:
+            self.__lock.release()
+
+    def unblock(self):
+        self.__lock.acquire()
+        try:
+            if self.__blocked.is_set():
+                self.__blocked.clear()
+        finally:
+            self.__lock.release()
+
+    def apply_changes(self, rm_obj_list, ap_obj_list):
+        self.__lock.acquire()
         try:
             tmp_table = HashRangesTable()
             for rm_obj in rm_obj_list:
@@ -200,15 +254,20 @@ class HashRangesTable:
                 found = self.find(rm_obj.start)
                 if found:
                     if rm_obj.start != found.start or rm_obj.end != found.end:
-                        raise Exception('Removing range {%040x-%040x} is not found in ranges table')
+                        raise Exception('Removing range {%040x-%040x} is not found in ranges table'%(rm_obj.start, rm_obj.end))
                 else:
                     found = self.find(rm_obj.end)
                     if found and (rm_obj.start != found.start or rm_obj.end != found.end):
-                        raise Exception('Removing range {%040x-%040x} is not found in ranges table')
-        except Exception, err:
-            logger.info('Error in range table. Blocking it and wait arbitring...')
-            self.__blocked.set()
-            raise err
+                        raise Exception('Removing range {%040x-%040x} is not found in ranges table'%(rm_obj.start, rm_obj.end))
+
+            #applying new new ranges and remove old
+            for rm_obj in rm_obj_list:
+                self.remove(rm_obj.start)
+
+            for app_obj in ap_obj_list:
+                self.append(app_obj.start, app_obj.end, app_obj.node_address)
+        finally:
+            self.__lock.release()
 
 
     def __find_int(self, find_value):

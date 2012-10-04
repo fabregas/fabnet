@@ -36,7 +36,7 @@ class TestNodeStatistic(unittest.TestCase):
             packet_obj = FabnetPacketRequest(**packet)
 
             client = FriClient()
-            ret_packet = client.call_sync('127.0.0.1:1987', packet_obj.to_dict())
+            ret_packet = client.call_sync('127.0.0.1:1987', packet_obj)
 
             self.assertEqual(isinstance(ret_packet, FabnetPacketResponse), True)
             self.assertEqual(ret_packet.ret_code, 0, ret_packet.ret_message)
