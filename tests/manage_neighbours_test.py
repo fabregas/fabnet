@@ -63,6 +63,7 @@ class TestManageMeighbours(unittest.TestCase):
         for thread in threads:
             thread.join()
 
+        operator.stop()
 
 
 if __name__ == '__main__':

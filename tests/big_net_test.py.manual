@@ -15,7 +15,7 @@ from fabnet.utils.logger import logger
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest
 logger.setLevel(logging.DEBUG)
 
-NODES_COUNT = range(30, 31)
+NODES_COUNT = range(90, 91)
 
 class TestBigNework(unittest.TestCase):
     def test_00_create_network(self):
@@ -47,22 +47,28 @@ class TestBigNework(unittest.TestCase):
                 time.sleep(.5)
 
                 PROCESSES.append(p)
-                if len(addresses) > 10:
+                if len(addresses) > 3:
                     self._check_stat(address)
+
 
             p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address])
             node_i = address.split(':')[-1]
-            self._wait_topology(node_i, nodes_count)
-            os.system('python ./tests/topology_to_tgf /tmp/node_%s/fabnet_topology.db /tmp/fabnet_topology.%s-orig.tgf'%(node_i, nodes_count))
+            self._wait_topology(node_i, len(addresses))
+            os.system('python ./tests/topology_to_tgf /tmp/node_%s/fabnet_topology.db /tmp/fabnet_topology.%s-orig.tgf'%(node_i, len(addresses)))
+
+
             for address in addresses:
                 print 'Collecting topology from %s ...'%address
                 p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address, '{"need_rebalance": 1}'])
+
                 node_i = address.split(':')[-1]
                 self._wait_topology(node_i, nodes_count)
 
                 os.system('python ./tests/topology_to_tgf /tmp/node_%s/fabnet_topology.db /tmp/fabnet_topology.%s-balanced.tgf'%(node_i, nodes_count,))
 
             print 'TOPOLOGY REBALANCED'
+
+            return
 
             del_count = nodes_count/3
             for i in xrange(del_count):

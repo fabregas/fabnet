@@ -190,6 +190,9 @@ class ManageNeighbour(OperationBase):
                 ret_params['dont_remove'] = True
 
         if is_force:
+            self._lock()
+            self.__discovered_nodes[n_type].append(node_address)
+            self._unlock()
             return
 
         if operation == MNO_APPEND:

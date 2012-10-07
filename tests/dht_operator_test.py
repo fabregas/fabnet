@@ -84,18 +84,16 @@ class TestFSMappedRanges(unittest.TestCase):
 
         try:
             operator.ranges_table.append(0, 99, 'first_range_holder')
-            checksum, last_dm = operator.ranges_table.get_checksum()
+            mod_index = operator.ranges_table.get_mod_index()
             operator.ranges_table.append(100, 149, 'second_range_holder')
             operator.ranges_table.append(300, 499, 'third_range_holder')
-            checksum1, last_dm1 = operator.ranges_table.get_checksum()
-            self.assertNotEqual(checksum, checksum1)
-            self.assertNotEqual(last_dm, last_dm1)
+            mod_index1 = operator.ranges_table.get_mod_index()
+            self.assertNotEqual(mod_index, mod_index1)
 
             tbl_dump = operator.ranges_table.dump()
             operator.ranges_table.load(tbl_dump)
-            checksum2, last_dm2 = operator.ranges_table.get_checksum()
-            self.assertEqual(last_dm2, last_dm1)
-            self.assertEqual(checksum2, checksum1)
+            mod_index2 = operator.ranges_table.get_mod_index()
+            self.assertEqual(mod_index1, mod_index2)
 
             operator.call_node = call_node_simulator
             operator.start_as_dht_member()
@@ -154,30 +152,30 @@ class TestFSMappedRanges(unittest.TestCase):
             operator1.call_node = call_node_simulator
             operator1.register_operation('CheckHashRangeTable', CheckHashRangeTableOperation)
 
-            csum, ldm = operator.ranges_table.get_checksum()
-            packet = FabnetPacketRequest(method='CheckHashRangeTable', sender=operator.self_address, parameters={'checksum': csum, 'last_dm': ldm.isoformat()})
+            mod_index = operator.ranges_table.get_mod_index()
+            params = {'mod_index': mod_index}
+            packet = FabnetPacketRequest(method='CheckHashRangeTable', sender=operator.self_address, parameters=params)
             resp = operator1.process(packet)
             self.assertEqual(resp.ret_code, 0)
 
             operator1.ranges_table.append(500, 599, 'forth_range_holder')
 
-            packet = FabnetPacketRequest(method='CheckHashRangeTable', sender=operator.self_address, parameters={'checksum': csum, 'last_dm': ldm.isoformat()})
+            packet = FabnetPacketRequest(method='CheckHashRangeTable', sender=operator.self_address, parameters=params)
             resp = operator1.process(packet)
             self.assertEqual(resp.ret_code, RC_NEED_UPDATE)
             callback_resp = resp
 
-            csum, ldm = operator1.ranges_table.get_checksum()
+            mod_index = operator.ranges_table.get_mod_index()
+            params = {'mod_index': mod_index}
             packet = FabnetPacketRequest(message_id=packet.message_id, method='CheckHashRangeTable', \
-                                    sender=operator1.self_address, parameters={'checksum': csum, 'last_dm': ldm.isoformat()})
+                                    sender=operator1.self_address, parameters=params)
             resp = operator.process(packet)
             self.assertEqual(resp.ret_code, 0, resp.ret_message)
 
             operator.callback(callback_resp)
-            self.assertEqual(len(call_stack), 2)
-            self.assertEqual(call_stack[0][0], call_stack[1][0])
+            self.assertEqual(len(call_stack), 1)
             self.assertEqual(call_stack[0][0], '127.0.0.1:1986')
             self.assertEqual(call_stack[0][2].method, 'GetRangesTable')
-            self.assertEqual(call_stack[1][2].method, 'GetRangesTable')
 
             print 'GENERATE EXCEPTION'
             packet = FabnetPacketRequest(method='CheckHashRangeTable', sender=operator.self_address)

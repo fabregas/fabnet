@@ -59,6 +59,8 @@ class UpdateHashRangeTableOperation(OperationBase):
         first_range = self.operator.ranges_table.find(MIN_HASH)
         if not first_range:
             first_range = self.operator.ranges_table.get_first()
+            if not first_range:
+                return
             if first_range.node_address == self.operator.self_address:
                 new_dht_range = self_dht_range.extend(MIN_HASH, first_range.start-1)
                 self.operator.update_dht_range(new_dht_range)
