@@ -16,8 +16,11 @@ FULL_RANGE_LEN = pow(2, 160)
 
 class KeyUtils:
     @classmethod
-    def generate_new_keys(cls, node_id, replica_count):
-        primary_key = hashlib.sha1(node_id + datetime.utcnow().isoformat()).hexdigest()
+    def generate_new_keys(cls, node_id, replica_count, prime_key=None):
+        if prime_key:
+            primary_key = prime_key
+        else:
+            primary_key = hashlib.sha1(node_id + datetime.utcnow().isoformat()).hexdigest()
 
         return cls.get_all_keys(primary_key, replica_count)
 

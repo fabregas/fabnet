@@ -21,6 +21,14 @@ from fabnet.dht_mgmt.key_utils import KeyUtils
 
 
 class ClientPutOperation(OperationBase):
+    def _validate_key(self, key):
+        try:
+            if len(key) != 40:
+                raise ValueError()
+            return long(key, 16)
+        except Exception:
+            raise Exception('Invalid key "%s"'%key)
+
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node
@@ -30,6 +38,10 @@ class ClientPutOperation(OperationBase):
                 or None for disabling packet response to sender
         """
         data = packet.binary_data
+        key = packet.parameters.get('key', None)
+        if key is not None:
+            self._validate_key(key)
+
         checksum = packet.parameters.get('checksum', None)
         replica_count = int(packet.parameters.get('replica_count', MIN_REPLICA_COUNT))
         wait_writes_count = int(packet.parameters.get('wait_writes_count', 1))
@@ -46,7 +58,7 @@ class ClientPutOperation(OperationBase):
         data_block.validate()
         succ_count = 0
         is_replica = False
-        keys = KeyUtils.generate_new_keys(self.operator.node_name, replica_count)
+        keys = KeyUtils.generate_new_keys(self.operator.node_name, replica_count, prime_key=key)
         data, checksum = data_block.pack(keys[0], replica_count)
         for key in keys:
             range_obj = self.operator.ranges_table.find(long(key, 16))

@@ -14,7 +14,7 @@ import hashlib
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR
-from fabnet.dht_mgmt.constants import MIN_REPLICA_COUNT
+from fabnet.dht_mgmt.constants import MIN_REPLICA_COUNT, RC_NO_DATA
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.dht_mgmt.key_utils import KeyUtils
@@ -68,7 +68,7 @@ class ClientGetOperation(OperationBase):
             is_replica = True
 
         if data is None:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='No data found!')
+            return FabnetPacketResponse(ret_code=RC_NO_DATA, ret_message='No data found!')
 
         data_block = DataBlock(data)
         raw_data, raw_checksum = data_block.unpack()
