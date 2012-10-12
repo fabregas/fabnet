@@ -27,10 +27,10 @@ class FileIterator:
         if not os.path.exists(self.file_path):
             raise Exception('File %s does not exists!'%self.file_path)
 
-        fd = open(self.file_path, 'rb')
+        f_obj = open(self.file_path, 'rb')
         try:
             while True:
-                data = fd.read(FILE_ITER_BLOCK_SIZE)
+                data = f_obj.read(FILE_ITER_BLOCK_SIZE)
                 if len(data) == 0:
                     return
 
@@ -38,7 +38,7 @@ class FileIterator:
         except Exception, err:
             raise Exception('Reading file %s failed: %s'%(self.file_path, err))
         finally:
-            fd.close()
+            f_obj.close()
             if self.is_tmp:
                 os.remove(self.file_path)
 
@@ -52,14 +52,14 @@ class Nibbler:
 
 
     def __get_file(self, file_obj):
-        fd, tmpfl = tempfile.mkstemp(prefix='nibbler')
+        f_obj, tmpfl = tempfile.mkstemp(prefix='nibbler')
         try:
             for chunk in file_obj.chunks:
                 data = self.fabnet_gateway.get(chunk.key, file_obj.replica_count)
-                fd = open(tmpfl, 'ab')
-                fd.seek(chunk.seek)
-                fd.write(data[:chunk.size])
-                fd.close()
+                f_obj = open(tmpfl, 'ab')
+                f_obj.seek(chunk.seek)
+                f_obj.write(data[:chunk.size])
+                f_obj.close()
         except Exception, err:
             os.unlink(tmpfl)
             raise err
@@ -68,11 +68,10 @@ class Nibbler:
 
 
     def __save_file(self, file_obj, file_path):
-        fd = open(file_path, 'rb')
-        chunks_count = file_obj.size / CHUNK_SIZE
+        f_obj = open(file_path, 'rb')
         seek = 0
         while True:
-            data = fd.read(CHUNK_SIZE)
+            data = f_obj.read(CHUNK_SIZE)
             size = len(data)
             if size == 0:
                 break
@@ -103,7 +102,7 @@ class Nibbler:
         user_id = self.security_provider.get_user_id()
         metadata_key = hashlib.sha1(user_id).hexdigest()
         try:
-            file_obj = self.fabnet_gateway.put(metadata, key=metadata_key)
+            self.fabnet_gateway.put(metadata, key=metadata_key)
         except Exception, err:
             self.__get_metadata(reload_force=True)
             raise err
@@ -122,7 +121,7 @@ class Nibbler:
 
         mdf = MetadataFile()
         mdf.load('{}')
-        file_obj = self.fabnet_gateway.put(mdf.dump(), key=metadata_key)
+        self.fabnet_gateway.put(mdf.dump(), key=metadata_key)
         self.metadata = mdf
 
 

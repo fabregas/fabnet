@@ -13,6 +13,12 @@ This module contains the implementation of user metadata classes.
 import json
 from client.constants import DEFAULT_REPLICA_COUNT
 
+class BadMetadata(Exception):
+    def __init__(self, msg):
+        Exception.__init__(self, 'Bad metadata. %s'%msg)
+
+class PathException(Exception):
+    pass
 
 class ChunkMD:
     def __init__(self, key=None, checksum=None, seek=None, size=None):
@@ -28,13 +34,13 @@ class ChunkMD:
         self.size = chunk_obj.get('size', None)
 
         if self.checksum is None:
-            raise Exception('Bad metadata. Chunk checksum does not found!')
+            raise BadMetadata('Chunk checksum does not found!')
         if self.key is None:
-            raise Exception('Bad metadata. Chunk key does not found!')
+            raise BadMetadata('Chunk key does not found!')
         if self.seek is None:
-            raise Exception('Bad metadata. Chunk seek does not found!')
+            raise BadMetadata('Chunk seek does not found!')
         if self.size is None:
-            raise Exception('Bad metadata. Chunk size does not found!')
+            raise BadMetadata('Chunk size does not found!')
 
     def dump(self):
         return {'checksum': self.checksum,
@@ -50,10 +56,12 @@ class FileMD:
         self.replica_count = replica_count
         self.chunks = []
 
-    def is_dir(self):
+    @classmethod
+    def is_dir(cls):
         return False
 
-    def is_file(self):
+    @classmethod
+    def is_file(cls):
         return True
 
     def load(self, file_obj):
@@ -63,11 +71,11 @@ class FileMD:
         self.replica_count = file_obj.get('replica_count', DEFAULT_REPLICA_COUNT)
 
         if self.name is None:
-            raise Exception('Bad metadata. File name does not found!')
+            raise BadMetadata('File name does not found!')
         if self.size is None:
-            raise Exception('Bad metadata. File size does not found!')
+            raise BadMetadata('File size does not found!')
         if self.replica_count is None:
-            raise Exception('Bad metadata. File replica count does not found!')
+            raise BadMetadata('File replica count does not found!')
 
     def dump(self):
         return {'name': self.name,
@@ -81,20 +89,22 @@ class DirectoryMD:
         self.name = name
         self.content = []
 
-    def is_dir(self):
-        return True
-
-    def is_file(self):
+    @classmethod
+    def is_dir(cls):
         return False
+
+    @classmethod
+    def is_file(cls):
+        return True
 
     def load(self, dir_obj):
         self.name = dir_obj.get('name', None)
         if self.name is None:
-            raise Exception('Bad metadata. Directory name does not found!')
+            raise BadMetadata('Directory name does not found!')
 
         content = dir_obj.get('content', None)
         if content is None:
-            raise Exception('Bad metadata. Directory content does not found!')
+            raise BadMetadata('Directory content does not found!')
 
         for item in content:
             if item.has_key('content'):
@@ -120,7 +130,7 @@ class DirectoryMD:
             if item.name == item_name:
                 return item
 
-        raise Exception('"%s" does not found in %s directory'%(item_name, self.name))
+        raise PathException('"%s" does not found in %s directory'%(item_name, self.name))
 
     def append(self, item_md):
         if not isinstance(item_md, DirectoryMD) and not isinstance(item_md, FileMD):
@@ -166,7 +176,7 @@ class MetadataFile:
                 continue
 
             if not cur_item.is_dir():
-                raise Exception('Path "%s" does not found!'%path)
+                raise PathException('Path "%s" does not found!'%path)
 
             cur_item = cur_item.get(item_name)
 
@@ -175,7 +185,7 @@ class MetadataFile:
     def exists(self, path):
         try:
             self.find(path)
-        except Exception, err:
+        except PathException:
             return False
 
         return True
