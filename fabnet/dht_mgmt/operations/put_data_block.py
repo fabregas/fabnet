@@ -14,6 +14,7 @@ import hashlib
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR
+from fabnet.dht_mgmt.data_block import DataBlock
 
 class PutDataBlockOperation(OperationBase):
     def process(self, packet):
@@ -24,16 +25,28 @@ class PutDataBlockOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
+        primary_key = packet.parameters.get('primary_key', None)
+        replica_count =  packet.parameters.get('replica_count', None)
         key = packet.parameters.get('key', None)
         checksum = packet.parameters.get('checksum', None)
         is_replica = packet.parameters.get('is_replica', False)
         data = packet.binary_data
 
-        if key is None or checksum is None:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='key or/and checksum does not found!')
+        if key is None:
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='key does not found!')
+        if checksum is None:
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='data checksum does not found!')
 
-        if hashlib.sha1(data).hexdigest() != checksum:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='data is corrupted!')
+        if primary_key:
+            if replica_count is None:
+                return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='replica_count does not found!')
+
+            data_block = DataBlock(data, checksum)
+            data_block.validate()
+            data, checksum = data_block.pack(primary_key, replica_count)
+        else:
+            #DataBlock.read_header(data) #FIXME
+            pass
 
         dht_range = self.operator.get_dht_range()
         if not is_replica:

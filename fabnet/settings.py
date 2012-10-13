@@ -14,6 +14,8 @@ from fabnet.dht_mgmt.operations.split_range_cancel import SplitRangeCancelOperat
 from fabnet.dht_mgmt.operations.split_range_request import SplitRangeRequestOperation
 from fabnet.dht_mgmt.operations.update_hash_range_table import UpdateHashRangeTableOperation
 from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTableOperation
+from fabnet.dht_mgmt.operations.get_data_keys import GetKeysInfoOperation
+from fabnet.dht_mgmt.operations.put_data_keys import PutKeysInfoOperation
 from fabnet.dht_mgmt.operations.client_get import ClientGetOperation
 from fabnet.dht_mgmt.operations.client_put import ClientPutOperation
 
@@ -31,5 +33,7 @@ OPERATIONS_MAP = {'ManageNeighbour': ManageNeighbour,
                         'SplitRangeRequest': SplitRangeRequestOperation,
                         'UpdateHashRangeTable': UpdateHashRangeTableOperation,
                         'CheckHashRangeTable': CheckHashRangeTableOperation,
+                        'GetKeysInfo': GetKeysInfoOperation,
+                        'PutKeysInfo': PutKeysInfoOperation,
                         'ClientGetData': ClientGetOperation,
                         'ClientPutData': ClientPutOperation}

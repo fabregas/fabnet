@@ -13,6 +13,8 @@ from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesNoData
 from fabnet.core.constants import RC_OK, RC_ERROR
+from fabnet.dht_mgmt.constants import RC_NO_DATA
+from fabnet.dht_mgmt.data_block import DataBlock
 
 class GetDataBlockOperation(OperationBase):
     def process(self, packet):
@@ -35,9 +37,12 @@ class GetDataBlockOperation(OperationBase):
             else:
                 data = dht_range.get_replica(key)
         except FSHashRangesNoData, err:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='No data found!')
+            return FabnetPacketResponse(ret_code=RC_NO_DATA, ret_message='No data found!')
 
-        return FabnetPacketResponse(binary_data=data)
+        data_block = DataBlock(data)
+        raw_data, raw_checksum = data_block.unpack()
+
+        return FabnetPacketResponse(binary_data=raw_data, ret_parameters={'checksum': raw_checksum})
 
 
     def callback(self, packet, sender=None):

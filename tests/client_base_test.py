@@ -66,7 +66,10 @@ class TestDHTInitProcedure(unittest.TestCase):
 
     def test99_dht_stop(self):
         TestDHTInitProcedure.NODE_PROC.send_signal(signal.SIGINT)
-        time.sleep(1.5)
+        time.sleep(2.5)
+        home = '/tmp/node_1987'
+        if os.path.exists(home):
+            shutil.rmtree(home)
 
     def test02_create_dir(self):
         nibbler = TestDHTInitProcedure.NIBBLER_INST

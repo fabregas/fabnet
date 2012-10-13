@@ -25,40 +25,56 @@ class FabnetGateway:
         network_key = self.security_manager.get_network_key()
         fri_client = FriClient(network_key)
 
-        data = self.security_manager.encrypt(data)
-
-        checksum =  hashlib.sha1(data).hexdigest()
-
-        params = {'key': key, 'replica_count': replica_count, 'checksum': checksum, 'wait_writes_count': 1}
-        packet = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
-
+        packet = FabnetPacketRequest(method='PutKeysInfo', parameters={'key': key, 'replica_count': replica_count}, sync=True)
         resp = fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
-            raise Exception('Put data block error: %s'%resp.ret_message)
+            raise Exception('Put keys info error: %s'%resp.ret_message)
 
-        return resp.ret_parameters['key'], checksum
+        keys_info = resp.ret_parameters['keys_info']
+        data = self.security_manager.encrypt(data)
+        checksum =  hashlib.sha1(data).hexdigest()
 
-    def get(self, key, replica_count=DEFAULT_REPLICA_COUNT):
+        primary_key = keys_info[0][0]
+        for key, is_replica, node_addr in keys_info:
+            params = {'primary_key': primary_key, 'key': key, 'checksum': checksum, 'is_replica': is_replica, 'replica_count': replica_count}
+            packet = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=data, sync=True)
+            resp = fri_client.call_sync(node_addr, packet, FRI_CLIENT_TIMEOUT)
+            if resp.ret_code != 0:
+                raise Exception('Put data error: %s'%resp.ret_message)
+
+        return primary_key, checksum
+
+    def get(self, primary_key, replica_count=DEFAULT_REPLICA_COUNT):
         network_key = self.security_manager.get_network_key()
         fri_client = FriClient(network_key)
 
-        params = {'key': key, 'replica_count': replica_count}
-        packet = FabnetPacketRequest(method='ClientGetData', parameters=params, sync=True)
-
+        packet = FabnetPacketRequest(method='GetKeysInfo', parameters={'key': primary_key, 'replica_count': replica_count}, sync=True)
         resp = fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)
-        if resp.ret_code == RC_NO_DATA:
-            return None
-
         if resp.ret_code != 0:
-            raise Exception('Get data block error: %s'%resp.ret_message)
+            raise Exception('Get keys info error: %s'%resp.ret_message)
 
-        exp_checksum = resp.ret_parameters['checksum']
-        data = resp.binary_data
-        checksum =  hashlib.sha1(data).hexdigest()
+        keys_info = resp.ret_parameters['keys_info']
+        for key, is_replica, node_addr in keys_info:
+            params = {'key': key, 'is_replica': is_replica}
+            packet = FabnetPacketRequest(method='GetDataBlock', parameters=params, sync=True)
+            resp = fri_client.call_sync(node_addr, packet, FRI_CLIENT_TIMEOUT)
 
-        if exp_checksum != checksum:
-            raise Exception('Currupted data block on client')
+            if resp.ret_code == RC_NO_DATA:
+                print 'ERROR: No data found for key %s on node %s'%(key, node_addr) #FIXME
+            elif resp.ret_code != 0:
+                print 'ERROR: Get data block error for key %s from node %s: %s'%(key, node_addr, resp.ret_message)
 
-        data = self.security_manager.decrypt(data)
+            if resp.ret_code == 0:
+                exp_checksum = resp.ret_parameters['checksum']
+                data = resp.binary_data
+                checksum =  hashlib.sha1(data).hexdigest()
+                if exp_checksum != checksum:
+                    #FIXME: logger.error('Currupted data block on client')
+                    print 'ERROR: Currupted data block for key %s from node %s'%(key, node_addr)
+                    continue
+                data = self.security_manager.decrypt(data)
+                return data
 
-        return data
+        return None
+
+
