@@ -11,6 +11,9 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of user metadata classes.
 """
 import json
+import hashlib
+from datetime import datetime
+
 from client.constants import DEFAULT_REPLICA_COUNT
 
 class BadMetadata(Exception):
@@ -91,11 +94,11 @@ class DirectoryMD:
 
     @classmethod
     def is_dir(cls):
-        return False
+        return True
 
     @classmethod
     def is_file(cls):
-        return True
+        return False
 
     def load(self, dir_obj):
         self.name = dir_obj.get('name', None)
@@ -185,8 +188,26 @@ class MetadataFile:
     def exists(self, path):
         try:
             self.find(path)
-        except PathException:
+        except PathException, err:
             return False
 
         return True
+
+    def make_new_version(self, user_id):
+        cdt = datetime.now().isoformat()
+        new_version_key = hashlib.sha1(user_id+cdt).hexdigest()
+        self.versions.append((cdt, new_version_key))
+        return new_version_key
+
+    def get_versions(self):
+        return self.versions
+
+    def remove_version(self, version_key):
+        for_del = None
+        for i, (vdt, ver_key) in enumerate(self.versions):
+            if ver_key == version_key:
+                for_del = i
+
+        if for_del is not None:
+            del self.versions[for_del]
 

@@ -82,12 +82,14 @@ class Nibbler:
 
 
 
-    def __get_metadata(self, reload_force=False):
+    def __get_metadata(self, reload_force=False, metadata_key=None):
         if self.metadata and not reload_force:
             return self.metadata
 
-        user_id = self.security_provider.get_user_id()
-        metadata_key = hashlib.sha1(user_id).hexdigest()
+        if not metadata_key:
+            user_id = self.security_provider.get_user_id()
+            metadata_key = hashlib.sha1(user_id).hexdigest()
+
         metadata = self.fabnet_gateway.get(metadata_key)
         if metadata is None:
             raise Exception('No metadata found!')
@@ -98,8 +100,14 @@ class Nibbler:
         return self.metadata
 
     def __save_metadata(self):
-        metadata = self.metadata.dump()
         user_id = self.security_provider.get_user_id()
+        version_key = self.metadata.make_new_version(user_id)
+        metadata = self.metadata.dump()
+        try:
+            self.fabnet_gateway.put(metadata, key=version_key)
+        except Exception, err:
+            self.metadata.remove_version(version_key)
+
         metadata_key = hashlib.sha1(user_id).hexdigest()
         try:
             self.fabnet_gateway.put(metadata, key=metadata_key)
@@ -124,6 +132,12 @@ class Nibbler:
         self.fabnet_gateway.put(mdf.dump(), key=metadata_key)
         self.metadata = mdf
 
+    def get_versions(self):
+        mdf = self.__get_metadata()
+        return mdf.get_versions()
+
+    def load_version(self, version_key):
+        self.__get_metadata(reload_force=True, metadata_key=version_key)
 
     def listdir(self, path='/'):
         mdf = self.__get_metadata()

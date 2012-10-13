@@ -112,7 +112,20 @@ class TestDHTInitProcedure(unittest.TestCase):
         self.assertEqual(len(items), 1, items)
         self.assertEqual(items[0], ('test_file.out', True))
 
-    def test06_remove_file(self):
+    def test06_versions(self):
+        nibbler = TestDHTInitProcedure.NIBBLER_INST
+        versions = nibbler.get_versions()
+        self.assertEqual(len(versions), 4)
+
+        nibbler.load_version(versions[0][1])
+        items = nibbler.listdir('/')
+        self.assertEqual(len(items), 1, items)
+        self.assertEqual(items[0], ('my_first_dir', False))
+
+        nibbler.load_version(versions[-1][1])
+
+
+    def test07_remove_file(self):
         nibbler = TestDHTInitProcedure.NIBBLER_INST
 
         nibbler.remove_file('/my_first_dir/my_first_subdir/test_file.out')
@@ -120,7 +133,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         self.assertEqual(len(items), 0, items)
 
 
-    def test07_rmdir(self):
+    def test08_rmdir(self):
         nibbler = TestDHTInitProcedure.NIBBLER_INST
         try:
             nibbler.rmdir('/my_first_dir')
@@ -133,6 +146,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         items = nibbler.listdir()
         self.assertEqual(len(items), 1, items)
         self.assertEqual(items[0], ('my_second_dir', False))
+
 
 
 if __name__ == '__main__':
