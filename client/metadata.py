@@ -58,6 +58,7 @@ class FileMD:
         self.size = size
         self.replica_count = replica_count
         self.chunks = []
+        self.create_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
 
     @classmethod
     def is_dir(cls):
@@ -72,6 +73,9 @@ class FileMD:
         self.size = file_obj.get('size', None)
         self.chunks = file_obj.get('chunks', [])
         self.replica_count = file_obj.get('replica_count', DEFAULT_REPLICA_COUNT)
+        create_date = file_obj.get('create_date', None)
+        if create_date:
+            self.create_date = create_date
 
         if self.name is None:
             raise BadMetadata('File name does not found!')
@@ -84,13 +88,16 @@ class FileMD:
         return {'name': self.name,
                 'size': self.size,
                 'chunks': [c.dump() for c in self.chunks],
-                'replica_count': self.replica_count }
+                'replica_count': self.replica_count,
+                'create_date': self.create_date}
 
 
 class DirectoryMD:
     def __init__(self, name=''):
         self.name = name
         self.content = []
+        self.create_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        self.last_modify_date = self.create_date
 
     @classmethod
     def is_dir(cls):
@@ -109,6 +116,13 @@ class DirectoryMD:
         if content is None:
             raise BadMetadata('Directory content does not found!')
 
+        create_date = dir_obj.get('create_date', None)
+        if create_date:
+            self.create_date = create_date
+        last_mod_date = dir_obj.get('last_modify_date', None)
+        if last_mod_date:
+            self.last_modify_date = last_mod_date
+
         for item in content:
             if item.has_key('content'):
                 item_md = DirectoryMD()
@@ -119,7 +133,9 @@ class DirectoryMD:
 
     def dump(self):
         return {'name': self.name,
-                'content': [c.dump() for c in self.content]}
+                'content': [c.dump() for c in self.content],
+                'create_date': self.create_date,
+                'last_modify_date': self.last_modify_date}
 
     def items(self):
         ret_items = []
@@ -139,7 +155,11 @@ class DirectoryMD:
         if not isinstance(item_md, DirectoryMD) and not isinstance(item_md, FileMD):
             raise Exception('Item cant be appended to directory, bcs it type is equal to "%s"'%item_md)
 
+        if item_md.is_file():
+            self.remove(item_md.name)
+
         self.content.append(item_md)
+        self.last_modify_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
 
     def remove(self, item_name):
         rm_i = None
@@ -150,6 +170,7 @@ class DirectoryMD:
 
         if rm_i is not None:
             del self.content[rm_i]
+            self.last_modify_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 class MetadataFile:
