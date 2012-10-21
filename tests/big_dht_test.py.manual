@@ -14,7 +14,7 @@ import hashlib
 import string
 from fabnet.utils.logger import logger
 
-from fabnet.core.fri_base import FriClient, FabnetPacketRequest
+from fabnet.core.fri_server import FriClient, FabnetPacketRequest
 logger.setLevel(logging.DEBUG)
 
 NODES_COUNT = 8

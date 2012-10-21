@@ -8,7 +8,7 @@ import random
 import  sqlite3
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
-from fabnet.core.fri_base import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.operator import Operator
 from fabnet.operations.node_statistic import NodeStatisticOperation
 from fabnet.utils.logger import logger

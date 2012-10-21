@@ -9,7 +9,7 @@ from datetime import datetime
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.dht_operator import DHTOperator
 from fabnet.dht_mgmt import dht_operator
-from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTableOperation
 from fabnet.dht_mgmt.constants import RC_NEED_UPDATE
 

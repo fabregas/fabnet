@@ -46,11 +46,6 @@ class FileResource(DAVNonCollection):
     def getContentType(self):
         return 'application/octet-stream'
 
-        #mimetype = self.file_obj.mimetype
-        #if not mimetype:
-        #    mimetype = "application/octet-stream"
-        #return mimetype
-
     def _to_unix_time(self, date):
         return float(datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ').strftime("%s"))
 
@@ -119,51 +114,34 @@ class FileResource(DAVNonCollection):
         self.removeAllProperties(True)
         self.removeAllLocks(True)
 
+
     def copyMoveSingle(self, destPath, isMove):
         """See DAVResource.copyMoveSingle() """
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
 
-        fpDest = self.provider._locToFilePath(destPath)
         assert not util.isEqualOrChildUri(self.path, destPath)
-        # Copy file (overwrite, if exists)
-        shutil.copy2(self._filePath, fpDest)
-        # (Live properties are copied by copy2 or copystat)
-        # Copy dead properties
-        propMan = self.provider.propManager
-        if propMan:
-            destRes = self.provider.getResourceInst(destPath, self.environ)
-            if isMove:
-                propMan.moveProperties(self.getRefUrl(), destRes.getRefUrl(), 
-                                       withChildren=False)
-            else:
-                propMan.copyProperties(self.getRefUrl(), destRes.getRefUrl())
-               
+        if isMove:
+            self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+        else:
+            self.nibbler.copy(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+
 
     def supportRecursiveMove(self, destPath):
         """Return True, if moveRecursive() is available (see comments there)."""
         return True
 
-    
+
     def moveRecursive(self, destPath):
         """See DAVResource.moveRecursive() """
         if self.provider.readonly:
-            raise DAVError(HTTP_FORBIDDEN)               
-        fpDest = self.provider._locToFilePath(destPath)
+            raise DAVError(HTTP_FORBIDDEN)
+
         assert not util.isEqualOrChildUri(self.path, destPath)
-        assert not os.path.exists(fpDest)
-        _logger.debug("moveRecursive(%s, %s)" % (self._filePath, fpDest))
-        shutil.move(self._filePath, fpDest)
-        # (Live properties are copied by copy2 or copystat)
-        # Move dead properties
-        if self.provider.propManager:
-            destRes = self.provider.getResourceInst(destPath, self.environ)
-            self.provider.propManager.moveProperties(self.getRefUrl(), destRes.getRefUrl(), 
-                                                     withChildren=True)
-               
+
+        self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
 
 
-    
 #===============================================================================
 # FolderResource
 #===============================================================================
@@ -289,26 +267,12 @@ class FolderResource(DAVCollection):
         """See DAVResource.copyMoveSingle() """
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
-        fpDest = self.provider._locToFilePath(destPath)
+
         assert not util.isEqualOrChildUri(self.path, destPath)
-        # Create destination collection, if not exists
-        if not os.path.exists(fpDest):
-            os.mkdir(fpDest)
-        try:
-            # may raise: [Error 5] Permission denied: u'C:\\temp\\litmus\\ccdest'
-            shutil.copystat(self._filePath, fpDest)
-        except Exception, e:
-            _logger.debug("Could not copy folder stats: %s" % e)
-        # (Live properties are copied by copy2 or copystat)
-        # Copy dead properties
-        propMan = self.provider.propManager
-        if propMan:
-            destRes = self.provider.getResourceInst(destPath, self.environ)
-            if isMove:
-                propMan.moveProperties(self.getRefUrl(), destRes.getRefUrl(),
-                                       withChildren=False)
-            else:
-                propMan.copyProperties(self.getRefUrl(), destRes.getRefUrl())
+        if isMove:
+            self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+        else:
+            self.nibbler.copy(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
 
 
     def supportRecursiveMove(self, destPath):
@@ -319,18 +283,12 @@ class FolderResource(DAVCollection):
     def moveRecursive(self, destPath):
         """See DAVResource.moveRecursive() """
         if self.provider.readonly:
-            raise DAVError(HTTP_FORBIDDEN)               
-        fpDest = self.provider._locToFilePath(destPath)
+            raise DAVError(HTTP_FORBIDDEN)
+
         assert not util.isEqualOrChildUri(self.path, destPath)
-        assert not os.path.exists(fpDest)
-        _logger.debug("moveRecursive(%s, %s)" % (self._filePath, fpDest))
-        shutil.move(self._filePath, fpDest)
-        # (Live properties are copied by copy2 or copystat)
-        # Move dead properties
-        if self.provider.propManager:
-            destRes = self.provider.getResourceInst(destPath, self.environ)
-            self.provider.propManager.moveProperties(self.getRefUrl(), destRes.getRefUrl(), 
-                                                     withChildren=True)
+
+        self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+
 
 
 #===============================================================================

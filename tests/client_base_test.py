@@ -93,7 +93,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         fb.close()
         checksum = hashlib.sha1(data).hexdigest()
 
-        nibbler.save_file('/tmp/test_file.out', '/my_first_dir/my_first_subdir')
+        nibbler.save_file('/tmp/test_file.out', 'test_file.out', '/my_first_dir/my_first_subdir')
         os.remove('/tmp/test_file.out')
 
         #get file

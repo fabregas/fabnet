@@ -8,7 +8,7 @@ from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 constants.KEEP_ALIVE_MAX_WAIT_TIME = 0.2
 
-from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.operator import Operator
 from fabnet.operations.manage_neighbours import ManageNeighbour
 from fabnet.operations.discovery_operation import DiscoveryOperation

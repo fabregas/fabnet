@@ -11,7 +11,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the Node class implementation
 """
 
-from fabnet.core.fri_base import FriServer
+from fabnet.core.fri_server import FriServer
 from fabnet.settings import OPERATOR, OPERATIONS_MAP
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger

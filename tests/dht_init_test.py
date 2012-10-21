@@ -6,7 +6,7 @@ import shutil
 import threading
 import json
 import random
-from fabnet.core.fri_base import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
 from fabnet.dht_mgmt import constants
 constants.WAIT_RANGE_TIMEOUT = 0.1

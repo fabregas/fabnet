@@ -52,7 +52,7 @@ class Nibbler:
 
 
     def __get_file(self, file_obj):
-        f_obj = tempfile.TemporaryFile(prefix='nibbler-download-')
+        f_obj = tempfile.NamedTemporaryFile(prefix='nibbler-download-')
         try:
             for chunk in file_obj.chunks:
                 data = self.fabnet_gateway.get(chunk.key, file_obj.replica_count)
@@ -70,15 +70,18 @@ class Nibbler:
     def __save_file(self, file_obj, file_path):
         f_obj = open(file_path, 'rb')
         seek = 0
-        while True:
-            data = f_obj.read(CHUNK_SIZE)
-            size = len(data)
-            if size == 0:
-                break
-            key, checksum = self.fabnet_gateway.put(data, replica_count=file_obj.replica_count)
-            chunk = ChunkMD(key, checksum, seek, size)
-            file_obj.chunks.append(chunk)
-            seek += size
+        try:
+            while True:
+                data = f_obj.read(CHUNK_SIZE)
+                size = len(data)
+                if size == 0:
+                    break
+                key, checksum = self.fabnet_gateway.put(data, replica_count=file_obj.replica_count)
+                chunk = ChunkMD(key, checksum, seek, size)
+                file_obj.chunks.append(chunk)
+                seek += size
+        finally:
+            f_obj.close()
 
 
 
@@ -200,7 +203,7 @@ class Nibbler:
 
 
     def save_file(self, file_path, file_name, dest_dir):
-        if not os.path.exists(file_path):
+        if file_path and not os.path.exists(file_path):
             raise Exception('File %s does not found!'%file_path)
 
         mdf = self.__get_metadata()
@@ -209,7 +212,10 @@ class Nibbler:
         if not dir_obj.is_dir():
             raise Exception('%s is a file!'%dest_dir)
 
-        file_size = os.stat(file_path).st_size
+        if file_path:
+            file_size = os.stat(file_path).st_size
+        else:
+            file_size = 0
 
         if isinstance(file_name, FileMD):
             file_md = file_name
@@ -217,7 +223,7 @@ class Nibbler:
         else:
             file_md = FileMD(file_name, file_size)
 
-        empty = os.path.getsize(file_path) == 0
+        empty = (file_size == 0)
         if not empty:
             print 'SAVING %s'%file_md.name
             self.__save_file(file_md, file_path)
@@ -240,6 +246,60 @@ class Nibbler:
             raise Exception('%s is not a file!'%file_path)
 
         return self.__get_file(file_obj)
+
+    def move(self, s_path, d_path):
+        print 'mv %s to %s'%(s_path, d_path)
+        mdf, d_obj, source, new_name, dst_path = self._cpmv_int(s_path, d_path)
+
+        base_path, s_name = os.path.split(s_path)
+        mdf.find(base_path).remove(s_name)
+
+        if new_name:
+            source.name = new_name
+
+        d_obj.append(source)
+        self.__save_metadata()
+
+    def copy(self, s_path, d_path):
+        print 'cp %s to %s'%(s_path, d_path)
+        mdf, d_obj, source, new_name, dst_path = self._cpmv_int(s_path, d_path)
+        if not new_name:
+            new_name = source.name
+
+        if source.is_file():
+            fhdl = self.load_file(s_path)
+            try:
+                self.save_file(fhdl.name, new_name, dst_path)
+            finally:
+                fhdl.close()
+        else:
+            dst_dir = os.path.join(dst_path, new_name)
+            self.mkdir(dst_dir)
+            for i_name, dummy in source.items():
+                self.copy(os.path.join(s_path, i_name), dst_dir)
+
+        self.__save_metadata()
+
+    def _cpmv_int(self, s_path, d_path):
+        mdf = self.__get_metadata()
+        if not mdf.exists(s_path):
+            raise Exception('Path %s does not found!'%s_path)
+
+        if mdf.exists(d_path):
+            new_name = None
+            dst_path = d_path
+            d_obj = mdf.find(d_path)
+            if d_obj.is_file():
+                raise Exception('File %s is already exists!'%d_path)
+        else:
+            dst_path, new_name = os.path.split(d_path)
+            if not mdf.exists(dst_path):
+                raise Exception('Directory %s does not found!'%dst_path)
+            d_obj = mdf.find(dst_path)
+
+        source = mdf.find(s_path)
+        return mdf, d_obj, source, new_name, dst_path
+
 
     def remove_file(self, file_path):
         mdf = self.__get_metadata()
