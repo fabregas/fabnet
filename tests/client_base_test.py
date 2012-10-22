@@ -11,9 +11,11 @@ import signal
 import string
 import hashlib
 
-from fabnet.utils.logger import logger
+from client.logger import logger
 
 logger.setLevel(logging.DEBUG)
+from client import constants
+constants.CHUNK_SIZE = 100000
 
 from client.nibbler import Nibbler
 
@@ -65,6 +67,7 @@ class TestDHTInitProcedure(unittest.TestCase):
 
 
     def test99_dht_stop(self):
+        TestDHTInitProcedure.NIBBLER_INST.stop()
         TestDHTInitProcedure.NODE_PROC.send_signal(signal.SIGINT)
         time.sleep(2.5)
         home = '/tmp/node_1987'
@@ -88,12 +91,20 @@ class TestDHTInitProcedure(unittest.TestCase):
         nibbler = TestDHTInitProcedure.NIBBLER_INST
         fb = open('/tmp/test_file.out', 'wb')
         data = ''.join(random.choice(string.letters) for i in xrange(1024))
-        data *= 80*1024
+        data *= 10*1024
         fb.write(data)
         fb.close()
         checksum = hashlib.sha1(data).hexdigest()
 
         nibbler.save_file('/tmp/test_file.out', 'test_file.out', '/my_first_dir/my_first_subdir')
+
+        for i in xrange(20):
+            time.sleep(1)
+            if nibbler.get_resource('/my_first_dir/my_first_subdir/test_file.out'):
+                break
+        else:
+            raise Exception('File does not uploaded!')
+
         os.remove('/tmp/test_file.out')
 
         #get file

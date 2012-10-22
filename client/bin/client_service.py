@@ -23,6 +23,7 @@ if __name__ == '__main__':
         global server
         try:
             server.stop()
+            server.provider.stop()
         except Exception, err:
             #FIXME: logger.error('Stopping client error: %s'%err)
             print 'ERROR: %s'%err

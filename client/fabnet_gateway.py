@@ -33,7 +33,7 @@ class FabnetGateway:
 
         checksum =  hashlib.sha1(data).hexdigest()
 
-        params = {'checksum': checksum, 'wait_writes_count': wait_writes_count}
+        params = {'key':key, 'checksum': checksum, 'wait_writes_count': wait_writes_count}
         packet = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
 
         resp = fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)

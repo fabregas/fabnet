@@ -13,6 +13,7 @@ This module contains the implementation of user metadata classes.
 import json
 import hashlib
 from datetime import datetime
+import threading
 
 from client.constants import DEFAULT_REPLICA_COUNT
 
@@ -53,12 +54,15 @@ class ChunkMD:
 
 
 class FileMD:
-    def __init__(self, name=None, size=0, replica_count=DEFAULT_REPLICA_COUNT):
+    def __init__(self, name=None, size=0, replica_count=DEFAULT_REPLICA_COUNT, parent_dir=None):
         self.name = name
         self.size = size
         self.replica_count = replica_count
         self.chunks = []
         self.create_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        self.__lock = threading.Lock()
+        self.parent_dir = parent_dir
 
     @classmethod
     def is_dir(cls):
@@ -94,6 +98,27 @@ class FileMD:
                 'chunks': [c.dump() for c in self.chunks],
                 'replica_count': self.replica_count,
                 'create_date': self.create_date}
+
+    def append_chunk(self, key, checksum, seek, size):
+        self.__lock.acquire()
+        try:
+            chunk_obj = ChunkMD(key, checksum, seek, size)
+            self.chunks.append(chunk_obj)
+        finally:
+            self.__lock.release()
+
+    def is_all_chunks(self):
+        act_size = 0
+        self.__lock.acquire()
+        try:
+            for chunk in self.chunks:
+                act_size += chunk.size
+
+            if act_size == self.size:
+                return True
+            return False
+        finally:
+            self.__lock.release()
 
 
 class DirectoryMD:

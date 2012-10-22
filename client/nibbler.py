@@ -17,73 +17,40 @@ from client.constants import FILE_ITER_BLOCK_SIZE, CHUNK_SIZE
 from client.logger import logger
 from fabnet_gateway import FabnetGateway
 from metadata import *
+from parallel_put import PutDataManager
+from parallel_get import GetDataManager
 
+import threading
+lock = threading.RLock()
 
-class FileIterator:
-    def __init__(self, file_path, is_tmp=True):
-        self.file_path = file_path
-        self.is_tmp = is_tmp
-
-    def __iter__(self):
-        if not os.path.exists(self.file_path):
-            raise Exception('File %s does not exists!'%self.file_path)
-
-        f_obj = open(self.file_path, 'rb')
-        try:
-            while True:
-                data = f_obj.read(FILE_ITER_BLOCK_SIZE)
-                if len(data) == 0:
-                    return
-
-                yield data
-        except Exception, err:
-            raise Exception('Reading file %s failed: %s'%(self.file_path, err))
-        finally:
-            f_obj.close()
-            if self.is_tmp:
-                os.remove(self.file_path)
+def synchronized(lock):
+    """ Synchronization decorator. """
+    def wrap(f):
+        def wrapFunction(*args, **kw):
+            lock.acquire()
+            try:
+                return f(*args, **kw)
+            finally:
+                lock.release()
+        return wrapFunction
+    return wrap
 
 
 
 class Nibbler:
-    def __init__(self, fabnet_host, security_provider):
+    def __init__(self, fabnet_host, security_provider, parallel_put=3, parallel_get=3):
         self.security_provider = security_provider
         self.fabnet_gateway = FabnetGateway(fabnet_host, security_provider)
         self.metadata = None
+        self.put_manager = PutDataManager(self.fabnet_gateway, self.__finish_file_put, parallel_put)
+        self.get_manager = GetDataManager(self.fabnet_gateway, parallel_get)
 
+        self.put_manager.start()
+        self.get_manager.start()
 
-    def __get_file(self, file_obj):
-        f_obj = tempfile.NamedTemporaryFile(prefix='nibbler-download-')
-        try:
-            for chunk in file_obj.chunks:
-                data = self.fabnet_gateway.get(chunk.key, file_obj.replica_count)
-
-                f_obj.seek(chunk.seek)
-                f_obj.write(data[:chunk.size])
-        except Exception, err:
-            f_obj.close()
-            raise err
-
-        f_obj.seek(0)
-        return f_obj
-
-
-    def __save_file(self, file_obj, file_path):
-        f_obj = open(file_path, 'rb')
-        seek = 0
-        try:
-            while True:
-                data = f_obj.read(CHUNK_SIZE)
-                size = len(data)
-                if size == 0:
-                    break
-                key, checksum = self.fabnet_gateway.put(data, replica_count=file_obj.replica_count)
-                chunk = ChunkMD(key, checksum, seek, size)
-                file_obj.chunks.append(chunk)
-                seek += size
-        finally:
-            f_obj.close()
-
+    def stop(self):
+        self.put_manager.stop()
+        self.get_manager.stop()
 
 
     def __get_metadata(self, reload_force=False, metadata_key=None):
@@ -111,6 +78,7 @@ class Nibbler:
             self.fabnet_gateway.put(metadata, key=version_key)
         except Exception, err:
             self.metadata.remove_version(version_key)
+            raise err
 
         metadata_key = hashlib.sha1(user_id).hexdigest()
         try:
@@ -137,6 +105,7 @@ class Nibbler:
         self.metadata = mdf
         logger.info('User is registered in fabnet successfully')
 
+    @synchronized(lock)
     def get_resource(self, path):
         mdf = self.__get_metadata()
         try:
@@ -146,13 +115,16 @@ class Nibbler:
             #logger.debug('[get_resource] %s'%str(err))
             return None
 
+    @synchronized(lock)
     def get_versions(self):
         mdf = self.__get_metadata()
         return mdf.get_versions()
 
+    @synchronized(lock)
     def load_version(self, version_key):
         self.__get_metadata(reload_force=True, metadata_key=version_key)
 
+    @synchronized(lock)
     def listdir(self, path='/'):
         mdf = self.__get_metadata()
         dir_obj = mdf.find(path)
@@ -161,6 +133,7 @@ class Nibbler:
 
         return dir_obj.items()
 
+    @synchronized(lock)
     def mkdir(self, path, recursive=False):
         mdf = self.__get_metadata()
         if mdf.exists(path):
@@ -179,6 +152,7 @@ class Nibbler:
         base_path_obj.append(new_dir_obj)
         self.__save_metadata()
 
+    @synchronized(lock)
     def rmdir(self, path, recursive=False):
         mdf = self.__get_metadata()
 
@@ -203,7 +177,7 @@ class Nibbler:
         base_dir.remove(rm_dir)
         self.__save_metadata()
 
-
+    @synchronized(lock)
     def save_file(self, file_path, file_name, dest_dir):
         if file_path and not os.path.exists(file_path):
             raise Exception('File %s does not found!'%file_path)
@@ -225,17 +199,21 @@ class Nibbler:
         else:
             file_md = FileMD(file_name, file_size)
 
+        file_md.parent_dir = dir_obj
+
         empty = (file_size == 0)
         if not empty:
             logger.info('Saving file %s to fabnet'%file_md.name)
-            self.__save_file(file_md, file_path)
+            self.put_manager.put_file(file_md, file_path)
 
+    @synchronized(lock)
+    def __finish_file_put(self, file_md):
+        dir_obj = file_md.parent_dir
         dir_obj.append(file_md)
 
-        if not empty:
-            self.__save_metadata()
+        self.__save_metadata()
 
-
+    @synchronized(lock)
     def load_file(self, file_path):
         if isinstance(file_path, FileMD):
             file_obj = file_path
@@ -248,8 +226,11 @@ class Nibbler:
         if not file_obj.is_file():
             raise Exception('%s is not a file!'%file_path)
 
-        return self.__get_file(file_obj)
+        streem = self.get_manager.get_file(file_obj)
+        streem.wait_get()
+        return streem.get_file_obj()
 
+    @synchronized(lock)
     def move(self, s_path, d_path):
         logger.info('mv %s to %s'%(s_path, d_path))
         mdf, d_obj, source, new_name, dst_path = self._cpmv_int(s_path, d_path)
@@ -263,6 +244,7 @@ class Nibbler:
         d_obj.append(source)
         self.__save_metadata()
 
+    @synchronized(lock)
     def copy(self, s_path, d_path):
         logger.info('cp %s to %s'%(s_path, d_path))
         mdf, d_obj, source, new_name, dst_path = self._cpmv_int(s_path, d_path)
@@ -304,6 +286,7 @@ class Nibbler:
         return mdf, d_obj, source, new_name, dst_path
 
 
+    @synchronized(lock)
     def remove_file(self, file_path):
         mdf = self.__get_metadata()
         if not mdf.exists(file_path):

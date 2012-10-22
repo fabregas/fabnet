@@ -55,5 +55,6 @@ def make_server(host, port, fabnet_host):
         print("Runing %s, listening on %s://%s:%s" % (version, 'http', host, port))
 
     server = wsgiserver.CherryPyWSGIServer((host, port), app,)
+    server.provider = provider
     return server
 
