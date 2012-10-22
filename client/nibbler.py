@@ -14,6 +14,7 @@ import os
 import tempfile
 import hashlib
 from client.constants import FILE_ITER_BLOCK_SIZE, CHUNK_SIZE
+from client.logger import logger
 from fabnet_gateway import FabnetGateway
 from metadata import *
 
@@ -120,20 +121,21 @@ class Nibbler:
 
     def register_user(self):
         if self.metadata:
-            #user is already registered
+            logger.warning('Trying register user in fabnet, but it is already registered!')
             return
 
         user_id = self.security_provider.get_user_id()
         metadata_key = hashlib.sha1(user_id).hexdigest()
         metadata = self.fabnet_gateway.get(metadata_key)
         if metadata is not None:
-            #user is already registered
+            logger.warning('Trying register user in fabnet, but it is already registered!')
             return
 
         mdf = MetadataFile()
         mdf.load('{}')
         self.fabnet_gateway.put(mdf.dump(), key=metadata_key)
         self.metadata = mdf
+        logger.info('User is registered in fabnet successfully')
 
     def get_resource(self, path):
         mdf = self.__get_metadata()
@@ -141,7 +143,7 @@ class Nibbler:
             path_obj = mdf.find(path)
             return path_obj
         except PathException, err:
-            #print 'get_resource: ', err
+            #logger.debug('[get_resource] %s'%str(err))
             return None
 
     def get_versions(self):
@@ -225,13 +227,14 @@ class Nibbler:
 
         empty = (file_size == 0)
         if not empty:
-            print 'SAVING %s'%file_md.name
+            logger.info('Saving file %s to fabnet'%file_md.name)
             self.__save_file(file_md, file_path)
 
         dir_obj.append(file_md)
 
         if not empty:
             self.__save_metadata()
+
 
     def load_file(self, file_path):
         if isinstance(file_path, FileMD):
@@ -248,7 +251,7 @@ class Nibbler:
         return self.__get_file(file_obj)
 
     def move(self, s_path, d_path):
-        print 'mv %s to %s'%(s_path, d_path)
+        logger.info('mv %s to %s'%(s_path, d_path))
         mdf, d_obj, source, new_name, dst_path = self._cpmv_int(s_path, d_path)
 
         base_path, s_name = os.path.split(s_path)
@@ -261,7 +264,7 @@ class Nibbler:
         self.__save_metadata()
 
     def copy(self, s_path, d_path):
-        print 'cp %s to %s'%(s_path, d_path)
+        logger.info('cp %s to %s'%(s_path, d_path))
         mdf, d_obj, source, new_name, dst_path = self._cpmv_int(s_path, d_path)
         if not new_name:
             new_name = source.name
@@ -311,3 +314,4 @@ class Nibbler:
 
         dir_obj.remove(file_name)
         self.__save_metadata()
+

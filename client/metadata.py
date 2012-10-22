@@ -71,7 +71,11 @@ class FileMD:
     def load(self, file_obj):
         self.name = file_obj.get('name', None)
         self.size = file_obj.get('size', None)
-        self.chunks = file_obj.get('chunks', [])
+        chunks = file_obj.get('chunks', [])
+        for chunk in chunks:
+            chunk_obj = ChunkMD()
+            chunk_obj.load(chunk)
+            self.chunks.append(chunk_obj)
         self.replica_count = file_obj.get('replica_count', DEFAULT_REPLICA_COUNT)
         create_date = file_obj.get('create_date', None)
         if create_date:

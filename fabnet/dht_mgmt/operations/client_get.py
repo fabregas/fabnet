@@ -51,6 +51,7 @@ class ClientGetOperation(OperationBase):
         keys = KeyUtils.get_all_keys(key, replica_count)
 
         data = None
+        checksum = None
         is_replica = False
         for key in keys:
             long_key = self._validate_key(key)
@@ -64,15 +65,13 @@ class ClientGetOperation(OperationBase):
                     logger.warning('[ClientGetOperation] GetDataBlock error from %s: %s'%(range_obj.node_address, resp.ret_message))
                 else:
                     data = resp.binary_data
+                    checksum = resp.ret_parameters['checksum']
                     break
             is_replica = True
 
         if data is None:
             return FabnetPacketResponse(ret_code=RC_NO_DATA, ret_message='No data found!')
 
-        data_block = DataBlock(data)
-        raw_data, raw_checksum = data_block.unpack()
-
-        return FabnetPacketResponse(binary_data=raw_data, ret_parameters={'checksum': raw_checksum})
+        return FabnetPacketResponse(binary_data=data, ret_parameters={'checksum': checksum})
 
 
