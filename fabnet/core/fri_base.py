@@ -17,7 +17,7 @@ import struct
 import zlib
 import json
 
-from fabnet.core.constants import RC_OK, RC_ERROR, RC_UNEXPECTED, \
+from constants import RC_OK, RC_ERROR, RC_UNEXPECTED, \
                 BUF_SIZE, FRI_CLIENT_TIMEOUT, \
                 FRI_PROTOCOL_IDENTIFIER, FRI_PACKET_INFO_LEN
 

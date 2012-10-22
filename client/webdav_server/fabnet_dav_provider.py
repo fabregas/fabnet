@@ -122,9 +122,9 @@ class FileResource(DAVNonCollection):
 
         assert not util.isEqualOrChildUri(self.path, destPath)
         if isMove:
-            self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+            self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
         else:
-            self.nibbler.copy(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+            self.nibbler.copy(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
 
 
     def supportRecursiveMove(self, destPath):
@@ -139,7 +139,7 @@ class FileResource(DAVNonCollection):
 
         assert not util.isEqualOrChildUri(self.path, destPath)
 
-        self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+        self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
 
 
 #===============================================================================
@@ -270,9 +270,9 @@ class FolderResource(DAVCollection):
 
         assert not util.isEqualOrChildUri(self.path, destPath)
         if isMove:
-            self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+            self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
         else:
-            self.nibbler.copy(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+            self.nibbler.copy(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
 
 
     def supportRecursiveMove(self, destPath):
@@ -287,7 +287,7 @@ class FolderResource(DAVCollection):
 
         assert not util.isEqualOrChildUri(self.path, destPath)
 
-        self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/'))
+        self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
 
 
 

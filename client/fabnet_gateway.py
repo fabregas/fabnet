@@ -11,7 +11,12 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of gateway API for talking with fabnet
 """
 import hashlib
-from fabnet.core.fri_base import FriClient, FabnetPacketRequest
+
+try:
+    from client.fri_base import FriClient, FabnetPacketRequest
+except ImportError:
+    from fabnet.core.fri_base import FriClient, FabnetPacketRequest
+
 from client.constants import DEFAULT_REPLICA_COUNT, FRI_PORT, FRI_CLIENT_TIMEOUT, \
                             RC_NO_DATA
 
