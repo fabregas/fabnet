@@ -18,7 +18,7 @@ import zlib
 import json
 
 from constants import RC_OK, RC_ERROR, RC_UNEXPECTED, \
-                BUF_SIZE, FRI_CLIENT_TIMEOUT, \
+                BUF_SIZE, FRI_CLIENT_TIMEOUT, FRI_CLIENT_READ_TIMEOUT,\
                 FRI_PROTOCOL_IDENTIFIER, FRI_PACKET_INFO_LEN
 
 
@@ -27,6 +27,8 @@ class FriException(Exception):
 
 
 class FriBinaryProcessor:
+    NEED_COMPRESSION = False
+
     @classmethod
     def get_expected_len(cls, data):
         p_info = data[:FRI_PACKET_INFO_LEN]
@@ -59,7 +61,7 @@ class FriBinaryProcessor:
             raise FriException('Invalid FRI packet! Header is corrupted: %s'%err)
 
         bin_data = data[header_len+FRI_PACKET_INFO_LEN:]
-        if bin_data:
+        if bin_data and cls.NEED_COMPRESSION:
             bin_data = zlib.decompress(bin_data)
 
         return json_header, bin_data
@@ -71,7 +73,7 @@ class FriBinaryProcessor:
         except Exception, err:
             raise FriException('Cant form FRI packet! Header is corrupted: %s'%err)
 
-        if bin_data:
+        if bin_data and cls.NEED_COMPRESSION:
             bin_data = zlib.compress(bin_data)
 
         h_len = len(header)
@@ -173,7 +175,7 @@ class FriClient:
     def __init__(self, certfile=None):
         self.certfile = certfile
 
-    def __int_call(self, node_address, packet, timeout):
+    def __int_call(self, node_address, packet, conn_timeout, read_timeout=None):
         sock = None
 
         try:
@@ -201,7 +203,7 @@ class FriClient:
             if self.certfile:
                 sock = ssl.wrap_socket(sock, ca_certs=self.certfile,
                                     cert_reqs=ssl.CERT_REQUIRED)
-            sock.settimeout(timeout)
+            sock.settimeout(conn_timeout)
 
             sock.connect((hostname, port))
 
@@ -210,6 +212,7 @@ class FriClient:
             sock.sendall(data)
             #sock.shutdown(socket.SHUT_WR)
 
+            sock.settimeout(read_timeout)
             data = ''
             exp_len = None
             header_len = 0
@@ -238,19 +241,19 @@ class FriClient:
 
     def call(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
-            json_object = self.__int_call(node_address, packet, timeout)
+            json_object = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
 
             return json_object.get('ret_code', RC_UNEXPECTED), json_object.get('ret_message', '')
         except Exception, err:
-            return RC_ERROR, '[FriClient] %s' % err
+            return RC_ERROR, '[FriClient][%s] %s' % (err.__class__.__name__, err)
 
 
     def call_sync(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
-            json_object = self.__int_call(node_address, packet, timeout)
+            json_object = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
 
             return FabnetPacketResponse(**json_object)
         except Exception, err:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='[FriClient] %s'%err)
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='[FriClient][%s] %s' % (err.__class__.__name__, err))
 
 

@@ -44,7 +44,9 @@ class TestAbstractOperator(unittest.TestCase):
             ret = server2.start()
             self.assertEqual(ret, True)
 
-            data = '0123456789'*4000000
+            print 'Init big data...'
+            data = '0123456789'*5000000
+            print 'Done'
             data += ''
             packet = { 'message_id': 323232,
                         'method': 'ECHO',

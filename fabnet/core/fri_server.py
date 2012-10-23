@@ -322,7 +322,6 @@ class FriWorker(threading.Thread):
         data = ''
         exp_len = None
         header_len = 0
-
         while True:
             received = sock.recv(BUF_SIZE)
 
