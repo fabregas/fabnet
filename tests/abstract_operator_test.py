@@ -27,10 +27,10 @@ class EchoOperation(OperationBase):
 
 
 class TestAbstractOperator(unittest.TestCase):
-    def test_echo_operation(self):
+    def test00_echo_operation(self):
         self.__test_server()
 
-    def test_ssl_echo_operation(self):
+    def test01_ssl_echo_operation(self):
         self.__test_server('./tests/cert/server.crt', './tests/cert/server.key')
 
     def __test_server(self, cert=None, key=None):
@@ -78,10 +78,11 @@ class TestAbstractOperator(unittest.TestCase):
             if server2:
                 server2.stop()
 
-    def test_ssl_bad_cert(self):
+    def test02_ssl_bad_cert(self):
         cert = './tests/cert/server.crt'
         bad_cert = './tests/cert/server_invalid.crt'
         key = './tests/cert/server.key'
+        server1 = server2 = None
         try:
             operator = Operator('127.0.0.1:1986', certfile=cert)
             operator.neighbours = ['127.0.0.1:1987']

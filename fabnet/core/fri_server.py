@@ -10,16 +10,18 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 This module contains the implementation of FriServer class.
 """
-import ssl
 import socket
 import threading
 import time
 from datetime import datetime
 from Queue import Queue
 
+import M2Crypto.SSL
+from M2Crypto.SSL import Context, Connection
+
 from fabnet.utils.logger import logger
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse,\
-                                FriBinaryProcessor, FriClient
+                                FriBinaryProcessor, FriClient, FriException
 
 from fabnet.core.constants import RC_OK, RC_ERROR, \
                 STOP_THREAD_EVENT, S_ERROR, S_PENDING, S_INWORK, \
@@ -79,12 +81,17 @@ class FriServer:
         self.operator.stop()
         self.__conn_handler_thread.stop()
         self.__check_neighbours_thread.stop()
+        sock = None
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             if self.certfile:
-                sock = ssl.wrap_socket(sock, ca_certs=self.certfile,
-                                    cert_reqs=ssl.CERT_REQUIRED)
-            sock.settimeout(1.0)
+                context = Context()
+                context.set_verify(0, depth = 0)
+                sock = Connection(context)
+                sock.set_post_connection_check_callback(None)
+                sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=1))
+            else:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1.0)
 
             if self.hostname == '0.0.0.0':
                 hostname = '127.0.0.1'
@@ -92,10 +99,12 @@ class FriServer:
                 hostname = self.hostname
 
             sock.connect((hostname, self.port))
-            sock.close()
         except socket.error:
+            pass
+        finally:
             if sock:
                 sock.close()
+                del sock
 
         self.__workers_manager_thread.stop()
 
@@ -120,7 +129,14 @@ class FriConnectionHandler(threading.Thread):
 
     def __bind_socket(self):
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if self.certfile:
+                context = Context()
+                context.load_cert(self.certfile, self.keyfile)
+
+                self.sock = Connection(context)
+            else:
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self.sock.bind((self.hostname, self.port))
@@ -142,15 +158,6 @@ class FriConnectionHandler(threading.Thread):
             try:
                 (sock, addr) = self.sock.accept()
 
-                if self.certfile:
-                    try:
-                        sock = ssl.wrap_socket(sock, server_side=True,
-                                    certfile=self.certfile,
-                                    keyfile=self.keyfile)
-                    except Exception, err:
-                        sock.close()
-                        raise err
-
                 if self.stopped:
                     sock.close()
                     break
@@ -160,6 +167,7 @@ class FriConnectionHandler(threading.Thread):
                 logger.error(err)
 
         self.sock.close()
+        del self.sock
         logger.info('Connection handler thread stopped!')
 
     def stop(self):
