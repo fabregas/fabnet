@@ -1,0 +1,40 @@
+#!/usr/bin/python
+import os
+import shutil
+import sys
+import tempfile
+
+NB_CERT_FILENAME = 'nodes.idepositbox.com.pem'
+CB_CERT_FILENAME = 'clients.idepositbox.com.pem'
+NODE_CERT_FILENAME = 'node_certificate.pem'
+NODE_PRIKEY_FILENAME = 'node_prikey'
+
+if __name__ == '__main__':
+    if len(sys.argv) != 6:
+        print 'usage: %s <out file>  <nodes base cert> <clients base cert> <node cert> <node prikey>'%sys.argv[0]
+        sys.exit(1)
+
+    out_file = os.path.abspath(sys.argv[1])
+    if os.path.exists(out_file):
+        os.unlink(out_file)
+    nb_cert = os.path.abspath(sys.argv[2])
+    cb_cert = os.path.abspath(sys.argv[3])
+    node_cert = os.path.abspath(sys.argv[4])
+    node_prikey = os.path.abspath(sys.argv[5])
+
+    tmpdir = tempfile.mkdtemp()
+    shutil.copy(nb_cert, os.path.join(tmpdir, NB_CERT_FILENAME))
+    shutil.copy(cb_cert, os.path.join(tmpdir, CB_CERT_FILENAME))
+    shutil.copy(node_cert, os.path.join(tmpdir, NODE_CERT_FILENAME))
+    shutil.copy(node_prikey, os.path.join(tmpdir, NODE_PRIKEY_FILENAME))
+
+    os.chdir(tmpdir)
+    ret = os.system('zip -e %s %s %s %s %s'%(out_file, NB_CERT_FILENAME, \
+            CB_CERT_FILENAME, NODE_CERT_FILENAME, NODE_PRIKEY_FILENAME))
+
+    shutil.rmtree(tmpdir)
+    if ret:
+        print 'ERROR!'
+        sys.exit(1)
+
+    print 'Done!'

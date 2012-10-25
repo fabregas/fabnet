@@ -11,7 +11,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of
 a basic secure saved key storage.
 """
-
+import os
 import tempfile
 import zipfile
 from datetime import datetime
@@ -70,7 +70,7 @@ class AbstractKeyStorage:
 
         return role
 
-    def get_node_context(t(self):
+    def get_node_context(self):
         _, certfile = tempfile.mkstemp()
         _, keyfile = tempfile.mkstemp()
         try:
@@ -85,7 +85,7 @@ class AbstractKeyStorage:
             os.unlink(keyfile)
 
 
-class FileBasedKeyStorage(KeyStorage):
+class FileBasedKeyStorage(AbstractKeyStorage):
     def _load_key_storage(self, ks_path, passwd):
         if not os.path.exists(ks_path):
             raise Exception('Key storage file %s does not found!'%ks_path)

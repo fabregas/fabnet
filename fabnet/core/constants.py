@@ -58,3 +58,11 @@ NO_TOPOLOGY_DYSCOVERY_WINDOW = 60
 MIN_TOPOLOGY_DISCOVERY_WAIT = 10
 MAX_TOPOLOGY_DISCOVERY_WAIT = 60
 DISCOVERY_TOPOLOGY_TIMEOUT = 120 #FIXME:this value should be match bigger in real network
+
+
+
+#certificates constantns
+NODE_CERTIFICATE = 'nodes.idepositbox.com'
+CLIENT_CERTIFICATE = 'clients.idepositbox.com'
+NODE_ROLE = 'node'
+CLIENT_ROLE = 'client'
