@@ -14,6 +14,7 @@ This module contains the Node class implementation
 from fabnet.core.fri_server import FriServer
 from fabnet.settings import OPERATOR, OPERATIONS_MAP
 from fabnet.core.fri_base import FabnetPacketRequest
+from fabnet.core.key_storage import init_keystore
 from fabnet.utils.logger import logger
 
 class Node:
@@ -23,7 +24,7 @@ class Node:
         self.home_dir = home_dir
         self.node_name = node_name
         if ks_path:
-            self.keystore = FileBasedKeyStore(ks_path, ks_passwd)
+            self.keystore = init_keystore(ks_path, ks_passwd)
         else:
             self.keystore = None
 

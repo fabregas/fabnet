@@ -32,8 +32,8 @@ class FabnetGateway:
         self.fri_client = FriClient(bool(ckey), cert, ckey)
 
     def put(self, data, key=None, replica_count=DEFAULT_REPLICA_COUNT, wait_writes_count=2):
-
-
+        source_checksum =  hashlib.sha1(data).hexdigest()
+        data = self.security_manager.encrypt(data)
         checksum =  hashlib.sha1(data).hexdigest()
 
         params = {'key':key, 'checksum': checksum, 'wait_writes_count': wait_writes_count}
@@ -46,7 +46,7 @@ class FabnetGateway:
 
         primary_key = resp.ret_parameters['key']
 
-        return primary_key, checksum
+        return primary_key, source_checksum
 
     def get(self, primary_key, replica_count=DEFAULT_REPLICA_COUNT):
         params = {'key': primary_key, 'replica_count': replica_count}

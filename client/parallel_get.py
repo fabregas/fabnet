@@ -14,6 +14,7 @@ for parallel files download from fabnet.
 import time
 import tempfile
 import threading
+import hashlib
 from Queue import Queue
 
 from client.constants import FG_ERROR_TIMEOUT
@@ -32,20 +33,23 @@ class FileStreem:
 
     def save_block(self, seek, data):
         self.__lock.acquire()
-        self.downloaded_blocks += 1
-        self.__lock.release()
-        fobj = None
         try:
-            fobj = open(self.file_obj.name, 'r+b')
-            fobj.seek(seek)
-            fobj.write(data)
-            logger.debug('Saved %s %s %s'%(self.file_name, seek, len(data)))
-        except Exception, err:
-            self.is_error = True
-            raise err
+            self.downloaded_blocks += 1
+            fobj = None
+            try:
+                fobj = open(self.file_obj.name, 'r+b')
+                fobj.seek(seek)
+                fobj.write(data)
+                logger.debug('Saved %s %s %s'%(self.file_name, seek, len(data)))
+            except Exception, err:
+                self.is_error = True
+                raise err
+            finally:
+                if fobj:
+                    fobj.close()
+
         finally:
-            if fobj:
-                fobj.close()
+            self.__lock.release()
 
     def wait_get(self):
         while True:
@@ -78,18 +82,19 @@ class GetWorker(threading.Thread):
                 if job == QUIT_JOB:
                     break
 
-                out_streem, key, replica_count, seek, size = job
+                out_streem, key, replica_count, seek, checksum = job
 
                 try:
                     data = self.fabnet_gateway.get(key, replica_count)
                 except Exception, err:
-                    logger.error('Cant get data block for key %s. Wait %s seconds and try again...'%(key, FG_ERROR_TIMEOUT))
+                    logger.error('Cant get data block for key %s. Details: %s'%(key, err))
+                    logger.error('Wait %s seconds and try again...'%(FG_ERROR_TIMEOUT,))
                     time.sleep(FG_ERROR_TIMEOUT)
                     GetWorker.QUEUE.put(job)
                     continue
 
-                if len(data) != size:
-                    raise Exception('Data block for key %s has invalid size %s != %s'%(key, len(data), size))
+                if checksum != hashlib.sha1(data).hexdigest():
+                    raise Exception('Data block for key %s has invalid checksum!'%key)
 
                 out_streem.save_block(seek, data)
             except Exception, err:
@@ -124,6 +129,6 @@ class GetDataManager:
         file_streem = FileStreem(file_md.name, len(file_md.chunks))
 
         for chunk in file_md.chunks:
-            GetWorker.QUEUE.put((file_streem, chunk.key, file_md.replica_count, chunk.seek, chunk.size))
+            GetWorker.QUEUE.put((file_streem, chunk.key, file_md.replica_count, chunk.seek, chunk.checksum))
 
         return file_streem

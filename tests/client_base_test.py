@@ -18,24 +18,13 @@ from client import constants
 constants.CHUNK_SIZE = 100000
 
 from client.nibbler import Nibbler
+from client.security_manager import init_security_manager
 
 DEBUG=False
 
-class SecurityProviderMock:
-    def get_user_id(self):
-        return 'this is test USER ID string'
-
-    def get_client_cert(self):
-        return 'fake cert'
-
-    def get_client_cert_key(self):
-        return
-
-    def encrypt(self, data):
-        return data
-
-    def decrypt(self, data):
-        return data
+CLIENT_KS_PATH = './tests/cert/test_client_ks.zip'
+VALID_STORAGE = './tests/cert/test_keystorage.zip'
+PASSWD = 'qwerty123'
 
 class TestDHTInitProcedure(unittest.TestCase):
     NODE_PROC = None
@@ -53,7 +42,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         os.mkdir(home)
 
         logger.warning('{SNP} STARTING NODE %s'%address)
-        args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home]
+        args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, VALID_STORAGE, PASSWD]
         if DEBUG:
             args.append('--debug')
         p = subprocess.Popen(args)
@@ -63,7 +52,8 @@ class TestDHTInitProcedure(unittest.TestCase):
         TestDHTInitProcedure.NODE_PROC = p
         TestDHTInitProcedure.NODE_ADDRESS = address
 
-        nibbler = Nibbler('127.0.0.1', SecurityProviderMock())
+        security_manager = init_security_manager(CLIENT_KS_PATH, PASSWD)
+        nibbler = Nibbler('127.0.0.1', security_manager)
         TestDHTInitProcedure.NIBBLER_INST = nibbler
 
         nibbler.register_user()
@@ -94,7 +84,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         nibbler = TestDHTInitProcedure.NIBBLER_INST
         fb = open('/tmp/test_file.out', 'wb')
         data = ''.join(random.choice(string.letters) for i in xrange(1024))
-        data *= 10*1024
+        data *= 2*1024
         fb.write(data)
         fb.close()
         checksum = hashlib.sha1(data).hexdigest()

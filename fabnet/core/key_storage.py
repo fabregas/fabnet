@@ -50,7 +50,7 @@ class AbstractKeyStorage:
         return self._node_cert
 
     def get_node_cert_key(self):
-        cert = X509.load_cert_string(self._node_cert)
+        cert = X509.load_cert_string(str(self._node_cert))
         return cert.get_fingerprint()
         #return cert.get_ext('authorityKeyIdentifier').get_value()[5:].strip().replace(':','')
 
@@ -105,7 +105,7 @@ class FileBasedKeyStorage(AbstractKeyStorage):
             f_obj = storage.open(f_name)
             data = f_obj.read()
             f_obj.close()
-            return data
+            return str(data)
 
         nb_cert = X509.load_cert_string(read_file(NB_CERT_FILENAME))
         self._nodes_base_pubkey = nb_cert.get_pubkey()
@@ -117,3 +117,6 @@ class FileBasedKeyStorage(AbstractKeyStorage):
         self._node_prikey = read_file(NODE_PRIKEY_FILENAME)
 
         storage.close()
+
+def init_keystore(ks_path, passwd):
+    return FileBasedKeyStorage(ks_path, passwd)

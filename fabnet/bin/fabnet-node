@@ -36,13 +36,16 @@ def start(args):
         node_name = args[2]
         home_dir = args[3]
         ks_path = ks_passwd = None
-        if len(args) >= 5:
+        if len(args) > 5:
             ks_path = args[4]
 
         if '--debug' in args:
             logger.setLevel(logging.DEBUG)
 
-        if ks_path:
+        if len(args) >= 6:
+            ks_passwd = args[5] #for tests only. should be removed in production
+
+        if ks_path and not ks_passwd:
             ks_passwd = raw_input('Key storage password: ')
             rtpwd = raw_input('Retype password: ')
             if ks_passwd != rtpwd:
