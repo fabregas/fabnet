@@ -17,7 +17,10 @@ import struct
 import zlib
 import json
 
-from constants import RC_OK, RC_ERROR, RC_UNEXPECTED, \
+import M2Crypto.SSL
+from M2Crypto.SSL import Context, Connection
+
+from constants import RC_OK, RC_ERROR, RC_UNEXPECTED, RC_REQ_CERTIFICATE,\
                 BUF_SIZE, FRI_CLIENT_TIMEOUT, FRI_CLIENT_READ_TIMEOUT,\
                 FRI_PROTOCOL_IDENTIFIER, FRI_PACKET_INFO_LEN
 
@@ -83,10 +86,13 @@ class FriBinaryProcessor:
 
         return p_info + packet_data
 
+class FabnetPacket:
+    pass
 
-class FabnetPacketRequest:
+class FabnetPacketRequest(FabnetPacket):
     def __init__(self, **packet):
         self.message_id = packet.get('message_id', None)
+        self.session_id = packet.get('session_id', None)
         self.sync = packet.get('sync', False)
         if not self.message_id:
             self.message_id = str(uuid.uuid1())
@@ -121,6 +127,9 @@ class FabnetPacketRequest:
 
         if self.parameters:
             ret_dict['parameters'] = self.parameters
+        if self.session_id:
+            ret_dict['session_id'] = self.session_id
+
         return ret_dict
 
     def __str__(self):
@@ -130,7 +139,7 @@ class FabnetPacketRequest:
         return '{%s}[%s] %s %s'%(self.message_id, self.sender, self.method, str(self.parameters))
 
 
-class FabnetPacketResponse:
+class FabnetPacketResponse(FabnetPacket):
     def __init__(self, **packet):
         self.message_id = packet.get('message_id', None)
         self.ret_code = packet.get('ret_code', RC_OK)
@@ -172,8 +181,10 @@ class FabnetPacketResponse:
 
 class FriClient:
     """class for calling asynchronous operation over FRI protocol"""
-    def __init__(self, certfile=None):
-        self.certfile = certfile
+    def __init__(self, is_ssl=None, cert=None, session_id=None):
+        self.is_ssl = is_ssl
+        self.certificate = cert
+        self.session_id = session_id
 
     def __int_call(self, node_address, packet, conn_timeout, read_timeout=None):
         sock = None
@@ -192,52 +203,68 @@ class FriClient:
                 raise FriException('Node address %s is invalid! ' \
                             'Port should be integer in range 0...65535'%node_address)
 
+            if not isinstance(packet, FabnetPacket):
+                raise Exception('FRI request packet should be an object of FabnetPacket')
 
-            if type(packet) == str:
-                data = packet
+            packet.session_id = self.session_id
+            data = packet.dump()
+
+            if self.is_ssl:
+                context = Context()
+                context.set_verify(0, depth = 0)
+                sock = Connection(context)
+                sock.set_post_connection_check_callback(None)
+                sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=conn_timeout))
             else:
-                data = packet.dump()
-
-
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            if self.certfile:
-                sock = ssl.wrap_socket(sock, ca_certs=self.certfile,
-                                    cert_reqs=ssl.CERT_REQUIRED)
-            sock.settimeout(conn_timeout)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(conn_timeout)
 
             sock.connect((hostname, port))
 
-            sock.settimeout(None)
-
             sock.sendall(data)
-            #sock.shutdown(socket.SHUT_WR)
 
-            sock.settimeout(read_timeout)
-            data = ''
-            exp_len = None
-            header_len = 0
-            while True:
-                received = sock.recv(BUF_SIZE)
+            if self.is_ssl:
+                sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=read_timeout))
+            else:
+                sock.settimeout(read_timeout)
 
-                if not received:
-                    break
+            ret_packet = self.__read_packet(sock)
+            if ret_packet.get('ret_code', -1) == RC_REQ_CERTIFICATE:
+                self.__send_cert(sock)
+                ret_packet = self.__read_packet(sock)
 
-                data += received
-
-                if exp_len is None:
-                    exp_len, header_len = FriBinaryProcessor.get_expected_len(data)
-                if exp_len and len(data) >= exp_len:
-                    break
-
-            if not data:
-                raise FriException('empty data block')
-
-            header, bin_data = FriBinaryProcessor.from_binary(data, exp_len, header_len)
-            header['binary_data'] = bin_data
-            return header
+            return ret_packet
         finally:
             if sock:
                 sock.close()
+
+    def __send_cert(self, sock):
+        req = FabnetPacketRequest(method='crtput', parameters={'certificate': self.certificate})
+        sock.sendall(req.dump())
+
+    def __read_packet(self, sock):
+        data = ''
+        exp_len = None
+        header_len = 0
+        while True:
+            received = sock.recv(BUF_SIZE)
+
+            if not received:
+                break
+
+            data += received
+
+            if exp_len is None:
+                exp_len, header_len = FriBinaryProcessor.get_expected_len(data)
+            if exp_len and len(data) >= exp_len:
+                break
+
+        if not data:
+            raise FriException('empty data block')
+
+        header, bin_data = FriBinaryProcessor.from_binary(data, exp_len, header_len)
+        header['binary_data'] = bin_data
+        return header
 
     def call(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:

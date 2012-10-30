@@ -14,12 +14,14 @@ import time
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.core.constants import RC_ERROR
+from fabnet.core.constants import RC_ERROR, NODE_ROLE
 from fabnet.dht_mgmt.constants import RC_NEED_UPDATE, DS_INITIALIZE, \
                                 RANGES_TABLE_FLAPPING_TIMEOUT
 from fabnet.utils.logger import logger
 
 class CheckHashRangeTableOperation(OperationBase):
+    ROLES = [NODE_ROLE]
+
     def _get_ranges_table(self, from_addr, mod_index):
         if not self.operator.ranges_table.empty():
             for i in xrange(RANGES_TABLE_FLAPPING_TIMEOUT):

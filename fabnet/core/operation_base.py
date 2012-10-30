@@ -16,9 +16,20 @@ from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
 
 class OperationBase:
+    ROLES = []
+
     def __init__(self, operator):
         self.operator = operator
         self.__lock = threading.RLock()
+
+    @classmethod
+    def check_role(cls, role):
+        if role is None:
+            #no security mode enabled
+            return
+
+        if role not in cls.ROLES:
+            raise Exception('Permission denied!')
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation

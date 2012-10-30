@@ -15,8 +15,11 @@ from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesNoData
 from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.dht_mgmt.constants import RC_NO_DATA
 from fabnet.dht_mgmt.data_block import DataBlock
+from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 
 class GetDataBlockOperation(OperationBase):
+    ROLES = [NODE_ROLE, CLIENT_ROLE]
+
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node

@@ -13,10 +13,11 @@ from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.constants import ALLOW_FREE_SIZE_PERCENTS
 from fabnet.utils.logger import logger
-from fabnet.core.constants import RC_OK, RC_ERROR
+from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
 
 
 class SplitRangeRequestOperation(OperationBase):
+    ROLES = [NODE_ROLE]
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node

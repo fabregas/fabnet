@@ -27,16 +27,19 @@ class FabnetGateway:
         self.fabnet_hostname = fabnet_hostname
         self.security_manager = security_manager
 
+        cert = self.security_manager.get_client_cert()
+        ckey = self.security_manager.get_client_cert_key()
+        self.fri_client = FriClient(bool(ckey), cert, ckey)
+
     def put(self, data, key=None, replica_count=DEFAULT_REPLICA_COUNT, wait_writes_count=2):
-        network_key = self.security_manager.get_network_key()
-        fri_client = FriClient(network_key)
+
 
         checksum =  hashlib.sha1(data).hexdigest()
 
         params = {'key':key, 'checksum': checksum, 'wait_writes_count': wait_writes_count}
         packet = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
 
-        resp = fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)
+        resp = self.fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
             logger.error('ClientPutData error: %s'%resp.ret_message)
             raise Exception('ClientPutData error: %s'%resp.ret_message)
@@ -46,12 +49,9 @@ class FabnetGateway:
         return primary_key, checksum
 
     def get(self, primary_key, replica_count=DEFAULT_REPLICA_COUNT):
-        network_key = self.security_manager.get_network_key()
-        fri_client = FriClient(network_key)
-
         params = {'key': primary_key, 'replica_count': replica_count}
         packet = FabnetPacketRequest(method='ClientGetData', parameters=params, sync=True)
-        resp = fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)
+        resp = self.fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)
 
         if resp.ret_code == RC_NO_DATA:
             logger.error('No data found for key %s'%(primary_key,))

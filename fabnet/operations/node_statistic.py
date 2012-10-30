@@ -14,9 +14,12 @@ import resource
 from datetime import datetime
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
+from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 
 
 class NodeStatisticOperation(OperationBase):
+    ROLES = [NODE_ROLE]
+
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
         for resend it to neighbours

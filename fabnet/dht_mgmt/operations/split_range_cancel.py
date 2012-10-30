@@ -12,9 +12,11 @@ Copyright (C) 2012 Konstantin Andrusenko
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.utils.logger import logger
+from fabnet.core.constants import NODE_ROLE
 
 
 class SplitRangeCancelOperation(OperationBase):
+    ROELS = [NODE_ROLE]
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node

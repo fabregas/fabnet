@@ -45,6 +45,9 @@ class Nibbler:
         self.put_manager = PutDataManager(self.fabnet_gateway, self.__finish_file_put, parallel_put)
         self.get_manager = GetDataManager(self.fabnet_gateway, parallel_get)
 
+        user_id = self.security_provider.get_client_cert()
+        self.metadata_key = hashlib.sha1(user_id).hexdigest()
+
         self.put_manager.start()
         self.get_manager.start()
 
@@ -58,8 +61,8 @@ class Nibbler:
             return self.metadata
 
         if not metadata_key:
-            user_id = self.security_provider.get_user_id()
-            metadata_key = hashlib.sha1(user_id).hexdigest()
+            metadata_key = self.metadata_key
+
 
         metadata = self.fabnet_gateway.get(metadata_key)
         if metadata is None:
@@ -71,8 +74,7 @@ class Nibbler:
         return self.metadata
 
     def __save_metadata(self):
-        user_id = self.security_provider.get_user_id()
-        version_key = self.metadata.make_new_version(user_id)
+        version_key = self.metadata.make_new_version(self.metadata_key)
         metadata = self.metadata.dump()
         try:
             self.fabnet_gateway.put(metadata, key=version_key)
@@ -80,9 +82,8 @@ class Nibbler:
             self.metadata.remove_version(version_key)
             raise err
 
-        metadata_key = hashlib.sha1(user_id).hexdigest()
         try:
-            self.fabnet_gateway.put(metadata, key=metadata_key)
+            self.fabnet_gateway.put(metadata, key=self.metadata_key)
         except Exception, err:
             self.__get_metadata(reload_force=True)
             raise err
@@ -92,16 +93,14 @@ class Nibbler:
             logger.warning('Trying register user in fabnet, but it is already registered!')
             return
 
-        user_id = self.security_provider.get_user_id()
-        metadata_key = hashlib.sha1(user_id).hexdigest()
-        metadata = self.fabnet_gateway.get(metadata_key)
+        metadata = self.fabnet_gateway.get(self.metadata_key)
         if metadata is not None:
             logger.warning('Trying register user in fabnet, but it is already registered!')
             return
 
         mdf = MetadataFile()
         mdf.load('{}')
-        self.fabnet_gateway.put(mdf.dump(), key=metadata_key)
+        self.fabnet_gateway.put(mdf.dump(), key=self.metadata_key)
         self.metadata = mdf
         logger.info('User is registered in fabnet successfully')
 

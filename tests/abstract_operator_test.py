@@ -6,15 +6,23 @@ import json
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.key_storage import FileBasedKeyStorage
 from fabnet.core.operator import Operator
 from fabnet.core.operation_base import OperationBase
 from fabnet.utils.logger import logger
 from datetime import datetime
 
+from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
+
 logger.setLevel(logging.DEBUG)
+
+VALID_STORAGE = './tests/cert/test_keystorage.zip'
+INVALID_STORAGE = './tests/cert/test_keystorage_invalid.zip'
+PASSWD = 'qwerty123'
 
 
 class EchoOperation(OperationBase):
+    ROLES = [NODE_ROLE, CLIENT_ROLE]
     def before_resend(self, packet):
         pass
 
@@ -31,22 +39,22 @@ class TestAbstractOperator(unittest.TestCase):
         self.__test_server()
 
     def test01_ssl_echo_operation(self):
-        self.__test_server('./tests/cert/server.crt', './tests/cert/server.key')
+        self.__test_server(FileBasedKeyStorage(VALID_STORAGE, PASSWD))
 
-    def __test_server(self, cert=None, key=None):
+    def __test_server(self, keystorage=None):
         server1 = server2 = None
         try:
-            operator = Operator('127.0.0.1:1986', certfile=cert)
+            operator = Operator('127.0.0.1:1986', key_storage=keystorage)
             operator.neighbours = ['127.0.0.1:1987']
             operator.register_operation('ECHO', EchoOperation)
-            server1 = FriServer('0.0.0.0', 1986, operator, 10, 'node_1', cert, key)
+            server1 = FriServer('0.0.0.0', 1986, operator, 10, 'node_1', keystorage)
             ret = server1.start()
             self.assertEqual(ret, True)
 
-            operator = Operator('127.0.0.1:1987', certfile=cert)
+            operator = Operator('127.0.0.1:1987', key_storage=keystorage)
             operator.neighbours = ['127.0.0.1:1986']
             operator.register_operation('ECHO', EchoOperation)
-            server2 = FriServer('0.0.0.0', 1987, operator, 10, 'node_2', cert, key)
+            server2 = FriServer('0.0.0.0', 1987, operator, 10, 'node_2', keystorage)
             ret = server2.start()
             self.assertEqual(ret, True)
 
@@ -55,6 +63,10 @@ class TestAbstractOperator(unittest.TestCase):
                         'sync': False,
                         'sender': '127.0.0.1:1987',
                         'parameters': {'message': 'test message'}}
+
+            if keystorage:
+                packet['session_id'] = keystorage.get_node_cert_key()
+
             packet_obj = FabnetPacketRequest(**packet)
             rcode, rmsg = operator.call_node('127.0.0.1:1986', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
@@ -79,22 +91,21 @@ class TestAbstractOperator(unittest.TestCase):
                 server2.stop()
 
     def test02_ssl_bad_cert(self):
-        cert = './tests/cert/server.crt'
-        bad_cert = './tests/cert/server_invalid.crt'
-        key = './tests/cert/server.key'
+        keystorage = FileBasedKeyStorage(VALID_STORAGE, PASSWD)
+        inv_keystorage = FileBasedKeyStorage(INVALID_STORAGE, PASSWD)
         server1 = server2 = None
         try:
-            operator = Operator('127.0.0.1:1986', certfile=cert)
+            operator = Operator('127.0.0.1:1986', key_storage=keystorage)
             operator.neighbours = ['127.0.0.1:1987']
             operator.register_operation('ECHO', EchoOperation)
-            server1 = FriServer('0.0.0.0', 1986, operator, 10, 'node_1', cert, key)
+            server1 = FriServer('0.0.0.0', 1986, operator, 10, 'node_1', keystorage)
             ret = server1.start()
             self.assertEqual(ret, True)
 
-            operator = Operator('127.0.0.1:1987', certfile=bad_cert)
+            operator = Operator('127.0.0.1:1987', key_storage=inv_keystorage)
             operator.neighbours = ['127.0.0.1:1986']
             operator.register_operation('ECHO', EchoOperation)
-            server2 = FriServer('0.0.0.0', 1987, operator, 10, 'node_2', cert, key)
+            server2 = FriServer('0.0.0.0', 1987, operator, 10, 'node_2', inv_keystorage)
             ret = server2.start()
             self.assertEqual(ret, True)
 

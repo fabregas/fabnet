@@ -12,7 +12,8 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 from fabnet.core.operation_base import OperationBase
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
-                        ONE_DIRECT_NEIGHBOURS_COUNT
+                        ONE_DIRECT_NEIGHBOURS_COUNT, \
+                        NODE_ROLE, CLIENT_ROLE
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.operations.constants import MNO_APPEND, MNO_REMOVE
 from fabnet.utils.logger import logger
@@ -20,6 +21,7 @@ from fabnet.operations.topology_cognition import TopologyCognition
 
 
 class ManageNeighbour(OperationBase):
+    ROLES = [NODE_ROLE]
     def __init__(self, operator):
         OperationBase.__init__(self, operator)
         self.__cache = {}

@@ -13,13 +13,14 @@ import hashlib
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.core.constants import RC_OK, RC_ERROR
+from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE, CLIENT_ROLE
 from fabnet.dht_mgmt.constants import MIN_REPLICA_COUNT
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.key_utils import KeyUtils
 
 
 class PutKeysInfoOperation(OperationBase):
+    ROLES = [NODE_ROLE, CLIENT_ROLE]
     def _validate_key(self, key):
         try:
             if len(key) != 40:

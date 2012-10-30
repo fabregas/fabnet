@@ -17,13 +17,15 @@ from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
 
 class Node:
-    def __init__(self, hostname, port, home_dir, node_name='anonymous_node', certfile=None, keyfile=None):
+    def __init__(self, hostname, port, home_dir, node_name='anonymous_node', ks_path=None, ks_passwd=None):
         self.hostname = hostname
         self.port = port
         self.home_dir = home_dir
         self.node_name = node_name
-        self.certfile = certfile
-        self.keyfile = keyfile
+        if ks_path:
+            self.keystore = FileBasedKeyStore(ks_path, ks_passwd)
+        else:
+            self.keystore = None
 
         self.server = None
 
@@ -33,15 +35,15 @@ class Node:
             is_init_node = True
         else:
             is_init_node = False
-        operator = OPERATOR(address, self.home_dir, self.certfile, is_init_node, self.node_name)
+
+        operator = OPERATOR(address, self.home_dir, self.keystore, is_init_node, self.node_name)
 
         for (op_name, op_class) in OPERATIONS_MAP.items():
             operator.register_operation(op_name, op_class)
 
         self.server = FriServer(self.hostname, self.port, operator, \
                                     server_name=self.node_name, \
-                                    certfile=self.certfile, \
-                                    keyfile=self.keyfile)
+                                    keystorage=self.keystore)
 
         started = self.server.start()
         if not started:

@@ -46,9 +46,17 @@ class AbstractKeyStorage:
     def _load_key_storage(self, ks_path, passwd):
         pass
 
-    def verify_cert(self, cert):
+    def get_node_cert(self):
+        return self._node_cert
+
+    def get_node_cert_key(self):
+        cert = X509.load_cert_string(self._node_cert)
+        return cert.get_fingerprint()
+        #return cert.get_ext('authorityKeyIdentifier').get_value()[5:].strip().replace(':','')
+
+    def verify_cert(self, cert_str):
         '''Verify certificate and return certificate role'''
-        cert = X509.load_cert_string(cert)
+        cert = X509.load_cert_string(str(cert_str))
 
         cert_end_dt = cert.get_not_after().get_datetime().utctimetuple()
         if cert_end_dt < datetime.utcnow().utctimetuple():
@@ -90,7 +98,7 @@ class FileBasedKeyStorage(AbstractKeyStorage):
         if not os.path.exists(ks_path):
             raise Exception('Key storage file %s does not found!'%ks_path)
 
-        storage = zipfile.ZipFile(self.ks_path)
+        storage = zipfile.ZipFile(ks_path)
         storage.setpassword(passwd)
 
         def read_file(f_name):

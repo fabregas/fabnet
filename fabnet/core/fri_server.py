@@ -23,29 +23,32 @@ from fabnet.utils.logger import logger
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse,\
                                 FriBinaryProcessor, FriClient, FriException
 
-from fabnet.core.constants import RC_OK, RC_ERROR, \
+from fabnet.core.constants import RC_OK, RC_ERROR, RC_REQ_CERTIFICATE, \
                 STOP_THREAD_EVENT, S_ERROR, S_PENDING, S_INWORK, \
                 BUF_SIZE, CHECK_NEIGHBOURS_TIMEOUT, \
                 MIN_WORKERS_COUNT, MAX_WORKERS_COUNT
 
+from fabnet.core.sessions_manager import SessionsManager
+
 class FriServer:
     def __init__(self, hostname, port,  operator_obj, max_workers_count=20, server_name='fri-node',
-                    certfile=None, keyfile=None):
+                    keystorage=None):
         self.hostname = hostname
         self.port = port
-        self.certfile = certfile
+        self.keystorage = keystorage
 
         self.queue = Queue()
         self.operator = operator_obj
         self.operator.set_node_name(server_name)
         self.operator.set_server(self)
+        self.sessions = SessionsManager(self.operator.home_dir)
         self.stopped = True
 
         self.__workers_manager_thread = FriWorkersManager(self.queue, self.operator, \
-                    max_count=max_workers_count, workers_name=server_name)
+                    keystorage, self.sessions, max_count=max_workers_count, workers_name=server_name)
         self.__workers_manager_thread.setName('%s-FriWorkersManager'%(server_name,))
 
-        self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.queue, certfile, keyfile)
+        self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.queue, keystorage)
         self.__conn_handler_thread.setName('%s-FriConnectionHandler'%(server_name,))
 
         self.__check_neighbours_thread = CheckNeighboursThread(self.operator)
@@ -83,7 +86,7 @@ class FriServer:
         self.__check_neighbours_thread.stop()
         sock = None
         try:
-            if self.certfile:
+            if self.keystorage:
                 context = Context()
                 context.set_verify(0, depth = 0)
                 sock = Connection(context)
@@ -116,7 +119,7 @@ class FriServer:
 
 
 class FriConnectionHandler(threading.Thread):
-    def __init__(self, host, port, queue, certfile, keyfile):
+    def __init__(self, host, port, queue, keystorage):
         threading.Thread.__init__(self)
         self.queue = queue
         self.hostname = host
@@ -124,14 +127,12 @@ class FriConnectionHandler(threading.Thread):
         self.stopped = True
         self.status = S_PENDING
         self.sock = None
-        self.certfile = certfile
-        self.keyfile = keyfile
+        self.keystorage = keystorage
 
     def __bind_socket(self):
         try:
-            if self.certfile:
-                context = Context()
-                context.load_cert(self.certfile, self.keyfile)
+            if self.keystorage:
+                context = self.keystorage.get_node_context()
 
                 self.sock = Connection(context)
             else:
@@ -164,10 +165,11 @@ class FriConnectionHandler(threading.Thread):
 
                 self.queue.put(sock)
             except Exception, err:
-                logger.error(err)
+                logger.error('[accept] %s'%err)
 
-        self.sock.close()
-        del self.sock
+        if self.sock:
+            self.sock.close()
+            del self.sock
         logger.info('Connection handler thread stopped!')
 
     def stop(self):
@@ -175,14 +177,16 @@ class FriConnectionHandler(threading.Thread):
 
 
 class FriWorkersManager(threading.Thread):
-    def __init__(self, queue, operator, min_count=MIN_WORKERS_COUNT, \
+    def __init__(self, queue, operator, keystorage, sessions, min_count=MIN_WORKERS_COUNT, \
                     max_count=MAX_WORKERS_COUNT, workers_name='unnamed'):
         threading.Thread.__init__(self)
         self.queue = queue
         self.operator = operator
+        self.keystorage = keystorage
         self.min_count = min_count
         self.max_count = max_count
         self.workers_name = workers_name
+        self.sessions = sessions
 
         self.__threads = []
         self.__threads_idx = 0
@@ -210,7 +214,7 @@ class FriWorkersManager(threading.Thread):
         self.__lock.acquire()
         try:
             for i in range(self.min_count):
-                thread = FriWorker(self.queue, self.operator)
+                thread = FriWorker(self.queue, self.operator, self.keystorage, self.sessions)
                 thread.setName('%s-FriWorkerThread#%i' % (self.workers_name, i))
                 self.__threads.append(thread)
                 self.__threads_idx = self.min_count
@@ -257,7 +261,7 @@ class FriWorkersManager(threading.Thread):
             if len(self.__threads) == self.max_count:
                 return
 
-            thread = FriWorker(self.queue, self.operator)
+            thread = FriWorker(self.queue, self.operator, self.keystorage, self.sessions)
             thread.setName('%s-FriWorkerThread#%i'%(self.workers_name, self.__threads_idx))
             self.__threads_idx += 1
             thread.start()
@@ -316,11 +320,13 @@ class FriWorkersManager(threading.Thread):
 
 
 class FriWorker(threading.Thread):
-    def __init__(self, queue, operator):
+    def __init__(self, queue, operator, keystorage, sessions):
         threading.Thread.__init__(self)
 
         self.queue = queue
         self.operator = operator
+        self.sessions = sessions
+        self.key_storage = keystorage
         self.__busy_flag = threading.Event()
 
     def is_busy(self):
@@ -351,6 +357,27 @@ class FriWorker(threading.Thread):
 
         return header
 
+    def check_session(self, sock, session_id):
+        if not self.key_storage:
+            return None
+
+        session = self.sessions.get(session_id)
+        if session is None:
+            cert_req_packet = FabnetPacketResponse(ret_code=RC_REQ_CERTIFICATE, ret_message='Certificate request')
+            sock.sendall(cert_req_packet.dump())
+            cert_packet = self.handle_connection(sock)
+
+            certificate = cert_packet['parameters'].get('certificate', None)
+
+            if not certificate:
+                raise Exception('No client certificate found!')
+
+            role = self.key_storage.verify_cert(certificate)
+
+            self.sessions.append(session_id, role)
+            return role
+        return session.role
+
 
     def run(self):
         logger.info('%s started!'%self.getName())
@@ -374,18 +401,19 @@ class FriWorker(threading.Thread):
                 self.__busy_flag.set()
 
                 packet = self.handle_connection(sock)
+                session_id = packet.get('session_id', None)
+                role = self.check_session(sock, session_id)
 
                 is_sync = packet.get('sync', False)
                 if not is_sync:
                     sock.sendall(ok_msg)
-                    sock.shutdown(socket.SHUT_WR)
                     sock.close()
                     sock = None
 
                 if not packet.has_key('ret_code'):
                     pack = FabnetPacketRequest(**packet)
 
-                    ret_packet = self.operator.process(pack)
+                    ret_packet = self.operator.process(pack, role)
 
                     try:
                         if not is_sync:
@@ -395,7 +423,6 @@ class FriWorker(threading.Thread):
                             if not ret_packet:
                                 ret_packet = FabnetPacketResponse()
                             sock.sendall(ret_packet.dump())
-                            sock.shutdown(socket.SHUT_WR)
                             sock.close()
                             sock = None
                     finally:
@@ -409,7 +436,6 @@ class FriWorker(threading.Thread):
                     if sock:
                         err_packet = FabnetPacketResponse(ret_code=RC_ERROR, ret_message=ret_message)
                         sock.sendall(err_packet.dump())
-                        sock.shutdown(socket.SHUT_WR)
                         sock.close()
                 except Exception, err:
                     logger.error("Can't send error message to socket: %s"%err)

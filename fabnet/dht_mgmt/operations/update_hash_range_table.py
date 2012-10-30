@@ -15,11 +15,12 @@ from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.constants import DS_NORMALWORK, DS_INITIALIZE, \
                             MAX_HASH, MIN_HASH, WAIT_DHT_TABLE_UPDATE
-from fabnet.core.constants import RC_OK, RC_ERROR
+from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
 from fabnet.dht_mgmt.hash_ranges_table import HashRange
 from fabnet.utils.logger import logger
 
 class UpdateHashRangeTableOperation(OperationBase):
+    ROLES = [NODE_ROLE]
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
         for resend it to neighbours

@@ -38,7 +38,7 @@ class OperTimeoutException(OperException):
 
 
 class Operator:
-    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown-node'):
+    def __init__(self, self_address, home_dir='/tmp/', key_storage=None, is_init_node=False, node_name='unknown-node'):
         self.__operations = {}
         self.msg_container = MessageContainer(MC_SIZE)
 
@@ -50,7 +50,12 @@ class Operator:
 
         self.superior_neighbours = []
         self.upper_neighbours = []
-        self.fri_client = FriClient(certfile)
+        if key_storage:
+            cert = key_storage.get_node_cert()
+            ckey = key_storage.get_node_cert_key()
+        else:
+            cert = ckey = None
+        self.fri_client = FriClient(bool(cert), cert, ckey)
 
         self.__upper_keep_alives = {}
         self.__superior_keep_alives = {}
@@ -292,9 +297,10 @@ class Operator:
 
 
 
-    def process(self, packet):
+    def process(self, packet, role=None):
         """process request fabnet packet
         @param packet - object of FabnetPacketRequest class
+        @param role - requestor role (None for disable auth)
         """
         try:
             if packet.method == KEEP_ALIVE_METHOD:
@@ -314,6 +320,8 @@ class Operator:
             operation_obj = self.__operations.get(packet.method, None)
             if operation_obj is None:
                 raise OperException('Method "%s" does not implemented!'%packet.method)
+
+            operation_obj.check_role(role)
 
             logger.debug('processing packet %s'%packet)
 
@@ -460,6 +468,9 @@ class DiscoverTopologyThread(threading.Thread):
         logger.info('Thread started!')
 
         while not self.stopped:
+            time.sleep(1)
+            continue#FIXME
+
             try:
                 try:
                     tc_oper = self.operator.get_operation_instance('TopologyCognition')

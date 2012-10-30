@@ -25,8 +25,11 @@ class SecurityProviderMock:
     def get_user_id(self):
         return 'this is test USER ID string'
 
-    def get_network_key(self):
-        pass
+    def get_client_cert(self):
+        return 'fake cert'
+
+    def get_client_cert_key(self):
+        return
 
     def encrypt(self, data):
         return data

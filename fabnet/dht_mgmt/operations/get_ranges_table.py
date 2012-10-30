@@ -12,10 +12,11 @@ Copyright (C) 2012 Konstantin Andrusenko
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.constants import DS_INITIALIZE
-from fabnet.core.constants import RC_ERROR, RC_OK
+from fabnet.core.constants import RC_ERROR, RC_OK, NODE_ROLE
 from fabnet.utils.logger import logger
 
 class GetRangesTableOperation(OperationBase):
+    ROLES = [NODE_ROLE]
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node
