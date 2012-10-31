@@ -30,6 +30,8 @@ from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPER
 
 from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS, MNO_REMOVE
 
+NEED_STAT = True
+
 class OperException(Exception):
     pass
 
@@ -40,6 +42,11 @@ class OperTimeoutException(OperException):
 class Operator:
     def __init__(self, self_address, home_dir='/tmp/', key_storage=None, is_init_node=False, node_name='unknown-node'):
         self.__operations = {}
+        if NEED_STAT:
+            self.__stat = {}
+        else:
+            self.__stat = None
+
         self.msg_container = MessageContainer(MC_SIZE)
 
         self.__lock = threading.RLock()
@@ -109,6 +116,14 @@ class Operator:
         count, busy = self.server.workers_stat()
         ret_params['workers_count'] = count
         ret_params['workers_busy'] = busy
+
+        self._lock()
+        try:
+            methods_stat = copy.copy(self.__stat)
+        finally:
+            self._unlock()
+
+        ret_params['methods_stat'] = methods_stat
 
         return ret_params
 
@@ -190,6 +205,8 @@ class Operator:
             raise OperException('Class %s does not inherit OperationBase class'%op_class)
 
         self.__operations[op_name] = op_class(self)
+        if self.__stat is not None:
+            self.__stat[op_name] = 0
 
     def call_node(self, node_address, packet, sync=False):
         if node_address != self.self_address:
@@ -324,6 +341,12 @@ class Operator:
             operation_obj.check_role(role)
 
             logger.debug('processing packet %s'%packet)
+            if self.__stat is not None:
+                self._lock()
+                try:
+                    self.__stat[packet.method] += 1
+                finally:
+                    self._unlock()
 
             message_id = packet.message_id
             n_packet = operation_obj.before_resend(packet)

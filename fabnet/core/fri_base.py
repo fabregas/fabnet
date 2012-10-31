@@ -142,6 +142,7 @@ class FabnetPacketRequest(FabnetPacket):
 class FabnetPacketResponse(FabnetPacket):
     def __init__(self, **packet):
         self.message_id = packet.get('message_id', None)
+        self.session_id = packet.get('session_id', None)
         self.ret_code = packet.get('ret_code', RC_OK)
         self.ret_message = packet.get('ret_message', '')
         self.ret_parameters = packet.get('ret_parameters', {})
@@ -163,6 +164,8 @@ class FabnetPacketResponse(FabnetPacket):
             ret_dict['ret_parameters'] = self.ret_parameters
         if self.from_node:
             ret_dict['from_node'] = self.from_node
+        if self.session_id:
+            ret_dict['session_id'] = self.session_id
 
         return ret_dict
 

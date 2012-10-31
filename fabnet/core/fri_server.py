@@ -361,6 +361,9 @@ class FriWorker(threading.Thread):
         if not self.key_storage:
             return None
 
+        if not session_id:
+            raise Exception('SessionID does not found!')
+
         session = self.sessions.get(session_id)
         if session is None:
             cert_req_packet = FabnetPacketResponse(ret_code=RC_REQ_CERTIFICATE, ret_message='Certificate request')

@@ -45,6 +45,9 @@ class TestNodeStatistic(unittest.TestCase):
             self.assertEqual(int(ret_packet.ret_parameters['superiors_balance']), -1)
             self.assertTrue(int(ret_packet.ret_parameters['threads']) > 6)
             self.assertTrue(int(ret_packet.ret_parameters['memory']) > 1000)
+            self.assertEqual(len(ret_packet.ret_parameters['methods_stat']), 1)
+            self.assertEqual(ret_packet.ret_parameters['methods_stat']['NodeStatistic'], 1)
+            print ret_packet.ret_parameters
 
             time.sleep(.2)
         except Exception, err:
