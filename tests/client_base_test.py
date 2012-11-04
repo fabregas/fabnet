@@ -42,6 +42,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         os.mkdir(home)
 
         logger.warning('{SNP} STARTING NODE %s'%address)
+        #args = ['/usr/bin/python', '-m', 'cProfile', '-s', 'time', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, 'DHT', VALID_STORAGE, PASSWD]
         args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, 'DHT', VALID_STORAGE, PASSWD]
         if DEBUG:
             args.append('--debug')

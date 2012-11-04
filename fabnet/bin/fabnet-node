@@ -17,6 +17,11 @@ started = True
 INIT_ARGS = None
 NEIGHBOUR = None
 
+
+#import yappi
+#yappi.start()
+
+
 def reload_node(s, p):
     global node, fabnet_node, started, INIT_ARGS, NEIGHBOUR
     stop(s, p)
@@ -39,6 +44,7 @@ def stop(s, p):
     except Exception, err:
         logger.error('Stoping fabnet node error: %s'%err)
 
+    #yappi.print_stats(sort_type=2)
 
 def start(args):
     try:

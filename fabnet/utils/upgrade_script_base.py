@@ -79,6 +79,17 @@ class BaseFabnetUpgradeScript:
         except Exception, err:
             sys.stderr.write('ERROR: %s\n'%err)
 
+    def yum_install(self, package):
+        cmd = 'yum -y install %s'%package
+        ret = os.system(cmd)
+        if ret:
+            raise Exception('"%s" failed!'%cmd)
+
+    def emerge_install(self, package):
+        cmd = 'emerge -v %s'%package
+        ret = os.system(cmd)
+        if ret:
+            raise Exception('"%s" failed!'%cmd)
 
     def upgrade_win(self, osver, is64bit):
         pass

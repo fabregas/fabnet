@@ -67,3 +67,8 @@ NODE_CERTIFICATE = 'nodes.idepositbox.com'
 CLIENT_CERTIFICATE = 'clients.idepositbox.com'
 NODE_ROLE = 'node'
 CLIENT_ROLE = 'client'
+
+
+# types
+ET_ALERT = 'alert'
+ET_INFO = 'info'

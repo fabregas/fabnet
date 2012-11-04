@@ -4,20 +4,22 @@ Copyright (C) 2012 Konstantin Andrusenko
     See the documentation for further information on copyrights,
     or contact the author. All Rights Reserved.
 
-@package fabnet.operations.notify_operation
+@package fabnet.operations.upgrade_node_operation
 
 @author Konstantin Andrusenko
 @date Novenber 5, 2012
 """
 import os
-import sqlite3
+from datetime import datetime
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.utils.logger import logger
+from fabnet.core.constants import ET_ALERT
 
+GIT_HOME = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 
-class NotifyOperation(OperationBase):
+class UpgradeNodeOperation(OperationBase):
     ROLES = [NODE_ROLE]
 
     def before_resend(self, packet):
@@ -30,6 +32,28 @@ class NotifyOperation(OperationBase):
         """
         return packet
 
+    def __upgrade_node(self, origin_url):
+        old_curdir = os.path.abspath(os.curdir())
+        try:
+            if not origin_url:
+                raise Exception('origin_url does not found')
+
+            os.chdir(GIT_HOME)
+            os.system('git config --local --replace-all remote.origin.url %s'%origin_url)
+            ret = os.system('git pull')
+            if ret:
+                raise Exception('git pull failed')
+
+            ret = os.system('./fabnet/bin/upgrade-node')
+            if ret:
+                raise Exception('upgrade-node script failed!')
+        except Exception, err:
+            self._throw_event(ET_ALERT, 'UpgradeNodeOperation failed: %s'%err)
+            logger.error('[UpgradeNodeOperation] %s'%err)
+        finally:
+            os.chdir(old_curdir)
+
+
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node
@@ -38,28 +62,8 @@ class NotifyOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        if self.operator.has_type('Monitoring'):
-            self.__save_event(packet)
+        self.__upgrade_node(packet.parameters.get('origin_repo_url', None))
 
-    def __save_event(packet):
-        try:
-            event_type = packet.parameters.get('event_type', None)
-            event_provider = packet.parameters.get('event_provider', None)
-            if event_provider is None:
-                raise Exception('event_provider does not found!')
-
-            event_message = packet.parameters.get('event_message', None)
-
-            conn = sqlite3.connect(os.path.join(self.operator.home_dir, TOPOLOGY_DB)) #TODO: make me persistent
-            curs = conn.cursor()
-            curs.execute("INSERT INTO fabnet_event (event_type, event_provider, event_message) VALUES (%s, %s, %s)",
-                            (event_type, event_provider, event_message))
-            conn.commit()
-
-            curs.close()
-            conn.close()
-        except Exception, err:
-            logger.error('[NotifyOperation] %s'%err)
 
     def callback(self, packet, sender):
         """In this method should be implemented logic of processing
