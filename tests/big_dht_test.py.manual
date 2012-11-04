@@ -112,7 +112,7 @@ class TestBigNework(unittest.TestCase):
             os.mkdir(home)
 
             logger.warning('{SNP} STARTING NODE %s'%address)
-            args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home]
+            args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, 'DHT']
             if DEBUG:
                 args.append('--debug')
             p = subprocess.Popen(args)

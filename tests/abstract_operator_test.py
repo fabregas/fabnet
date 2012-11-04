@@ -83,6 +83,8 @@ class TestAbstractOperator(unittest.TestCase):
                 'ret_code': 0,
                 'ret_message': 'ok',
                 'ret_parameters': {'message': 'test message'}}
+            if keystorage:
+                good_resp['session_id'] = keystorage.get_node_cert_key()
             self.assertEqual(response, good_resp)
         finally:
             if server1:

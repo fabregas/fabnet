@@ -11,7 +11,9 @@ DEFAULT_HOME = '~/fabnet_node_home'
 
 
 def usage():
-    print('Usage: %s start <neighbour node>[:port] <node name> [<cert file path> <key file path>]'%sys.argv[0])
+    print('Usage: %s start <neighbour node>[:port] <node name> <node type> [<key storage path>]'%sys.argv[0])
+    print('           or')
+    print('       %s reload'%sys.argv[0])
     print('           or')
     print('       %s stop'%sys.argv[0])
 
@@ -22,7 +24,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if sys.argv[1] == 'start':
-        if len(sys.argv) < 3:
+        if len(sys.argv) < 5:
             usage()
             sys.exit(1)
 
@@ -31,13 +33,10 @@ if __name__ == '__main__':
             neighbour = '%s:%s'%(neighbour, DEFAULT_PORT)
 
         node_name = sys.argv[3]
-        cert_file = key_file = ''
-        if len(sys.argv) > 4:
-            if len(sys.argv) != 6:
-                usage()
-                sys.exit(1)
-            cert_file = sys.argv[4]
-            key_file = sys.argv[5]
+        node_type = sys.argv[4]
+        keystore = ''
+        if len(sys.argv) > 5:
+            keystore = sys.argv[5]
 
         ip_addr = os.environ.get('FABNET_NODE_HOST', '0.0.0.0')
         port = os.environ.get('FABNET_NODE_PORT', DEFAULT_PORT)
@@ -47,14 +46,16 @@ if __name__ == '__main__':
         if not os.path.exists(home_dir):
             os.makedirs(home_dir)
 
-        os.system('PYTHONPATH="%s" nohup %s %s %s %s %s %s %s> /dev/null &' \
+        os.system('PYTHONPATH="%s" %s %s %s %s %s %s %s > /dev/null &' \
                  %(PYPATH, NODE_SCRIPT, node_address, neighbour, node_name, \
-                    home_dir, cert_file, key_file))
+                    home_dir, node_type, keystore))
 
         os.system('nohup python %s &'% GIT_SERVER)
     elif sys.argv[1] == 'stop':
         os.system('killall -s INT fabnet-node')
         os.system('killall -s INT git_server.py')
+    elif sys.argv[1] == 'reload':
+        os.system('killall -s HUP fabnet-node')
     else:
         usage()
         sys.exit(1)

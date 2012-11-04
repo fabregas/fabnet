@@ -12,17 +12,19 @@ This module contains the Node class implementation
 """
 
 from fabnet.core.fri_server import FriServer
-from fabnet.settings import OPERATOR, OPERATIONS_MAP
+from fabnet.settings import OPERATORS_MAP, DEFAULT_OPERATOR
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.core.key_storage import init_keystore
 from fabnet.utils.logger import logger
 
 class Node:
-    def __init__(self, hostname, port, home_dir, node_name='anonymous_node', ks_path=None, ks_passwd=None):
+    def __init__(self, hostname, port, home_dir, node_name='anonymous_node',
+                    ks_path=None, ks_passwd=None, node_type=None):
         self.hostname = hostname
         self.port = port
         self.home_dir = home_dir
         self.node_name = node_name
+        self.node_type = node_type
         if ks_path:
             self.keystore = init_keystore(ks_path, ks_passwd)
         else:
@@ -37,10 +39,12 @@ class Node:
         else:
             is_init_node = False
 
-        operator = OPERATOR(address, self.home_dir, self.keystore, is_init_node, self.node_name)
+        operator_class = OPERATORS_MAP.get(self.node_type, None)
+        if operator_class is None:
+            logger.error('Node type "%s" does not found!'%self.node_type)
+            return False
 
-        for (op_name, op_class) in OPERATIONS_MAP.items():
-            operator.register_operation(op_name, op_class)
+        operator = operator_class(address, self.home_dir, self.keystore, is_init_node, self.node_name)
 
         self.server = FriServer(self.hostname, self.port, operator, \
                                     server_name=self.node_name, \

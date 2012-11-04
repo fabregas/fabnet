@@ -28,6 +28,11 @@ from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPER
                 NO_TOPOLOGY_DYSCOVERY_WINDOW, DISCOVERY_TOPOLOGY_TIMEOUT, \
                 MIN_TOPOLOGY_DISCOVERY_WAIT, MAX_TOPOLOGY_DISCOVERY_WAIT
 
+from fabnet.operations.manage_neighbours import ManageNeighbour
+from fabnet.operations.discovery_operation import DiscoveryOperation
+from fabnet.operations.topology_cognition import TopologyCognition
+from fabnet.operations.node_statistic import NodeStatisticOperation
+
 from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS, MNO_REMOVE
 
 NEED_STAT = True
@@ -39,7 +44,19 @@ class OperTimeoutException(OperException):
     pass
 
 
+OPERMAP =  {'ManageNeighbour': ManageNeighbour,
+            'DiscoveryOperation': DiscoveryOperation,
+            'TopologyCognition': TopologyCognition,
+            'NodeStatistic': NodeStatisticOperation}
+
+
 class Operator:
+    OPERATIONS_MAP = {}
+
+    @classmethod
+    def update_operations_map(cls, operations_map):
+        cls.OPERATIONS_MAP.update(operations_map)
+
     def __init__(self, self_address, home_dir='/tmp/', key_storage=None, is_init_node=False, node_name='unknown-node'):
         self.__operations = {}
         if NEED_STAT:
@@ -69,6 +86,9 @@ class Operator:
 
         self.start_datetime = datetime.now()
         self.is_init_node = is_init_node
+
+        for op_name, op_class in self.OPERATIONS_MAP.items():
+            self.register_operation(op_name, op_class)
 
         self.__discovery_topology_thrd = DiscoverTopologyThread(self)
         self.__discovery_topology_thrd.setName('%s-DiscoverTopologyThread'%node_name)
@@ -529,3 +549,7 @@ class DiscoverTopologyThread(threading.Thread):
 
     def stop(self):
         self.stopped = True
+
+
+
+Operator.update_operations_map(OPERMAP)

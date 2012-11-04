@@ -10,7 +10,6 @@ from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.operator import Operator
-from fabnet.operations.node_statistic import NodeStatisticOperation
 from fabnet.utils.logger import logger
 
 logger.setLevel(logging.DEBUG)
@@ -22,7 +21,6 @@ class TestNodeStatistic(unittest.TestCase):
             address = '127.0.0.1:1987'
             operator = Operator(address)
 
-            operator.register_operation('NodeStatistic', NodeStatisticOperation)
             server = FriServer('0.0.0.0', 1987, operator, server_name='node_test')
             ret = server.start()
             self.assertEqual(ret, True)
@@ -45,7 +43,7 @@ class TestNodeStatistic(unittest.TestCase):
             self.assertEqual(int(ret_packet.ret_parameters['superiors_balance']), -1)
             self.assertTrue(int(ret_packet.ret_parameters['threads']) > 6)
             self.assertTrue(int(ret_packet.ret_parameters['memory']) > 1000)
-            self.assertEqual(len(ret_packet.ret_parameters['methods_stat']), 1)
+            self.assertEqual(len(ret_packet.ret_parameters['methods_stat']), 4)
             self.assertEqual(ret_packet.ret_parameters['methods_stat']['NodeStatistic'], 1)
             print ret_packet.ret_parameters
 

@@ -42,7 +42,7 @@ class TestBigNework(unittest.TestCase):
                     shutil.rmtree(home)
                 os.mkdir(home)
                 logger.warning('{SNP} STARTING NODE %s'%address)
-                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home])
+                p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, 'DHT'])
                 logger.warning('{SNP} PROCESS STARTED')
                 time.sleep(.5)
 

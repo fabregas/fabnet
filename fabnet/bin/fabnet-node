@@ -5,12 +5,31 @@ import sys
 import signal
 import time
 import logging
+import getpass
 
-from fabnet.core.node import Node
+import fabnet
+import fabnet.core
+import fabnet.core.node as node
 from fabnet.utils.logger import logger
 
 fabnet_node = None
 started = True
+INIT_ARGS = None
+NEIGHBOUR = None
+
+def reload_node(s, p):
+    global node, fabnet_node, started, INIT_ARGS, NEIGHBOUR
+    stop(s, p)
+    try:
+        fabnet_node = node.Node(*INIT_ARGS)
+        started = fabnet_node.start(NEIGHBOUR)
+    except Exception, err:
+        logger.error('Reload node exception: %s'%err)
+
+    if not started:
+        logger.error('Node does not reloaded!')
+        sys.exit(1)
+    logger.info('Node is reloaded successfully.')
 
 def stop(s, p):
     global fabnet_node, started
@@ -23,9 +42,9 @@ def stop(s, p):
 
 def start(args):
     try:
-        global fabnet_node, started
-        if len(args) < 4:
-            logger.error('Usage: fabnet-node <node address> <neighbour address>|init-fabnet <node_name> <home_dir> <keystore path>')
+        global fabnet_node, started, INIT_ARGS, NEIGHBOUR
+        if len(args) < 5:
+            logger.error('Usage: fabnet-node <node address> <neighbour address>|init-fabnet <node_name> <home_dir> <node_type> [<keystore path>]')
             sys.exit(1)
 
         hostname, port = args[0].split(':')
@@ -35,29 +54,31 @@ def start(args):
             neighbour = None
         node_name = args[2]
         home_dir = args[3]
+        node_type = args[4]
+
         ks_path = ks_passwd = None
         if len(args) > 5:
-            ks_path = args[4]
+            ks_path = args[5]
 
         if '--debug' in args:
             logger.setLevel(logging.DEBUG)
 
         if len(args) >= 6:
-            ks_passwd = args[5] #for tests only. should be removed in production
+            ks_passwd = args[6] #for tests only. should be removed in production
 
         if ks_path and not ks_passwd:
-            ks_passwd = raw_input('Key storage password: ')
-            rtpwd = raw_input('Retype password: ')
-            if ks_passwd != rtpwd:
-                raise Exception('Passwords are not equal!')
+            ks_passwd = getpass.getpass('Key storage password: ')
 
-        fabnet_node = Node(hostname, port, home_dir, node_name, ks_path, ks_passwd)
+        fabnet_node = node.Node(hostname, port, home_dir, node_name, ks_path, ks_passwd, node_type)
         started = fabnet_node.start(neighbour)
         if not started:
             logger.error('Node does not started!')
             sys.exit(1)
 
+        INIT_ARGS = (hostname, port, home_dir, node_name, ks_path, ks_passwd)
+        NEIGHBOUR = neighbour
         signal.signal(signal.SIGINT, stop)
+        signal.signal(signal.SIGHUP, reload_node)
         while started:
             time.sleep(1)
     except Exception, err:

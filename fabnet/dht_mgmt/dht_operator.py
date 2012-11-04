@@ -26,6 +26,31 @@ from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_DESTROYING, DS_NORMALWOR
             MONITOR_DHT_RANGES_TIMEOUT
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
 
+from fabnet.dht_mgmt.operations.get_range_data_request import GetRangeDataRequestOperation
+from fabnet.dht_mgmt.operations.get_ranges_table import GetRangesTableOperation
+from fabnet.dht_mgmt.operations.put_data_block import PutDataBlockOperation
+from fabnet.dht_mgmt.operations.get_data_block import GetDataBlockOperation
+from fabnet.dht_mgmt.operations.split_range_cancel import SplitRangeCancelOperation
+from fabnet.dht_mgmt.operations.split_range_request import SplitRangeRequestOperation
+from fabnet.dht_mgmt.operations.update_hash_range_table import UpdateHashRangeTableOperation
+from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTableOperation
+from fabnet.dht_mgmt.operations.get_data_keys import GetKeysInfoOperation
+from fabnet.dht_mgmt.operations.put_data_keys import PutKeysInfoOperation
+from fabnet.dht_mgmt.operations.client_get import ClientGetOperation
+from fabnet.dht_mgmt.operations.client_put import ClientPutOperation
+
+OPERMAP = { 'GetRangeDataRequest': GetRangeDataRequestOperation,
+            'GetRangesTable': GetRangesTableOperation,
+            'PutDataBlock': PutDataBlockOperation,
+            'GetDataBlock': GetDataBlockOperation,
+            'SplitRangeCancel': SplitRangeCancelOperation,
+            'SplitRangeRequest': SplitRangeRequestOperation,
+            'UpdateHashRangeTable': UpdateHashRangeTableOperation,
+            'CheckHashRangeTable': CheckHashRangeTableOperation,
+            'GetKeysInfo': GetKeysInfoOperation,
+            'PutKeysInfo': PutKeysInfoOperation,
+            'ClientGetData': ClientGetOperation,
+            'ClientPutData': ClientPutOperation}
 
 class DHTOperator(Operator):
     def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown'):
@@ -369,3 +394,6 @@ class MonitorDHTRanges(threading.Thread):
 
     def stop(self):
         self.stopped = True
+
+
+DHTOperator.update_operations_map(OPERMAP)
