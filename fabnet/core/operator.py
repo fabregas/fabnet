@@ -51,6 +51,7 @@ OPERMAP =  {'ManageNeighbour': ManageNeighbour,
 
 
 class Operator:
+    OPTYPE = 'Base'
     OPERATIONS_MAP = {}
 
     @classmethod
@@ -101,6 +102,7 @@ class Operator:
             req = FabnetPacketRequest(method='ManageNeighbour', sender=self.self_address, parameters=parameters)
             self.call_node(neighbour, req)
 
+
     def stop(self):
         try:
             self.__discovery_topology_thrd.stop()
@@ -113,6 +115,11 @@ class Operator:
             self.__unbind_neighbours(superiors, NT_UPPER)
         except Exception, err:
             logger.write('Operator stopping failed. Details: %s'%err)
+
+    def has_type(self, optype):
+        if optype == self.OPTYPE:
+            return True
+        return False
 
     def get_statistic(self):
         ret_params = {}

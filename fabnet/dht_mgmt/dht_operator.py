@@ -53,6 +53,8 @@ OPERMAP = { 'GetRangeDataRequest': GetRangeDataRequestOperation,
             'ClientPutData': ClientPutOperation}
 
 class DHTOperator(Operator):
+    OPTYPE = 'DHT'
+
     def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown'):
         Operator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name)
 

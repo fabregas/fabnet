@@ -106,3 +106,7 @@ class OperationBase:
         """Get cached response from some node"""
         return self.operator.get_message_item(message_id,from_node)
 
+    def _throw_event(self, event_type, event_message):
+        self._init_network_operation('NotifyOperation', {'event_type':event_type, \
+                'event_message':event_message, 'event_provider':self.operator.self_address})
+
