@@ -80,13 +80,15 @@ class BaseFabnetUpgradeScript:
             sys.stderr.write('ERROR: %s\n'%err)
 
     def yum_install(self, package):
-        cmd = 'yum -y install %s'%package
+        cmd = 'sudo yum -y install %s'%package
+        print(cmd)
         ret = os.system(cmd)
         if ret:
             raise Exception('"%s" failed!'%cmd)
 
     def emerge_install(self, package):
-        cmd = 'emerge -v %s'%package
+        cmd = 'sudo emerge -v %s'%package
+        print(cmd)
         ret = os.system(cmd)
         if ret:
             raise Exception('"%s" failed!'%cmd)

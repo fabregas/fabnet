@@ -1,0 +1,6 @@
+[fabnet]
+name=Idepositbox Repository for RHEL6
+baseurl=http://repo.idepositbox.com:8080/repos/fabnet/
+enabled=1
+gpgcheck=0
+
