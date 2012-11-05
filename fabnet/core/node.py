@@ -19,8 +19,9 @@ from fabnet.utils.logger import logger
 
 class Node:
     def __init__(self, hostname, port, home_dir, node_name='anonymous_node',
-                    ks_path=None, ks_passwd=None, node_type=None):
+                    ks_path=None, ks_passwd=None, node_type=None, bind_host='0.0.0.0'):
         self.hostname = hostname
+        self.bind_host = bind_host
         self.port = port
         self.home_dir = home_dir
         self.node_name = node_name
@@ -46,7 +47,7 @@ class Node:
 
         operator = operator_class(address, self.home_dir, self.keystore, is_init_node, self.node_name)
 
-        self.server = FriServer(self.hostname, self.port, operator, \
+        self.server = FriServer(self.bind_host, self.port, operator, \
                                     server_name=self.node_name, \
                                     keystorage=self.keystore)
 
