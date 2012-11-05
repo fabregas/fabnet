@@ -51,7 +51,7 @@ class ClientPutOperation(OperationBase):
             return FabnetPacketResponse(ret_code=RC_ERROR,
                     ret_message='Checksum does not found in request packet!')
 
-        if wait_writes_count > replica_count:
+        if wait_writes_count > (replica_count+1):
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Cant waiting more replicas than saving!')
         if replica_count < MIN_REPLICA_COUNT:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Minimum replica count is equal to %s!'%MIN_REPLICA_COUNT)
