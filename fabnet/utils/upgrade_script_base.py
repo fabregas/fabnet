@@ -78,6 +78,8 @@ class BaseFabnetUpgradeScript:
             self.__run_int()
         except Exception, err:
             sys.stderr.write('ERROR: %s\n'%err)
+            return 1
+        return 0
 
     def yum_install(self, package):
         cmd = 'sudo yum -y install %s'%package
