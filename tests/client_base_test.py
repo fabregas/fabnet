@@ -106,6 +106,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         sha1 = hashlib.sha1()
         for data in file_iterator:
             sha1.update(data)
+        file_iterator.close()
 
         self.assertEqual(sha1.hexdigest(), checksum)
 

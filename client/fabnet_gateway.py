@@ -49,22 +49,28 @@ class FabnetGateway:
         return primary_key, source_checksum
 
     def get(self, primary_key, replica_count=DEFAULT_REPLICA_COUNT):
-        params = {'key': primary_key, 'replica_count': replica_count}
-        packet = FabnetPacketRequest(method='ClientGetData', parameters=params, sync=True)
+        packet = FabnetPacketRequest(method='GetKeysInfo', parameters={'key': primary_key, 'replica_count': replica_count}, sync=True)
         resp = self.fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)
+        if resp.ret_code != 0:
+            raise Exception('Get keys info error: %s'%resp.ret_message)
 
-        if resp.ret_code == RC_NO_DATA:
-            logger.error('No data found for key %s'%(primary_key,))
-        elif resp.ret_code != 0:
-            logger.error('Get data block error for key %s: %s'%(primary_key, resp.ret_message))
+        keys_info = resp.ret_parameters['keys_info']
+        for key, is_replica, node_addr in keys_info:
+            params = {'key': key, 'is_replica': is_replica}
+            packet = FabnetPacketRequest(method='GetDataBlock', parameters=params, sync=True)
+            resp = self.fri_client.call_sync(node_addr, packet, FRI_CLIENT_TIMEOUT)
 
-        if resp.ret_code == 0:
-            exp_checksum = resp.ret_parameters['checksum']
-            data = resp.binary_data
-            checksum =  hashlib.sha1(data).hexdigest()
-            if exp_checksum != checksum:
-                logger.error('Currupted data block for key %s from node %s'%(primary_key, node_addr))
-            else:
+            if resp.ret_code == RC_NO_DATA:
+                logger.error('No data found for key %s on node %s'%(key, node_addr))
+            elif resp.ret_code != 0:
+                logger.error('Get data block error for key %s from node %s: %s'%(key, node_addr, resp.ret_message))
+            elif resp.ret_code == 0:
+                exp_checksum = resp.ret_parameters['checksum']
+                data = resp.binary_data
+                checksum =  hashlib.sha1(data).hexdigest()
+                if exp_checksum != checksum:
+                    logger.error('Currupted data block for key %s from node %s'%(primary_key, node_addr))
+                    continue
                 data = self.security_manager.decrypt(data)
                 return data
 
