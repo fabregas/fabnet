@@ -15,8 +15,8 @@ from fabnet.core.fri_server import FriClient, FabnetPacketRequest
 
 NODEPORT = 1987
 
-CHUNKS_PER_NODE = 5
-DATA_BLOCK_SIZE = 10*1024#*1024 #10 MB
+CHUNKS_PER_NODE = 10
+DATA_BLOCK_SIZE = 10*1024*1024 #10 MB
 
 class SecurityManagerMock:
     def get_user_id(self):
