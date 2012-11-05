@@ -11,13 +11,17 @@ Copyright (C) 2011 Konstantin Andrusenko
 This module contains the fabnet logger initialization
 """
 import logging, logging.handlers
+import sys
 
 def init_logger():
     logger = logging.getLogger('localhost')
 
     logger.setLevel(logging.INFO)
 
-    log_path = '/dev/log'
+    if sys.platform == 'darwin':
+        log_path = '/var/run/syslog'
+    else:
+        log_path = '/dev/log'
 
     hdlr = logging.handlers.SysLogHandler(address=log_path,
               facility=logging.handlers.SysLogHandler.LOG_DAEMON)

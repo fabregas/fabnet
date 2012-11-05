@@ -45,7 +45,7 @@ if __name__ == '__main__':
         if not os.path.exists(home_dir):
             os.makedirs(home_dir)
 
-        os.system('PYTHONPATH="%s" %s %s %s %s %s %s %s > /dev/null &' \
+        os.system('PYTHONPATH="%s" nohup %s %s %s %s %s %s %s > /dev/null &' \
                  %(PYPATH, NODE_SCRIPT, node_address, neighbour, node_name, \
                     home_dir, node_type, keystore))
 
