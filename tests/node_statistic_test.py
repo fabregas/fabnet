@@ -38,14 +38,16 @@ class TestNodeStatistic(unittest.TestCase):
 
             self.assertEqual(isinstance(ret_packet, FabnetPacketResponse), True)
             self.assertEqual(ret_packet.ret_code, 0, ret_packet.ret_message)
+            print ret_packet.ret_parameters
             self.assertTrue(int(ret_packet.ret_parameters['workers_count']) > 2)
             self.assertEqual(int(ret_packet.ret_parameters['uppers_balance']), -1)
             self.assertEqual(int(ret_packet.ret_parameters['superiors_balance']), -1)
             self.assertTrue(int(ret_packet.ret_parameters['threads']) > 6)
             self.assertTrue(int(ret_packet.ret_parameters['memory']) > 1000)
             self.assertEqual(len(ret_packet.ret_parameters['methods_stat']), 4)
-            self.assertEqual(ret_packet.ret_parameters['methods_stat']['NodeStatistic'], 1)
-            print ret_packet.ret_parameters
+
+            self.assertEqual(ret_packet.ret_parameters['methods_stat']['NodeStatistic']['call_cnt'], 0)
+            self.assertEqual(ret_packet.ret_parameters['methods_stat']['NodeStatistic']['avg_proc_time'], '0')
 
             time.sleep(.2)
         except Exception, err:

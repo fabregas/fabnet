@@ -15,7 +15,7 @@ import threading
 import traceback
 import time
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fabnet.core.operation_base import OperationBase
 from fabnet.core.message_container import MessageContainer
@@ -36,6 +36,25 @@ from fabnet.operations.node_statistic import NodeStatisticOperation
 from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS, MNO_REMOVE
 
 NEED_STAT = True
+
+class OperationStat:
+    def __init__(self):
+        self.call_cnt = 0
+        self.proc_time = timedelta()
+
+    def update(self, proc_time):
+        self.call_cnt += 1
+        self.proc_time += proc_time
+
+    def dump(self):
+        if self.call_cnt:
+            avg = self.proc_time/self.call_cnt
+        else:
+            avg = 0
+
+        return {'call_cnt': self.call_cnt,
+                'avg_proc_time': str(avg)}
+
 
 class OperException(Exception):
     pass
@@ -144,9 +163,11 @@ class Operator:
         ret_params['workers_count'] = count
         ret_params['workers_busy'] = busy
 
+        methods_stat = {}
         self._lock()
         try:
-            methods_stat = copy.copy(self.__stat)
+            for op, op_stat in self.__stat.items():
+                methods_stat[op] = op_stat.dump()
         finally:
             self._unlock()
 
@@ -233,7 +254,7 @@ class Operator:
 
         self.__operations[op_name] = op_class(self)
         if self.__stat is not None:
-            self.__stat[op_name] = 0
+            self.__stat[op_name] = OperationStat()
 
     def call_node(self, node_address, packet, sync=False):
         if node_address != self.self_address:
@@ -346,6 +367,7 @@ class Operator:
         @param packet - object of FabnetPacketRequest class
         @param role - requestor role (None for disable auth)
         """
+        t0 = None
         try:
             if packet.method == KEEP_ALIVE_METHOD:
                 return self._process_keep_alive(packet)
@@ -361,6 +383,9 @@ class Operator:
                 #logger.debug('packet is already processing/processed: %s'%packet)
                 return
 
+            if self.__stat is not None:
+                t0 = datetime.now()
+
             operation_obj = self.__operations.get(packet.method, None)
             if operation_obj is None:
                 raise OperException('Method "%s" does not implemented!'%packet.method)
@@ -368,12 +393,6 @@ class Operator:
             operation_obj.check_role(role)
 
             logger.debug('processing packet %s'%packet)
-            if self.__stat is not None:
-                self._lock()
-                try:
-                    self.__stat[packet.method] += 1
-                finally:
-                    self._unlock()
 
             message_id = packet.message_id
             n_packet = operation_obj.before_resend(packet)
@@ -396,6 +415,13 @@ class Operator:
             traceback.print_exc(file=logger)
             logger.error('[Operator.process] %s'%err)
             return err_packet
+        finally:
+            if self.__stat is not None and t0:
+                self._lock()
+                try:
+                    self.__stat[packet.method].update(datetime.now()-t0)
+                finally:
+                    self._unlock()
 
     def after_process(self, packet, ret_packet):
         """process some logic after response send"""
