@@ -33,7 +33,7 @@ class UpgradeNodeOperation(OperationBase):
         return packet
 
     def __upgrade_node(self, origin_url):
-        old_curdir = os.path.abspath(os.curdir())
+        old_curdir = os.path.abspath(os.curdir)
         try:
             if not origin_url:
                 raise Exception('origin_url does not found')
@@ -41,11 +41,11 @@ class UpgradeNodeOperation(OperationBase):
             os.chdir(GIT_HOME)
             os.system('git config --local --replace-all remote.origin.url %s'%origin_url)
             ret = os.system('git pull')
-            if ret:
+            if ret != 0:
                 raise Exception('git pull failed')
 
             ret = os.system('./fabnet/bin/upgrade-node')
-            if ret:
+            if ret != 0:
                 raise Exception('upgrade-node script failed!')
         except Exception, err:
             self._throw_event(ET_ALERT, 'UpgradeNodeOperation failed: %s'%err)
