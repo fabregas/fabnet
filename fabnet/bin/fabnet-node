@@ -63,13 +63,13 @@ def start(args):
         node_type = args[4]
 
         ks_path = ks_passwd = None
-        if len(args) > 5:
+        if len(args) > 5 and not args[5].startswith('--'):
             ks_path = args[5]
 
         if '--debug' in args:
             logger.setLevel(logging.DEBUG)
 
-        if len(args) >= 6:
+        if len(args) > 6:
             ks_passwd = args[6] #for tests only. should be removed in production
 
         if ks_path and not ks_passwd:
