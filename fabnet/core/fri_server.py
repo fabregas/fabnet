@@ -437,7 +437,7 @@ class FriWorker(threading.Thread):
                 logger.error(ret_message)
                 try:
                     if sock:
-                        err_packet = FabnetPacketResponse(ret_code=RC_ERROR, ret_message=ret_message)
+                        err_packet = FabnetPacketResponse(ret_code=RC_ERROR, ret_message=str(err))
                         sock.sendall(err_packet.dump())
                         sock.close()
                 except Exception, err:

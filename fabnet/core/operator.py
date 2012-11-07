@@ -410,7 +410,7 @@ class Operator:
         except Exception, err:
             err_packet = FabnetPacketResponse(from_node=self.self_address,
                             message_id=packet.message_id,
-                            ret_code=1, ret_message= '[Operator.process] %s'%err)
+                            ret_code=1, ret_message= '[OpPROC] %s'%err)
             logger.write = logger.debug
             traceback.print_exc(file=logger)
             logger.error('[Operator.process] %s'%err)
