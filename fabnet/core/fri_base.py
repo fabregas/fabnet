@@ -36,7 +36,7 @@ class FriBinaryProcessor:
     def get_expected_len(cls, data):
         p_info = data[:FRI_PACKET_INFO_LEN]
         if len(p_info) != FRI_PACKET_INFO_LEN:
-            return None
+            raise FriException('Invalid FRI packet! No packet header found')
 
         try:
             prot, packet_len, header_len = struct.unpack('<4sqq', p_info)

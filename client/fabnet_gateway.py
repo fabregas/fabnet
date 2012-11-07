@@ -24,6 +24,8 @@ from client.logger import logger
 
 class FabnetGateway:
     def __init__(self, fabnet_hostname, security_manager):
+        if ':' not in fabnet_hostname:
+            fabnet_hostname += ':%s'%FRI_PORT
         self.fabnet_hostname = fabnet_hostname
         self.security_manager = security_manager
 
@@ -39,7 +41,7 @@ class FabnetGateway:
         params = {'key':key, 'checksum': checksum, 'wait_writes_count': wait_writes_count}
         packet = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
 
-        resp = self.fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)
+        resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
             logger.error('ClientPutData error: %s'%resp.ret_message)
             raise Exception('ClientPutData error: %s'%resp.ret_message)
@@ -50,7 +52,7 @@ class FabnetGateway:
 
     def get(self, primary_key, replica_count=DEFAULT_REPLICA_COUNT):
         packet = FabnetPacketRequest(method='GetKeysInfo', parameters={'key': primary_key, 'replica_count': replica_count}, sync=True)
-        resp = self.fri_client.call_sync('%s:%s'%(self.fabnet_hostname, FRI_PORT), packet, FRI_CLIENT_TIMEOUT)
+        resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
             raise Exception('Get keys info error: %s'%resp.ret_message)
 

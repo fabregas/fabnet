@@ -15,7 +15,7 @@ from fabnet.core.fri_server import FriClient, FabnetPacketRequest
 
 NODEPORT = 1987
 
-CHUNKS_PER_NODE = 10
+CHUNKS_PER_NODE = 5
 DATA_BLOCK_SIZE = 10*1024*1024 #10 MB
 
 class SecurityManagerMock:
@@ -75,7 +75,7 @@ def collect_topology(node_ip):
     print 'Collecting topology on %s'%node_ip
     fri_client = FriClient()
     packet_obj = FabnetPacketRequest(method='TopologyCognition')
-    ret_code, ret_msg = fri_client.call('%s:%s'%(node_ip, NODEPORT), packet_obj)
+    ret_code, ret_msg = fri_client.call(node_ip, packet_obj)
 
     if ret_code != 0:
         print '[ERROR] TopologyCognition operation does not started: %s'%ret_msg
@@ -88,7 +88,7 @@ def collect_nodes_stat(nodes_ip):
     for node_ip in nodes_ip:
         print 'Collecting statistic from %s'%node_ip
         packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
-        ret_packet = fri_client.call_sync('%s:%s'%(node_ip, NODEPORT), packet_obj)
+        ret_packet = fri_client.call_sync(node_ip, packet_obj)
         if ret_packet.ret_code != 0:
             print '[ERROR] no statistic: %s'%ret_packet.ret_message
 
@@ -142,6 +142,8 @@ if __name__ == '__main__':
         line = line.strip()
         if not line or line.startswith('#'):
             continue
+        if ':' not in line:
+            line  += ':%s'%NODEPORT
         ips.append(line)
     if not ips:
         print 'no IP addresses found!'
