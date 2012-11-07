@@ -159,11 +159,11 @@ class TestBigNework(unittest.TestCase):
         for address in ADDRESSES:
             packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
             ret_packet = client.call_sync(address, packet_obj)
-            start = ret_packet.ret_parameters['range_start']
-            end = ret_packet.ret_parameters['range_end']
+            start = ret_packet.ret_parameters['dht_info']['range_start']
+            end = ret_packet.ret_parameters['dht_info']['range_end']
             len_r = long(end, 16) - long(start, 16)
             print 'On node %s: {%s-%s}[%s] = %s KB (%s KB)'%(address, start, end, len_r,\
-                     ret_packet.ret_parameters['range_size']/1024, ret_packet.ret_parameters['replicas_size']/1024)
+                     ret_packet.ret_parameters['dht_info']['range_size']/1024, ret_packet.ret_parameters['dht_info']['replicas_size']/1024)
 
 
 

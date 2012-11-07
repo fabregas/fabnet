@@ -87,12 +87,14 @@ class DHTOperator(Operator):
         stat = Operator.get_statistic(self)
         dht_range = self.get_dht_range()
 
-        stat['status'] = self.status
-        stat['range_start'] = '%040x'% dht_range.get_start()
-        stat['range_end'] = '%040x'% dht_range.get_end()
-        stat['range_size'] = dht_range.get_range_size()
-        stat['replicas_size'] = dht_range.get_replicas_size()
-        stat['free_size'] = dht_range.get_free_size()
+        dht_i = {}
+        dht_i['status'] = self.status
+        dht_i['range_start'] = '%040x'% dht_range.get_start()
+        dht_i['range_end'] = '%040x'% dht_range.get_end()
+        dht_i['range_size'] = dht_range.get_range_size()
+        dht_i['replicas_size'] = dht_range.get_replicas_size()
+        dht_i['free_size'] = dht_range.get_free_size()
+        stat['dht_info'] = dht_i
         return stat
 
 

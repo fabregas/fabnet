@@ -6,6 +6,14 @@ from fabnet.core.fri_base import FriClient, FabnetPacketRequest
 def usage():
     print('Usage: %s <operation> <node address> [parameters in json format] [sync]'%sys.argv[0])
 
+def print_resp(params, prefix=''):
+    for key, value in params.items():
+        if type(value) == dict:
+            print '%s%s:'%(prefix, key)
+            print_resp(value, prefix+'\t')
+        else:
+            print '%s%s: %s'%(prefix, key, value)
+
 def call_operation(operation, node_address, params, sync):
     try:
         params = json.loads(params)
@@ -25,11 +33,11 @@ def call_operation(operation, node_address, params, sync):
 
         return rcode
     else:
-        resp = client.call_sync(node_address, packet.to_dict())
+        resp = client.call_sync(node_address, packet)
         print 'RET CODE: %s'% resp.ret_code
         print 'RET MESSAGE: %s'% (resp.ret_message or 'ok')
-        for key, value in resp.ret_parameters.items():
-            print '%s: %s'%(key, value)
+        print_resp(resp.ret_parameters)
+
         return resp.ret_code
 
 
