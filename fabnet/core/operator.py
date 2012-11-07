@@ -32,6 +32,8 @@ from fabnet.operations.manage_neighbours import ManageNeighbour
 from fabnet.operations.discovery_operation import DiscoveryOperation
 from fabnet.operations.topology_cognition import TopologyCognition
 from fabnet.operations.node_statistic import NodeStatisticOperation
+from fabnet.operations.upgrade_node_operation import UpgradeNodeOperation
+from fabnet.operations.notify_operation import NotifyOperation
 
 from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS, MNO_REMOVE
 
@@ -66,7 +68,9 @@ class OperTimeoutException(OperException):
 OPERMAP =  {'ManageNeighbour': ManageNeighbour,
             'DiscoveryOperation': DiscoveryOperation,
             'TopologyCognition': TopologyCognition,
-            'NodeStatistic': NodeStatisticOperation}
+            'NodeStatistic': NodeStatisticOperation,
+            'UpgradeNode': UpgradeNodeOperation,
+            'NotifyOperation': NotifyOperation}
 
 
 class Operator:

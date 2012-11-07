@@ -15,7 +15,7 @@ from datetime import datetime
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.utils.logger import logger
-from fabnet.core.constants import ET_ALERT
+from fabnet.core.constants import ET_ALERT, NODE_ROLE
 
 GIT_HOME = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 

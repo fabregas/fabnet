@@ -15,6 +15,7 @@ import sqlite3
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.utils.logger import logger
+from fabnet.core.constants import NODE_ROLE
 
 
 class NotifyOperation(OperationBase):
