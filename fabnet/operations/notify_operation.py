@@ -39,10 +39,6 @@ class NotifyOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        if self.operator.has_type('Monitoring'):
-            self.__save_event(packet)
-
-    def __save_event(packet):
         try:
             event_type = packet.parameters.get('event_type', None)
             event_provider = packet.parameters.get('event_provider', None)
@@ -51,16 +47,10 @@ class NotifyOperation(OperationBase):
 
             event_message = packet.parameters.get('event_message', None)
 
-            conn = sqlite3.connect(os.path.join(self.operator.home_dir, TOPOLOGY_DB)) #TODO: make me persistent
-            curs = conn.cursor()
-            curs.execute("INSERT INTO fabnet_event (event_type, event_provider, event_message) VALUES (%s, %s, %s)",
-                            (event_type, event_provider, event_message))
-            conn.commit()
-
-            curs.close()
-            conn.close()
+            self.operator.on_network_notify(event_type, event_provider, event_message)
         except Exception, err:
             logger.error('[NotifyOperation] %s'%err)
+
 
     def callback(self, packet, sender):
         """In this method should be implemented logic of processing

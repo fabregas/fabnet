@@ -139,6 +139,12 @@ class Operator:
         except Exception, err:
             logger.write('Operator stopping failed. Details: %s'%err)
 
+    def on_network_notify(self, notify_type, notify_provider, message):
+        """This method should be imlemented for some actions
+            on received network nofitications
+        """
+        pass
+
     def has_type(self, optype):
         if optype == self.OPTYPE:
             return True
