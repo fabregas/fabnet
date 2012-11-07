@@ -6,8 +6,10 @@ import shutil
 import threading
 import json
 import random
-from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
-from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
+import hashlib
+from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.constants import RC_OK, RC_OLD_DATA, NT_SUPERIOR, NT_UPPER
+from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.dht_mgmt import constants
 constants.WAIT_RANGE_TIMEOUT = 0.1
 constants.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT = 0.1
@@ -173,10 +175,32 @@ class TestDHTInitProcedure(unittest.TestCase):
             dht_range = server.operator.get_dht_range()
             dht_operator.DHT_CYCLE_TRY_COUNT = 10
             split_range_request.ALLOW_FREE_SIZE_PERCENTS = 0
-            dht_range.put(MAX_HASH/2+100, 'Hello, fabregas! '*100)
+
+            data = 'Hello, fabregas! '*100
+            checksum = hashlib.sha1(data).hexdigest()
+            data_block = DataBlock(data, checksum)
+            data_block.validate()
+            data2, checksum2 = data_block.pack('0000000000000000000000000000000000000000', 2)
+            checksum = hashlib.sha1(data).hexdigest()
+            data_block = DataBlock(data, checksum)
+            data_block.validate()
+            data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
+
+            params = {'key': MAX_HASH/2+100, 'checksum': checksum, 'carefully_save': True}
+            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=data, sync=True)
+            fri_client = FriClient()
+            resp = fri_client.call_sync('127.0.0.1:1987', packet_obj)
+            self.assertEqual(resp.ret_code, 0)
+            f_path = os.path.join(home2, 'dht_range/0000000000000000000000000000000000000000_ffffffffffffffffffffffffffffffffffffffff/8000000000000000000000000000000000000063')
+            self.assertTrue(os.path.exists(f_path))
+
+            params = {'key': MAX_HASH/2+100, 'checksum': checksum2, 'carefully_save': True}
+            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=data2, sync=True)
+            resp = fri_client.call_sync('127.0.0.1:1987', packet_obj)
+            self.assertEqual(resp.ret_code, RC_OLD_DATA, resp.ret_message)
+
+
             dht_range.split_range(0, 100500)
-
-
             server1.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1986')
             time.sleep(.2)
             dht_range.join_subranges()

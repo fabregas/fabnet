@@ -9,13 +9,16 @@ Copyright (C) 2012 Konstantin Andrusenko
 @author Konstantin Andrusenko
 @date October 06, 2012
 """
+from datetime import datetime
+import time
 import struct
 import hashlib
 
 DATA_BLOCK_LABEL = 'FDB'
+STRUCT_FMT = '<3sf40sb40s'
 
 class DataBlock:
-    header_len = struct.calcsize('<3s40sb40s')
+    header_len = struct.calcsize(STRUCT_FMT)
 
     def __init__(self, raw_data='', raw_checksum=None):
         self.raw_data = raw_data
@@ -31,11 +34,14 @@ class DataBlock:
         if self.__packed:
             return self.raw_data, self.raw_checksum
 
+        t0 = datetime.utcnow()
+        unixtime = time.mktime(t0.timetuple())
+
         try:
-            header = struct.pack('<3s40sb40s', DATA_BLOCK_LABEL, str(key), \
+            header = struct.pack(STRUCT_FMT, DATA_BLOCK_LABEL, unixtime, str(key), \
                             replica_count, str(self.raw_checksum))
         except Exception, err:
-            raise Exception('Data block header packig failed! Details: %s'%err)
+            raise Exception('Data block header packing failed! Details: %s'%err)
 
         self.raw_data = header + self.raw_data
         self.raw_checksum = hashlib.sha1(self.raw_data).hexdigest()
@@ -47,17 +53,17 @@ class DataBlock:
     def read_header(cls, data):
         header = data[:cls.header_len]
         try:
-            db_label, primary_key, replica_count, checksum = struct.unpack('<3s40sb40s', header)
+            db_label, put_unixtime, primary_key, replica_count, checksum = struct.unpack(STRUCT_FMT, header)
         except Exception, err:
             raise Exception('Data block header is invalid! Details: %s'%err)
 
         if db_label != DATA_BLOCK_LABEL:
             raise Exception('Corrupted data block! No block label found')
 
-        return primary_key, replica_count, checksum
+        return primary_key, replica_count, checksum, datetime.fromtimestamp(put_unixtime)
 
     def unpack(self):
-        primary_key, replica_count, checksum = self.read_header(self.raw_data)
+        primary_key, replica_count, checksum, put_dt = self.read_header(self.raw_data)
 
         self.raw_data = self.raw_data[self.header_len:]
         self.raw_checksum = checksum

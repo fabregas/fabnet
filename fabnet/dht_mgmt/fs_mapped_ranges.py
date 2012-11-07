@@ -18,6 +18,7 @@ from datetime import datetime
 
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH, WAIT_FILE_MD_TIMEDELTA
+from fabnet.dht_mgmt.data_block import DataBlock
 
 class FSHashRangesException(Exception):
     pass
@@ -26,6 +27,9 @@ class FSHashRangesNotFound(FSHashRangesException):
     pass
 
 class FSHashRangesNoData(FSHashRangesException):
+    pass
+
+class FSHashRangesOldDataDetected(FSHashRangesException):
     pass
 
 class SafeCounter:
@@ -211,6 +215,7 @@ class FSHashRanges:
         dest = os.path.join(self.__range_dir, os.path.basename(file_path))
         if os.path.exists(dest):
             if not rewrite:
+                os.remove(file_path)
                 return
             os.remove(dest)
 
@@ -234,8 +239,27 @@ class FSHashRanges:
             return '%040x'%key
         return key
 
-    def __write_data(self, f_name, data):
+    def __check_ex_data_block(self, f_name, data):
+        if os.path.exists(f_name):
+            logger.debug('Checking data block datetime at %s...'%f_name)
+            f_obj = open(f_name, 'rb')
+            try:
+                stored_header = f_obj.read(100)
+                new_header = data[:100]
+
+                _, _, _, stored_dt = DataBlock.read_header(stored_header)
+                _, _, _, new_dt = DataBlock.read_header(new_header)
+
+                if new_dt <= stored_dt:
+                    raise FSHashRangesOldDataDetected('Data block is already saved with newer datetime')
+            finally:
+                f_obj.close()
+
+    def __write_data(self, f_name, data, check_dt=False):
         try:
+            if check_dt:
+                self.__check_ex_data_block(f_name, data)
+
             f_obj = open(f_name, 'wb')
             try:
                 f_obj.write(data)
@@ -255,7 +279,7 @@ class FSHashRanges:
 
         return data
 
-    def __put_data(self, key, data, save_to_reservation=False):
+    def __put_data(self, key, data, save_to_reservation=False, check_dt=False):
         key = self._str_key(key)
         if self.__block_flag.is_set():
             range_dir = self.__reservation_dir
@@ -270,7 +294,7 @@ class FSHashRanges:
             is_reserv = False
 
         try:
-            self.__write_data(os.path.join(range_dir, key), data)
+            self.__write_data(os.path.join(range_dir, key), data, check_dt)
         finally:
             if not is_reserv:
                 self.__parallel_writes.dec()
@@ -347,7 +371,7 @@ class FSHashRanges:
 
 
 
-    def put(self, key, data):
+    def put(self, key, data, check_dt=False):
         if self.__child_ranges.size():
             for child_range in self.__child_ranges.copy():
                 if not child_range._in_range(key):
@@ -355,9 +379,9 @@ class FSHashRanges:
                 return child_range.put(key, data)
 
         if self._in_range(key):
-            self.__put_data(key, data)
+            self.__put_data(key, data, check_dt=check_dt)
         else:
-            self.__put_data(key, data, save_to_reservation=True)
+            self.__put_data(key, data, save_to_reservation=True, check_dt=check_dt)
 
     def get(self, key):
         '''WARNING: This method can fail when runned across split/join pocess'''
@@ -374,10 +398,10 @@ class FSHashRanges:
         return self.__get_data(key)
 
 
-    def put_replica(self, key, data):
+    def put_replica(self, key, data, check_dt=False):
         key = self._str_key(key)
         f_name = os.path.join(self.__replica_dir, key)
-        self.__write_data(f_name, data)
+        self.__write_data(f_name, data, check_dt)
 
 
     def get_replica(self, key):

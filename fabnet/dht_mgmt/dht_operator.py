@@ -361,7 +361,7 @@ class MonitorDHTRanges(threading.Thread):
             return False
 
         checksum = hashlib.sha1(data).hexdigest()
-        params = {'key': key, 'checksum': checksum, 'is_replica': is_replica}
+        params = {'key': key, 'checksum': checksum, 'is_replica': is_replica, 'carefully_save': True}
         req = FabnetPacketRequest(method='PutDataBlock', sender=self.operator.self_address,\
                 parameters=params, binary_data=data, sync=True)
 
