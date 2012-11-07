@@ -15,6 +15,7 @@ from fabnet.core.fri_server import FriServer
 from fabnet.settings import OPERATORS_MAP, DEFAULT_OPERATOR
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.core.key_storage import init_keystore
+from fabnet.core.constants import ET_INFO
 from fabnet.utils.logger import logger
 
 class Node:
@@ -63,8 +64,25 @@ class Node:
         rcode, rmsg = self.server.operator.call_node(neighbour, packet)
         if rcode:
             logger.warning('Neighbour %s does not respond!'%neighbour)
+            return False
+
+        params = {'event_type': ET_INFO, 'event_message': 'Hello, fabnet!', 'event_provider': address}
+        packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=address)
+        rcode, rmsg = self.server.operator.call_node(neighbour, packet)
+        if rcode:
+            logger.warning('Cant send notification to network. Details: %s'%rmsg)
 
         return True
 
     def stop(self):
+        try:
+            address = '%s:%s' % (self.hostname, self.port)
+            params = {'event_type': ET_INFO, 'event_message': 'Goodbye, fabnet :(', 'event_provider': address}
+            packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=address)
+            rcode, rmsg = self.server.operator.call_network(packet)
+            if rcode:
+                raise Exception(rmsg)
+        except Exception, err:
+            logger.warning('Cant send notification to network. Details: %s'%err)
+
         return self.server.stop()
