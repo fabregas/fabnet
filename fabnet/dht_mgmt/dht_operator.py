@@ -23,7 +23,7 @@ from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_DESTROYING, DS_NORMALWORK, \
             CHECK_HASH_TABLE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT, \
             INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGE_TIMEOUT, \
-            MONITOR_DHT_RANGES_TIMEOUT
+            MONITOR_DHT_RANGES_TIMEOUT, RC_OLD_DATA
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
 
 from fabnet.dht_mgmt.operations.get_range_data_request import GetRangeDataRequestOperation
@@ -367,7 +367,7 @@ class MonitorDHTRanges(threading.Thread):
 
         resp = self.operator.call_node(k_range.node_address, req, sync=True)
 
-        if resp.ret_code != RC_OK:
+        if resp.ret_code not in (RC_OK, RC_OLD_DATA):
             logger.error('PutDataBlock error on %s: %s'%(k_range.node_address, resp.ret_message))
             return False
 

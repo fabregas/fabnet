@@ -8,7 +8,7 @@ import json
 import random
 import hashlib
 from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
-from fabnet.core.constants import RC_OK, RC_OLD_DATA, NT_SUPERIOR, NT_UPPER
+from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
 from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.dht_mgmt import constants
 constants.WAIT_RANGE_TIMEOUT = 0.1
@@ -32,7 +32,7 @@ from fabnet.dht_mgmt.operations.update_hash_range_table import UpdateHashRangeTa
 from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTableOperation
 
 from fabnet.utils.logger import logger
-from fabnet.dht_mgmt.constants import DS_NORMALWORK
+from fabnet.dht_mgmt.constants import DS_NORMALWORK, RC_OLD_DATA
 
 logger.setLevel(logging.DEBUG)
 

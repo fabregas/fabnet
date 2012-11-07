@@ -13,8 +13,9 @@ import hashlib
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.core.constants import RC_OK, RC_ERROR, RC_OLD_DATA, \
+from fabnet.core.constants import RC_OK, RC_ERROR, \
                                     NODE_ROLE, CLIENT_ROLE
+from fabnet.dht_mgmt.constants import RC_OLD_DATA
 from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesOldDataDetected
 
