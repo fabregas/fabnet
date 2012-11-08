@@ -17,6 +17,7 @@ import time
 from datetime import datetime
 
 from fabnet.utils.logger import logger
+from fabnet.utils.internal import total_seconds
 from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH, WAIT_FILE_MD_TIMEDELTA
 from fabnet.dht_mgmt.data_block import DataBlock
 
@@ -472,10 +473,8 @@ class FSHashRanges:
             raise err
 
     def _ensure_not_write(self, file_path):
-        cdt = datetime.now()
         f_dm = datetime.fromtimestamp(os.path.getmtime(file_path))
-        dt = cdt - f_dm
-        if dt.total_seconds() > WAIT_FILE_MD_TIMEDELTA:
+        if total_seconds(datetime.now() - f_dm) > WAIT_FILE_MD_TIMEDELTA:
             return True
         return False
 

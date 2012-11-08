@@ -17,11 +17,13 @@ import time
 import random
 from datetime import datetime, timedelta
 
+from fabnet.utils.logger import logger
+from fabnet.utils.internal import total_seconds
+
 from fabnet.core.operation_base import OperationBase
 from fabnet.core.message_container import MessageContainer
 from fabnet.core.constants import MC_SIZE
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest, FabnetPacketResponse
-from fabnet.utils.logger import logger
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPERIOR, NT_UPPER, \
                 KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, \
                 KEEP_ALIVE_MAX_WAIT_TIME, ONE_DIRECT_NEIGHBOURS_COUNT, \
@@ -352,8 +354,8 @@ class Operator:
                 if ka_dt == None:
                     self.__upper_keep_alives[upper] = datetime.now()
                     continue
-                delta = cur_dt - ka_dt
-                if delta.total_seconds() >= KEEP_ALIVE_MAX_WAIT_TIME:
+
+                if total_seconds(cur_dt - ka_dt) >= KEEP_ALIVE_MAX_WAIT_TIME:
                     logger.info('No keep alive packets from upper neighbour %s. removing it...'%upper)
                     remove_nodes.append((NT_UPPER, upper, True))
 
@@ -567,7 +569,7 @@ class DiscoverTopologyThread(threading.Thread):
                 while True:
                     last_processed_dt = tc_oper.get_last_processed_dt()
                     dt = datetime.now() - last_processed_dt
-                    if dt.total_seconds() < NO_TOPOLOGY_DYSCOVERY_WINDOW:
+                    if total_seconds(dt) < NO_TOPOLOGY_DYSCOVERY_WINDOW:
                         w_seconds = random.randint(MIN_TOPOLOGY_DISCOVERY_WAIT, MAX_TOPOLOGY_DISCOVERY_WAIT)
                         for i in xrange(w_seconds):
                             time.sleep(1)
