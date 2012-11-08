@@ -50,7 +50,7 @@ class GetRangeDataRequestOperation(OperationBase):
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Send range data failed: %s'%err)
 
 
-        ret_range.move_to_trash()
+        ret_range._destroy(force=True)
         append_lst = [(ret_range.get_start(), ret_range.get_end(), node_address)]
         append_lst.append((new_range.get_start(), new_range.get_end(), self.operator.self_address))
         rm_lst = [(dht_range.get_start(), dht_range.get_end(), self.operator.self_address)]

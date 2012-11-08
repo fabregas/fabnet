@@ -6,6 +6,10 @@ import logging
 import json
 import shutil
 from datetime import datetime
+
+from fabnet.dht_mgmt import constants
+constants.WAIT_FILE_MD_TIMEDELTA = 0.1
+
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
 
@@ -58,6 +62,7 @@ class TestFSMappedRanges(unittest.TestCase):
         fs_range.put(900, 'Test data #2')
         fs_range.put(10005000, 'Test data #3')
         fs_range.split_range(0, 100500)
+        time.sleep(.2)
 
         discovered_range = FSHashRanges.discovery_range(TEST_FS_RANGE_DIR)
         self.assertEqual(discovered_range.get_start(), long(START_RANGE_HASH, 16))
@@ -104,15 +109,15 @@ class TestFSMappedRanges(unittest.TestCase):
         size = ret_range.get_range_size()
         self.assertTrue(size > 0)
 
-        ret_range.move_to_trash()
-        fs_ranges.move_to_trash()
+        ret_range.move_to_reservation()
+        fs_ranges.move_to_reservation()
 
         free_size = new_range.get_free_size()
         self.assertTrue(size > 0)
 
-        new_range.restore_from_trash()
+        new_range.restore_from_reservation()
 
-        self.assertTrue(os.path.exists(os.path.join(TEST_FS_RANGE_DIR, 'trash')))
+        self.assertTrue(os.path.exists(os.path.join(TEST_FS_RANGE_DIR, 'reservation_range')))
 
         rt.join()
         new_range.put('%040x'%100500, 'final data test')
@@ -127,8 +132,9 @@ class TestFSMappedRanges(unittest.TestCase):
             raise Exception('Expected error in this case.')
 
         extended_range = new_range.extend('%040x'%0, '%040x'%((45000)*100-1))
+        extended_range.put('%040x'%100500, 'final data test #2')
         data = extended_range.get('%040x'%100500)
-        self.assertNotEqual(data, 'final data test')
+        self.assertEqual(data, 'final data test #2')
 
 
 if __name__ == '__main__':

@@ -144,9 +144,9 @@ class FSHashRanges:
 
         for h_range in discovered_ranges:
             if h_range != max_range:
-                h_range.move_to_trash()
+                h_range.move_to_reservation()
 
-        max_range.restore_from_trash()
+        max_range.restore_from_reservation()
         return max_range
 
 
@@ -169,10 +169,6 @@ class FSHashRanges:
                 os.mkdir(self.__reservation_dir)
             except OSError, err:
                 raise FSHashRangesException('Cant create directory for range: %s'%self.__reservation_dir)
-
-        self.__trash_dir = os.path.join(save_path, 'trash')
-        if not os.path.exists(self.__trash_dir):
-            os.mkdir(self.__trash_dir)
 
         self.__replica_dir = os.path.join(save_path, 'replica_data')
         if not os.path.exists(self.__replica_dir):
@@ -306,10 +302,7 @@ class FSHashRanges:
             #check reservation range
             file_path = os.path.join(self.__reservation_dir, key)
             if not os.path.exists(file_path):
-                #check trash
-                file_path = os.path.join(self.__trash_dir, key)
-                if not os.path.exists(file_path):
-                    raise FSHashRangesNoData('No data found for key %s'% key)
+                raise FSHashRangesNoData('No data found for key %s'% key)
 
         return self.__read_data(file_path)
 
@@ -429,13 +422,13 @@ class FSHashRanges:
         self._wait_write_buffers()
         h_range = FSHashRanges(start, end, self.__save_path)
         try:
-            self.move_to_trash()
+            self.move_to_reservation()
         except Exception, err:
-            self.restore_from_trash()
+            self.restore_from_reservation()
             self._unblock_range()
             raise err
 
-        h_range.restore_from_trash()
+        h_range.restore_from_reservation()
         return h_range
 
 
@@ -478,28 +471,30 @@ class FSHashRanges:
             self._unblock_range()
             raise err
 
+    def _ensure_not_write(self, file_path):
+        cdt = datetime.now()
+        f_dm = datetime.fromtimestamp(os.path.getmtime(file_path))
+        dt = cdt - f_dm
+        if dt.total_seconds() > WAIT_FILE_MD_TIMEDELTA:
+            return True
+        return False
+
 
     def iter_reservation(self):
         files = os.listdir(self.__reservation_dir)
-        cdt = datetime.now()
         for digest in files:
             file_path = os.path.join(self.__reservation_dir, digest)
-            f_dm = datetime.fromtimestamp(os.path.getmtime(file_path))
-            dt = cdt - f_dm
-            if dt.total_seconds() > WAIT_FILE_MD_TIMEDELTA:
+            if self._ensure_not_write(file_path):
                 yield digest, self.__get_data(digest), file_path
 
 
     def iter_replicas(self, foreign_only=True):
         files = os.listdir(self.__replica_dir)
-        cdt = datetime.now()
         for digest in files:
             if foreign_only and self._in_range(digest):
                 continue
             file_path = os.path.join(self.__replica_dir, digest)
-            f_dm = datetime.fromtimestamp(os.path.getmtime(file_path))
-            dt = cdt - f_dm
-            if dt.total_seconds() > WAIT_FILE_MD_TIMEDELTA:
+            if self._ensure_not_write(file_path):
                 yield digest, self.__read_data(file_path), file_path
 
 
@@ -531,20 +526,16 @@ class FSHashRanges:
 
         return None
 
-
-    def move_to_trash(self):
+    def move_to_reservation(self):
         if not os.path.exists(self.__range_dir):
             return
-
-        if not os.path.exists(self.__trash_dir):
-            os.mkdir(self.__trash_dir)
 
         self._block_range()
         self._wait_write_buffers()
         files = os.listdir(self.__range_dir)
         for digest in files:
             file_path = os.path.join(self.__range_dir, digest)
-            dest = os.path.join(self.__trash_dir, digest)
+            dest = os.path.join(self.__reservation_dir, digest)
             if os.path.exists(dest):
                 os.remove(dest)
 
@@ -552,29 +543,21 @@ class FSHashRanges:
 
         self._destroy()
 
-    def restore_from_trash(self):
-        if not os.path.exists(self.__trash_dir):
-            return
-
-        files = os.listdir(self.__trash_dir)
+    def restore_from_reservation(self):
+        files = os.listdir(self.__reservation_dir)
         perc_part = len(files)/10
 
-        logger.info('Restore trash to range...')
+        logger.info('Restore reservation to range...')
 
         for cnt, digest in enumerate(files):
             if perc_part and (cnt) % perc_part == 0:
                 logger.info('Restore progress: %i'%(cnt/perc_part) + '0%...')
 
-            if self._in_range(digest):
-                self._move_from(os.path.join(self.__trash_dir, digest), rewrite=False)
+            r_file_path = os.path.join(self.__reservation_dir, digest)
+            if self._in_range(digest) and self._ensure_not_write(r_file_path):
+                self._move_from(r_file_path, rewrite=False)
 
-        logger.info('Range is restored from trash!')
-
-
-    def clear_trash(self):
-        if not os.path.exists(self.__trash_dir):
-            return
-        shutil.rmtree(self.__trash_dir)
+        logger.info('Range is restored from reservation!')
 
 
     def get_range_size(self):
@@ -584,11 +567,9 @@ class FSHashRanges:
         return sum([os.stat(os.path.join(self.__replica_dir, f)).st_size for f in os.listdir(self.__replica_dir)])
 
     def get_free_size(self):
-        trash_size = sum([os.stat(os.path.join(self.__trash_dir, f)).st_size for f in os.listdir(self.__trash_dir)])
-
         stat = os.statvfs(self.__range_dir)
         free_space = stat.f_bsize * stat.f_bavail
-        return free_space + trash_size
+        return free_space
 
     def get_free_size_percents(self):
         return (self.get_range_size() * 100.) / self.get_free_size()

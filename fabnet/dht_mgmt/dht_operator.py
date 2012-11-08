@@ -207,7 +207,7 @@ class DHTOperator(Operator):
         else:
             new_dht_range = FSHashRanges(long(new_range.start + new_range.length()/2+1), long(new_range.end), self.save_path)
             self.update_dht_range(new_dht_range)
-            new_dht_range.restore_from_trash() #try getting new range data from trash
+            new_dht_range.restore_from_reservation() #try getting new range data from reservation
 
         self.__split_requests_cache.append(new_range.node_address)
 
@@ -233,7 +233,7 @@ class DHTOperator(Operator):
         self.__dht_range = new_dht_range
         self._unlock()
 
-        old_dht_range.move_to_trash()
+        old_dht_range.move_to_reservation()
 
         dht_range = self.get_dht_range()
         logger.info('New node range: %040x-%040x'%(dht_range.get_start(), dht_range.get_end()))
