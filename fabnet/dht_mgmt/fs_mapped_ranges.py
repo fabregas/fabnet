@@ -412,6 +412,9 @@ class FSHashRanges:
         end = self.__end
         start_key = self._long_key(start_key)
         end_key = self._long_key(end_key)
+        if start_key >= end_key:
+            raise FSHashRangesException('Bad subrange [%040x-%040x]'%(start_key, end_key))
+
         if self.__start == end_key+1:
             start = start_key
         elif self.__end == start_key-1:
@@ -558,12 +561,27 @@ class FSHashRanges:
 
         logger.info('Range is restored from reservation!')
 
+    def __get_file_size(self, file_path):
+        stat = os.stat(file_path)
+        rest = stat.st_size % stat.st_blksize
+        if rest:
+            rest = stat.st_blksize - rest
+        return stat.st_size + rest
 
     def get_range_size(self):
-        return sum([os.stat(os.path.join(self.__range_dir, f)).st_size for f in os.listdir(self.__range_dir)])
+        return sum([self.__get_file_size(os.path.join(self.__range_dir, f)) for f in os.listdir(self.__range_dir)])
 
     def get_replicas_size(self):
-        return sum([os.stat(os.path.join(self.__replica_dir, f)).st_size for f in os.listdir(self.__replica_dir)])
+        return sum([self.__get_file_size(os.path.join(self.__replica_dir, f)) for f in os.listdir(self.__replica_dir)])
+
+    def get_all_related_data_size(self):
+        range_size = self.get_range_size()
+        replica_size = 0
+        for digest in os.listdir(self.__replica_dir):
+            if self._in_range(digest):
+                replica_size += self.__get_file_size(os.path.join(self.__replica_dir, digest))
+
+        return replica_size + range_size
 
     def get_free_size(self):
         stat = os.statvfs(self.__range_dir)
@@ -571,6 +589,12 @@ class FSHashRanges:
         return free_space
 
     def get_free_size_percents(self):
-        return (self.get_range_size() * 100.) / self.get_free_size()
+        stat = os.statvfs(self.__range_dir)
+        return (stat.f_bavail * 100) / stat.f_blocks
 
+    def get_estimated_data_percents(self, add_size=0):
+        estimated_data_size = self.get_range_size() + self.get_replicas_size() + add_size
+        stat = os.statvfs(self.__range_dir)
+        estimated_data_size_perc = (estimated_data_size * 100) / (stat.f_blocks * stat.f_bsize)
+        return estimated_data_size_perc
 

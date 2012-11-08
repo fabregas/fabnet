@@ -9,9 +9,10 @@ Copyright (C) 2012 Konstantin Andrusenko
 @author Konstantin Andrusenko
 @date September 23, 2012
 """
+import os
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.dht_mgmt.constants import ALLOW_FREE_SIZE_PERCENTS
+from fabnet.dht_mgmt.constants import ALLOW_USED_SIZE_PERCENTS
 from fabnet.utils.logger import logger
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
 
@@ -43,7 +44,7 @@ class SplitRangeRequestOperation(OperationBase):
 
         ret_range, new_range = dht_range.split_range(start_key, end_key)
 
-        range_size = ret_range.get_range_size()
+        range_size = ret_range.get_all_related_data_size()
 
         logger.debug('Range is splitted for %s. Subrange size: %s'%(packet.sender, range_size))
 
@@ -65,8 +66,10 @@ class SplitRangeRequestOperation(OperationBase):
             logger.info('Trying select other hash range...')
             self.operator.start_as_dht_member()
         else:
-            free_size = self.operator.get_dht_range().get_free_size()
-            if (int(packet.ret_parameters['range_size']) * 100. / free_size) > ALLOW_FREE_SIZE_PERCENTS:
+            dht_range = self.operator.get_dht_range()
+            subrange_size = int(packet.ret_parameters['range_size'])
+            estimated_data_size_perc = dht_range.get_estimated_data_percents(subrange_size)
+            if estimated_data_size_perc >= ALLOW_USED_SIZE_PERCENTS:
                 logger.info('Requested range is huge for me :( canceling...')
                 self._init_operation(packet.from_node, 'SplitRangeCancel', {})
             else:

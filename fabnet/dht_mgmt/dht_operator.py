@@ -23,8 +23,9 @@ from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_DESTROYING, DS_NORMALWORK, \
             CHECK_HASH_TABLE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT, \
             INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGE_TIMEOUT, \
-            MONITOR_DHT_RANGES_TIMEOUT, RC_OLD_DATA
-from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
+            MONITOR_DHT_RANGES_TIMEOUT, RC_OLD_DATA, \
+            MAX_USED_SIZE_PERCENTS, DANGER_USED_SIZE_PERCENTS, PULL_SUBRANGE_SIZE_PERC
+from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_ALERT
 
 from fabnet.dht_mgmt.operations.get_range_data_request import GetRangeDataRequestOperation
 from fabnet.dht_mgmt.operations.get_ranges_table import GetRangesTableOperation
@@ -32,6 +33,7 @@ from fabnet.dht_mgmt.operations.put_data_block import PutDataBlockOperation
 from fabnet.dht_mgmt.operations.get_data_block import GetDataBlockOperation
 from fabnet.dht_mgmt.operations.split_range_cancel import SplitRangeCancelOperation
 from fabnet.dht_mgmt.operations.split_range_request import SplitRangeRequestOperation
+from fabnet.dht_mgmt.operations.pull_subrange_request import PullSubrangeRequestOperation
 from fabnet.dht_mgmt.operations.update_hash_range_table import UpdateHashRangeTableOperation
 from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTableOperation
 from fabnet.dht_mgmt.operations.get_data_keys import GetKeysInfoOperation
@@ -45,6 +47,7 @@ OPERMAP = { 'GetRangeDataRequest': GetRangeDataRequestOperation,
             'GetDataBlock': GetDataBlockOperation,
             'SplitRangeCancel': SplitRangeCancelOperation,
             'SplitRangeRequest': SplitRangeRequestOperation,
+            'PullSubrangeRequest': PullSubrangeRequestOperation,
             'UpdateHashRangeTable': UpdateHashRangeTableOperation,
             'CheckHashRangeTable': CheckHashRangeTableOperation,
             'GetKeysInfo': GetKeysInfoOperation,
@@ -243,6 +246,9 @@ class DHTOperator(Operator):
             return
 
         dht_range = self.get_dht_range()
+        if dht_range.get_subranges():
+            return
+
         start = dht_range.get_start()
         end = dht_range.get_end()
 
@@ -300,39 +306,73 @@ class MonitorDHTRanges(threading.Thread):
         self.operator = operator
         self.stopped = True
 
-    """
+        self.__last_is_start_part = True
+        self.__notification_flag = False
+
     def _check_range_free_size(self):
-        #FIXME: implement this routine after PullRangeRequest operation implemented
-        #need pull strategy design!
         dht_range = self.operator.get_dht_range()
 
-        percents = dht_range.get_free_size_percents()
-        if percents >= MAX_FREE_SIZE_PERCENTS:
-            dht_range.clear_trash()
+        percents = 100 - dht_range.get_free_size_percents()
+        if percents >= MAX_USED_SIZE_PERCENTS:
+            logger.warning('Few free size for data range. Trying pull part of range to network')
 
-            percents = dht_range.get_free_size_percents()
-            if percents >= MAX_FREE_SIZE_PERCENTS:
-                logger.info('Few free size for data range. Trying pull part of range to network')
-                pre_key = dht_range.get_start() - 1
-                #post_key = dht_range.get_end() + 1
-                self._pull_subrange(pre_key, dht_range.get_start(), dht_range.get_start()+dht_range.length()/2)
-                #self._pull_subrange(post_key, dht_range.get_start()+3*dht_range.length()/4, dht_range.get_end())
+            if not self._pull_subrange(dht_range):
+                self._pull_subrange(dht_range)
+        elif percents >= DANGER_USED_SIZE_PERCENTS:
+            if self.__notification_flag:
+                return
+            message = 'HDD usage: %s percents'%percents
+            params = {'event_type': ET_ALERT, 'event_message': message,\
+                        'event_provider': self.operator.self_address}
+            packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=self.operator.self_address)
+            rcode, rmsg = self.operator.call_network(packet)
+            if rcode:
+                logger.error('Cant initiate NotifyOperation for ALERT "%s"'%message)
+            else:
+                self.__notification_flag = True
+        else:
+            self.__notification_flag = False
 
-    def _pull_subrange(self, dest_key, start_subrange, end_subrange):
+    def _pull_subrange(self, dht_range, start_part=True):
+        split_part = int((dht_range.length() * PULL_SUBRANGE_SIZE_PERC) / 100)
+        if self.__last_is_start_part:
+            dest_key = dht_range.get_start() - 1
+            start_subrange = dht_range.get_start()
+            end_subrange = split_part + dht_range.get_start()
+        else:
+            dest_key = dht_range.get_end() + 1
+            start_subrange = dht_range.get_end() - split_part
+            end_subrange = dht_range.get_end()
+
+        self.__last_is_start_part = not self.__last_is_start_part
+
+        if MIN_HASH > dest_key > MAX_HASH:
+            return False
+
         k_range = self.operator.ranges_table.find(dest_key)
         if not k_range:
             logger.error('[_pull_subrange] No range found for key=%s in ranges table'%dest_key)
-
-        logger.info('Call PullRangeRequest to %s'%(k_range.node_address,))
-        parameters = { 'start_key': start_subrange, 'end_key': end_subrange }
-        req = FabnetPacketRequest(method='PullRangeRequest', sender=self.operator.self_address, parameters=parameters, sync=True)
-        resp = self.operator.call_node(k_range.node_address, req, sync=True)
-        if ret_code != RC_OK:
-            logger.error('PullRangeRequest operation failed on node %s. Details: %s'%(k_range.node_address, ret_msg))
             return False
 
+        pull_subrange, new_dht_range = dht_range.split_range(start_subrange, end_subrange)
+        subrange_size = pull_subrange.get_all_related_data_size()
+        logger.info('NEW DHT RANGE: [%s-%s]'%(new_dht_range.get_start(), new_dht_range.get_end()))
+
+        try:
+            logger.info('Call PullSubrangeRequest to %s'%(k_range.node_address,))
+            parameters = { 'start_key': pull_subrange.get_start(), 'end_key': pull_subrange.get_end(), 'subrange_size': subrange_size }
+            req = FabnetPacketRequest(method='PullSubrangeRequest', sender=self.operator.self_address, parameters=parameters, sync=True)
+            resp = self.operator.call_node(k_range.node_address, req, sync=True)
+            if resp.ret_code != RC_OK:
+                raise Exception(resp.ret_message)
+
+            self.operator.update_dht_range(new_dht_range)
+            pull_subrange.move_to_reservation()
+        except Exception, err:
+            logger.error('PullSubrangeRequest operation failed on node %s. Details: %s'%(k_range.node_address, err))
+            dht_range.join_subranges()
+            return False
         return True
-    """
 
     def _process_reservation_range(self):
         dht_range = self.operator.get_dht_range()
@@ -340,20 +380,16 @@ class MonitorDHTRanges(threading.Thread):
         for digest, data, file_path in dht_range.iter_reservation():
             logger.info('Processing %s from reservation range'%digest)
             if self._put_data(digest, data):
-                logger.debug('removing %s from reservation'%digest)
-                os.remove(file_path)
-            else:
                 logger.debug('data block with key=%s is send from reservation range'%digest)
+                os.unlink(file_path)
 
     def _process_replicas(self):
         dht_range = self.operator.get_dht_range()
         for digest, data, file_path in dht_range.iter_replicas():
             logger.info('Processing replica %s'%digest)
             if self._put_data(digest, data, is_replica=True):
-                logger.debug('Removing %s from local replicas'%digest)
-                os.remove(file_path)
-            else:
-                logger.debug('data block with key=%s is send from reservation range'%digest)
+                logger.debug('data block with key=%s is send from replicas range'%digest)
+                os.unlink(file_path)
 
 
     def _put_data(self, key, data, is_replica=False):
@@ -381,10 +417,12 @@ class MonitorDHTRanges(threading.Thread):
         self.stopped = False
         while not self.stopped:
             try:
-                #self._check_range_free_size()
                 logger.debug('MonitorDHTRanges iteration...')
 
+                self._check_range_free_size()
+
                 self._process_reservation_range()
+
                 self._process_replicas()
             except Exception, err:
                 logger.error('[MonitorDHTRanges] %s'% err)

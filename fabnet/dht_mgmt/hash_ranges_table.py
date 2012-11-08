@@ -241,8 +241,8 @@ class HashRangesTable:
 
             end_i = None
             for item in tmp_table.iter_table():
-                if end_i and item.start != end_i-1:
-                    raise Exception('Ranges are not one near one')
+                if end_i and item.start != end_i+1:
+                    raise Exception('Ranges are not one near one. END=%040x, next START=%040x'%(end_i, item.start))
                 end_i = item.end
 
             for app_obj in ap_obj_list:

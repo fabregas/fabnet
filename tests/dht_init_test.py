@@ -6,6 +6,7 @@ import shutil
 import threading
 import json
 import random
+import string
 import hashlib
 from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
@@ -130,13 +131,25 @@ class TestDHTInitProcedure(unittest.TestCase):
 
             self.assertEqual(server1.operator.status, DS_NORMALWORK)
 
-            node86_range.put(MAX_HASH-100500, 'Hello, fabregas!') #should be appended into reservation range
-            node87_range.put_replica(100, 'This is replica data!')
+            data = 'Hello, fabregas!'
+            checksum = hashlib.sha1(data).hexdigest()
+            data_block = DataBlock(data, checksum)
+            data_block.validate()
+            resr_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
+            node86_range.put(MAX_HASH-100500, resr_data) #should be appended into reservation range
+
+            data = 'This is replica data!'
+            checksum = hashlib.sha1(data).hexdigest()
+            data_block = DataBlock(data, checksum)
+            data_block.validate()
+            repl_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
+            node87_range.put_replica(100, repl_data)
+
             time.sleep(1.5)
             data = node87_range.get(MAX_HASH-100500)
-            self.assertEqual(data, 'Hello, fabregas!')
+            self.assertEqual(data, resr_data)
             data = node86_range.get_replica(100)
-            self.assertEqual(data, 'This is replica data!')
+            self.assertEqual(data, repl_data)
             try:
                 node87_range.get_replica(100)
             except Exception, err:
@@ -144,6 +157,12 @@ class TestDHTInitProcedure(unittest.TestCase):
             else:
                 raise Exception('should be exception in this case')
 
+            try:
+                node86_range.get(MAX_HASH-100500)
+            except Exception, err:
+                pass
+            else:
+                raise Exception('should be exception in this case')
         finally:
             if server:
                 server.stop()
@@ -174,7 +193,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertNotEqual(server1.operator.status, DS_NORMALWORK)
             dht_range = server.operator.get_dht_range()
             dht_operator.DHT_CYCLE_TRY_COUNT = 10
-            split_range_request.ALLOW_FREE_SIZE_PERCENTS = 0
+            split_range_request.ALLOW_USED_SIZE_PERCENTS = 0
 
             data = 'Hello, fabregas! '*100
             checksum = hashlib.sha1(data).hexdigest()
@@ -206,7 +225,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             dht_range.join_subranges()
             time.sleep(.2)
 
-            split_range_request.ALLOW_FREE_SIZE_PERCENTS = 70
+            split_range_request.ALLOW_USED_SIZE_PERCENTS = 70
             time.sleep(1)
 
             node86_range = server.operator.get_dht_range()
@@ -235,14 +254,8 @@ class TestDHTInitProcedure(unittest.TestCase):
     def test03_dht_collisions_resolutions(self):
         server = server1 = None
         try:
-            home1 = '/tmp/node_1986_home'
-            home2 = '/tmp/node_1987_home'
-            if os.path.exists(home1):
-                shutil.rmtree(home1)
-            os.mkdir(home1)
-            if os.path.exists(home2):
-                shutil.rmtree(home2)
-            os.mkdir(home2)
+            home1 =  self._make_fake_hdd('node_1986', 1024, '/dev/loop0')
+            home2 =  self._make_fake_hdd('node_1987', 1024, '/dev/loop1')
 
             server = TestServerThread(1986, home1, init_node=True)
             server.start()
@@ -255,7 +268,7 @@ class TestDHTInitProcedure(unittest.TestCase):
 
             dht_range = server.operator.get_dht_range()
             dht_operator.DHT_CYCLE_TRY_COUNT = 10
-            split_range_request.ALLOW_FREE_SIZE_PERCENTS = 70
+            split_range_request.ALLOW_USED_SIZE_PERCENTS = 70
 
             print 'Starting discovery...'
 
@@ -296,7 +309,107 @@ class TestDHTInitProcedure(unittest.TestCase):
             if server1:
                 server1.stop()
                 server1.join()
+            self._destroy_fake_hdd('node_1986', '/dev/loop0')
+            self._destroy_fake_hdd('node_1987', '/dev/loop1')
 
+    def test04_dht_pull_subrange(self):
+        server = server1 = None
+        try:
+            home1 =  self._make_fake_hdd('node_1986', 1024, '/dev/loop0')
+            home2 =  self._make_fake_hdd('node_1987', 1024, '/dev/loop1')
+
+            server = TestServerThread(1986, home1, init_node=True)
+            server.start()
+
+            server1 = TestServerThread(1987, home2)
+            server1.start()
+
+            time.sleep(.5)
+            self.assertNotEqual(server1.operator.status, DS_NORMALWORK)
+
+            server1.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1986')
+            server.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1987')
+            for i in range(10):
+                if server1.operator.status == DS_NORMALWORK:
+                    break
+                time.sleep(1)
+            else:
+                raise Exception('Server1 does not started!')
+
+            node86_range = server.operator.get_dht_range()
+            node87_range = server1.operator.get_dht_range()
+
+            self.assertEqual(node86_range.get_start(), 0L)
+            self.assertEqual(node86_range.get_end(), MAX_HASH/2)
+            self.assertEqual(node87_range.get_start(), MAX_HASH/2+1)
+            self.assertEqual(node87_range.get_end(), MAX_HASH)
+
+            step = MAX_HASH/2/100
+            for i in range(100):
+                data = ''.join(random.choice(string.letters) for i in xrange(7*1024))
+                checksum = hashlib.sha1(data).hexdigest()
+                data_block = DataBlock(data, checksum)
+                data_block.validate()
+                resr_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
+                node86_range.put(step*i, resr_data)
+
+            self.assertEqual(node86_range.get_free_size_percents() < 20, True)
+            time.sleep(1)
+
+            step = MAX_HASH/2/10
+            for i in range(10):
+                data = ''.join(random.choice(string.letters) for i in xrange(7*1024))
+                checksum = hashlib.sha1(data).hexdigest()
+                data_block = DataBlock(data, checksum)
+                data_block.validate()
+                resr_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
+                node86_range.put_replica(step*i, resr_data)
+            self.assertEqual(node86_range.get_free_size_percents() < 10, True)
+            self.assertEqual(node87_range.get_free_size_percents() > 90, True)
+            time.sleep(1.5)
+            node86_range = server.operator.get_dht_range()
+            node87_range = server1.operator.get_dht_range()
+            self.assertEqual(node86_range.get_free_size_percents() > 15, True)
+            self.assertEqual(node87_range.get_free_size_percents() < 90, True)
+
+            step = MAX_HASH/2/100
+            for i in range(95):
+                data = ''.join(random.choice(string.letters) for i in xrange(7*1024))
+                checksum = hashlib.sha1(data).hexdigest()
+                data_block = DataBlock(data, checksum)
+                data_block.validate()
+                resr_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
+                node87_range.put(MAX_HASH/2+step*i, resr_data)
+            time.sleep(1)
+            node86_range = server.operator.get_dht_range()
+            node87_range = server1.operator.get_dht_range()
+            self.assertEqual(node86_range.get_free_size_percents() > 15, True)
+            self.assertEqual(node87_range.get_free_size_percents() < 10, True)
+        finally:
+            if server:
+                server.stop()
+                server.join()
+            if server1:
+                server1.stop()
+                server1.join()
+            self._destroy_fake_hdd('node_1986', '/dev/loop0')
+            self._destroy_fake_hdd('node_1987', '/dev/loop1')
+
+    def _make_fake_hdd(self, name, size, dev='/dev/loop0'):
+        os.system('dd if=/dev/zero of=/tmp/%s bs=1024 count=%s'%(name, size))
+        os.system('sudo umount /tmp/mnt_%s'%name)
+        os.system('sudo losetup -d %s'%dev)
+        os.system('sudo losetup %s /tmp/%s'%(dev, name))
+        os.system('sudo mkfs -t ext2 -m 1 -v %s'%dev)
+        os.system('sudo mkdir /tmp/mnt_%s'%name)
+        os.system('sudo mount -t ext2 %s /tmp/mnt_%s'%(dev, name))
+        os.system('sudo chmod 777 /tmp/mnt_%s -R'%name)
+        return '/tmp/mnt_%s'%name
+
+    def _destroy_fake_hdd(self, name, dev='/dev/loop0'):
+        os.system('sudo umount /tmp/mnt_%s'%name)
+        os.system('sudo losetup -d %s'%dev)
+        os.system('sudo rm /tmp/%s'%name)
 
 if __name__ == '__main__':
     unittest.main()
