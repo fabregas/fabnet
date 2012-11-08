@@ -28,8 +28,6 @@ if __name__ == '__main__':
             sys.exit(1)
 
         neighbour = sys.argv[2]
-        if ':' not in neighbour:
-            neighbour = '%s:%s'%(neighbour, DEFAULT_PORT)
 
         node_name = sys.argv[3]
         node_type = sys.argv[4]

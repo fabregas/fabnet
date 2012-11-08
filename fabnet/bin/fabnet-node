@@ -17,6 +17,8 @@ started = True
 INIT_ARGS = None
 NEIGHBOUR = None
 
+DEFAULT_PORT = 1987
+INIT_NEIGHBOUR = 'init-fabnet'
 
 #import yappi
 #yappi.start()
@@ -56,8 +58,13 @@ def start(args):
         hostname, port = args[0].split(':')
         port = int(port)
         neighbour = args[1]
-        if neighbour == 'init-fabnet':
+
+        if ':' not in neighbour and neighbour != INIT_NEIGHBOUR:
+            neighbour = '%s:%s'%(neighbour, DEFAULT_PORT)
+
+        if neighbour == INIT_NEIGHBOUR:
             neighbour = None
+
         node_name = args[2]
         home_dir = args[3]
         node_type = args[4]
