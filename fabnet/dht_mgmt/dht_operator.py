@@ -24,7 +24,8 @@ from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_DESTROYING, DS_NORMALWOR
             CHECK_HASH_TABLE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT, \
             INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGE_TIMEOUT, \
             MONITOR_DHT_RANGES_TIMEOUT, RC_OLD_DATA, \
-            MAX_USED_SIZE_PERCENTS, DANGER_USED_SIZE_PERCENTS, PULL_SUBRANGE_SIZE_PERC
+            MAX_USED_SIZE_PERCENTS, DANGER_USED_SIZE_PERCENTS, \
+            PULL_SUBRANGE_SIZE_PERC, CRITICAL_FREE_SPACE_PERCENT
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_ALERT
 
 from fabnet.dht_mgmt.operations.get_range_data_request import GetRangeDataRequestOperation
@@ -97,6 +98,7 @@ class DHTOperator(Operator):
         dht_i['range_size'] = dht_range.get_range_size()
         dht_i['replicas_size'] = dht_range.get_replicas_size()
         dht_i['free_size'] = dht_range.get_free_size()
+        dht_i['free_size_percents'] = dht_range.get_free_size_percents()
         stat['dht_info'] = dht_i
         return stat
 
@@ -312,8 +314,13 @@ class MonitorDHTRanges(threading.Thread):
     def _check_range_free_size(self):
         dht_range = self.operator.get_dht_range()
 
-        percents = 100 - dht_range.get_free_size_percents()
+        free_percents = dht_range.get_free_size_percents()
+        percents = 100 - free_percents
         if percents >= MAX_USED_SIZE_PERCENTS:
+            if free_percents < CRITICAL_FREE_SPACE_PERCENT:
+                logger.warning('Critical free disk space! Blocking range for write!')
+                dht_range.block_for_write()
+
             logger.warning('Few free size for data range. Trying pull part of range to network')
 
             if not self._pull_subrange(dht_range):

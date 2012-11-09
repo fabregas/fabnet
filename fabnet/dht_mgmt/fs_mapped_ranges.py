@@ -18,7 +18,8 @@ from datetime import datetime
 
 from fabnet.utils.logger import logger
 from fabnet.utils.internal import total_seconds
-from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH, WAIT_FILE_MD_TIMEDELTA
+from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH, \
+        WAIT_FILE_MD_TIMEDELTA, CRITICAL_FREE_SPACE_PERCENT
 from fabnet.dht_mgmt.data_block import DataBlock
 
 class FSHashRangesException(Exception):
@@ -31,6 +32,9 @@ class FSHashRangesNoData(FSHashRangesException):
     pass
 
 class FSHashRangesOldDataDetected(FSHashRangesException):
+    pass
+
+class FSHashRangesNoFreeSpace(FSHashRangesException):
     pass
 
 class SafeCounter:
@@ -178,7 +182,11 @@ class FSHashRanges:
         self.__child_ranges = SafeList()
         self.__parallel_writes = SafeCounter()
         self.__block_flag = threading.Event()
+        self.__no_free_space_flag = threading.Event()
         self.__ret_range_i = None
+
+    def block_for_write(self):
+        self.__no_free_space_flag.set()
 
     def get_start(self):
         return self.__start
@@ -254,6 +262,13 @@ class FSHashRanges:
 
     def __write_data(self, f_name, data, check_dt=False):
         try:
+            if self.__no_free_space_flag.is_set():
+                if self.get_free_size_percents() > CRITICAL_FREE_SPACE_PERCENT:
+                    self.__no_free_space_flag.clear()
+                    logger.info('Range is unlocked for write...')
+                else:
+                    raise FSHashRangesNoFreeSpace('No free space for saving data block')
+
             if check_dt:
                 self.__check_ex_data_block(f_name, data)
 
@@ -590,11 +605,11 @@ class FSHashRanges:
 
     def get_free_size_percents(self):
         stat = os.statvfs(self.__range_dir)
-        return (stat.f_bavail * 100) / stat.f_blocks
+        return (stat.f_bavail * 100.) / stat.f_blocks
 
     def get_estimated_data_percents(self, add_size=0):
         estimated_data_size = self.get_range_size() + self.get_replicas_size() + add_size
         stat = os.statvfs(self.__range_dir)
-        estimated_data_size_perc = (estimated_data_size * 100) / (stat.f_blocks * stat.f_bsize)
+        estimated_data_size_perc = (estimated_data_size * 100.) / (stat.f_blocks * stat.f_bsize)
         return estimated_data_size_perc
 
