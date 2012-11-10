@@ -32,6 +32,8 @@ from fabnet.dht_mgmt.operations.get_range_data_request import GetRangeDataReques
 from fabnet.dht_mgmt.operations.get_ranges_table import GetRangesTableOperation
 from fabnet.dht_mgmt.operations.put_data_block import PutDataBlockOperation
 from fabnet.dht_mgmt.operations.get_data_block import GetDataBlockOperation
+from fabnet.dht_mgmt.operations.check_data_block import CheckDataBlockOperation
+from fabnet.dht_mgmt.operations.repair_data_blocks import RepairDataBlocksOperation
 from fabnet.dht_mgmt.operations.split_range_cancel import SplitRangeCancelOperation
 from fabnet.dht_mgmt.operations.split_range_request import SplitRangeRequestOperation
 from fabnet.dht_mgmt.operations.pull_subrange_request import PullSubrangeRequestOperation
@@ -46,11 +48,13 @@ OPERMAP = { 'GetRangeDataRequest': GetRangeDataRequestOperation,
             'GetRangesTable': GetRangesTableOperation,
             'PutDataBlock': PutDataBlockOperation,
             'GetDataBlock': GetDataBlockOperation,
+            'CheckDataBlock': CheckDataBlockOperation,
             'SplitRangeCancel': SplitRangeCancelOperation,
             'SplitRangeRequest': SplitRangeRequestOperation,
             'PullSubrangeRequest': PullSubrangeRequestOperation,
             'UpdateHashRangeTable': UpdateHashRangeTableOperation,
             'CheckHashRangeTable': CheckHashRangeTableOperation,
+            'RepairDataBlocks': RepairDataBlocksOperation,
             'GetKeysInfo': GetKeysInfoOperation,
             'PutKeysInfo': PutKeysInfoOperation,
             'ClientGetData': ClientGetOperation,
@@ -334,7 +338,7 @@ class MonitorDHTRanges(threading.Thread):
             packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=self.operator.self_address)
             rcode, rmsg = self.operator.call_network(packet)
             if rcode:
-                logger.error('Cant initiate NotifyOperation for ALERT "%s"'%message)
+                logger.error('Cant initiate NotifyOperation for ALERT "%s". Details: %s'%(message, rmsg))
             else:
                 self.__notification_flag = True
         else:

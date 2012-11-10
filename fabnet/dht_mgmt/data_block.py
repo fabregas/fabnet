@@ -15,7 +15,7 @@ import struct
 import hashlib
 
 DATA_BLOCK_LABEL = 'FDB'
-STRUCT_FMT = '<3sf40sb40s'
+STRUCT_FMT = '<3sd40sb40s'
 
 class DataBlock:
     header_len = struct.calcsize(STRUCT_FMT)
@@ -50,6 +50,13 @@ class DataBlock:
         return self.raw_data, self.raw_checksum
 
     @classmethod
+    def check_raw_data(cls, packet_data, checksum):
+        raw_data = packet_data[cls.header_len:]
+        if checksum != hashlib.sha1(raw_data).hexdigest():
+            raise Exception('Data has bad checksum')
+
+
+    @classmethod
     def read_header(cls, data):
         header = data[:cls.header_len]
         try:
@@ -60,7 +67,8 @@ class DataBlock:
         if db_label != DATA_BLOCK_LABEL:
             raise Exception('Corrupted data block! No block label found')
 
-        return primary_key, replica_count, checksum, datetime.fromtimestamp(put_unixtime)
+        #datetime.fromtimestamp(put_unixtime)
+        return primary_key, replica_count, checksum, put_unixtime
 
     def unpack(self):
         primary_key, replica_count, checksum, put_dt = self.read_header(self.raw_data)

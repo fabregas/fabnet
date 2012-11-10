@@ -9,7 +9,7 @@ import random
 import string
 import hashlib
 from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
-from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER
+from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT
 from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.dht_mgmt import constants
 constants.WAIT_RANGE_TIMEOUT = 0.1
@@ -39,6 +39,17 @@ logger.setLevel(logging.DEBUG)
 
 MAX_HASH = constants.MAX_HASH
 
+
+class MonitoredDHTOperator(DHTOperator):
+    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown'):
+        DHTOperator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name)
+        self.events = []
+
+    def on_network_notify(self, notify_type, notify_provider, message):
+        DHTOperator.on_network_notify(self, notify_type, notify_provider, message)
+        self.events.append((notify_type, notify_provider, message))
+
+
 class TestServerThread(threading.Thread):
     def __init__(self, port, home_dir, init_node=False):
         threading.Thread.__init__(self)
@@ -50,20 +61,9 @@ class TestServerThread(threading.Thread):
 
     def run(self):
         address = '127.0.0.1:%s'%self.port
-        operator = DHTOperator(address, self.home_dir, is_init_node=self.init_node, node_name=self.port)
+        operator = MonitoredDHTOperator(address, self.home_dir, is_init_node=self.init_node, node_name=self.port)
         self.operator = operator
 
-        operator.register_operation('ManageNeighbour', ManageNeighbour)
-        operator.register_operation('DiscoveryOperation', DiscoveryOperation)
-        operator.register_operation('TopologyCognition', TopologyCognition)
-
-        operator.register_operation('GetRangeDataRequest', GetRangeDataRequestOperation)
-        operator.register_operation('GetRangesTable', GetRangesTableOperation)
-        operator.register_operation('PutDataBlock', PutDataBlockOperation)
-        operator.register_operation('SplitRangeCancel', SplitRangeCancelOperation)
-        operator.register_operation('SplitRangeRequest', SplitRangeRequestOperation)
-        operator.register_operation('UpdateHashRangeTable', UpdateHashRangeTableOperation)
-        operator.register_operation('CheckHashRangeTable', CheckHashRangeTableOperation)
         server = FriServer('0.0.0.0', self.port, operator, server_name='node_%s'%self.port)
         ret = server.start()
         if not ret:
@@ -200,10 +200,13 @@ class TestDHTInitProcedure(unittest.TestCase):
             data_block = DataBlock(data, checksum)
             data_block.validate()
             data2, checksum2 = data_block.pack('0000000000000000000000000000000000000000', 2)
+            _, _, _, stored_dt = DataBlock.read_header(data2)
+            time.sleep(1)
             checksum = hashlib.sha1(data).hexdigest()
             data_block = DataBlock(data, checksum)
             data_block.validate()
             data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
+            _, _, _, stored_dt = DataBlock.read_header(data)
 
             params = {'key': MAX_HASH/2+100, 'checksum': checksum, 'carefully_save': True}
             packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=data, sync=True)
@@ -394,6 +397,123 @@ class TestDHTInitProcedure(unittest.TestCase):
                 server1.join()
             self._destroy_fake_hdd('node_1986', '/dev/loop0')
             self._destroy_fake_hdd('node_1987', '/dev/loop1')
+
+    def test05_repair_data(self):
+        server = server1 = None
+        try:
+            home1 = '/tmp/node_1986_home'
+            home2 = '/tmp/node_1987_home'
+            if os.path.exists(home1):
+                shutil.rmtree(home1)
+            os.mkdir(home1)
+            if os.path.exists(home2):
+                shutil.rmtree(home2)
+            os.mkdir(home2)
+
+            server = TestServerThread(1986, home1, init_node=True)
+            server.start()
+
+            server1 = TestServerThread(1987, home2)
+            server1.start()
+
+            time.sleep(1)
+            self.assertNotEqual(server1.operator.status, DS_NORMALWORK)
+
+            server1.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1986')
+            server.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1987')
+            for i in range(10):
+                if server1.operator.status == DS_NORMALWORK:
+                    break
+                time.sleep(1)
+            else:
+                raise Exception('Server1 does not started!')
+
+            node86_range = server.operator.get_dht_range()
+            node87_range = server1.operator.get_dht_range()
+
+            self.assertEqual(node86_range.get_start(), 0L)
+            self.assertEqual(node86_range.get_end(), MAX_HASH/2)
+            self.assertEqual(node87_range.get_start(), MAX_HASH/2+1)
+            self.assertEqual(node87_range.get_end(), MAX_HASH)
+
+            data = 'Hello, fabregas!'
+            data_key = self._send_data_block('127.0.0.1:1986', data)
+
+            data = 'This is replica data!'
+            data_key2 = self._send_data_block('127.0.0.1:1987', data)
+
+            time.sleep(.2)
+            client = FriClient()
+            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', parameters={})
+            rcode, rmsg = client.call('127.0.0.1:1986', packet_obj)
+            self.assertEqual(rcode, 0, rmsg)
+            time.sleep(1.5)
+
+            stat = 'processed_local_blocks=%i, invalid_local_blocks=0, repaired_foreign_blocks=0, failed_repair_foreign_blocks=0'
+            self.assertEqual(len(server.operator.events), 2)
+            event86 = server.operator.events[0]
+            self.assertEqual(event86[0], ET_INFO)
+            self.assertEqual(event86[1], '127.0.0.1:1986')
+            cnt86 = len(os.listdir(node86_range.get_range_dir())) + len(os.listdir(node86_range.get_replicas_dir()))
+            self.assertTrue(stat%cnt86 in event86[2])
+
+            event87 = server.operator.events[1]
+            self.assertEqual(event87[0], ET_INFO)
+            self.assertEqual(event87[1], '127.0.0.1:1987')
+            cnt87 = len(os.listdir(node87_range.get_range_dir())) + len(os.listdir(node87_range.get_replicas_dir()))
+            self.assertTrue(stat%cnt87 in event87[2])
+
+            server.stop()
+            server.join()
+            server = None
+            time.sleep(1)
+            server1.operator.events = []
+            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', parameters={})
+            rcode, rmsg = client.call('127.0.0.1:1987', packet_obj)
+            self.assertEqual(rcode, 0, rmsg)
+            time.sleep(1.5)
+            self.assertEqual(len(server1.operator.events), 1)
+            event87 = server1.operator.events[0]
+            self.assertEqual(event87[0], ET_INFO)
+            self.assertEqual(event87[1], '127.0.0.1:1987')
+            stat_rep = 'processed_local_blocks=%i, invalid_local_blocks=0, repaired_foreign_blocks=%i, failed_repair_foreign_blocks=0'
+            self.assertTrue(stat_rep%(cnt87, cnt86) in event87[2])
+
+            node87_range = server1.operator.get_dht_range()
+            open(os.path.join(node87_range.get_range_dir(), data_key), 'wr').write('wrong data')
+            open(os.path.join(node87_range.get_range_dir(), data_key2), 'ar').write('wrong data')
+            server1.operator.events = []
+
+            time.sleep(.2)
+            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', parameters={})
+            rcode, rmsg = client.call('127.0.0.1:1987', packet_obj)
+            self.assertEqual(rcode, 0, rmsg)
+            time.sleep(1.5)
+            self.assertEqual(len(server1.operator.events), 1)
+            event87 = server1.operator.events[0]
+            self.assertEqual(event87[0], ET_INFO)
+            self.assertEqual(event87[1], '127.0.0.1:1987')
+            stat_rep = 'processed_local_blocks=%i, invalid_local_blocks=%i, repaired_foreign_blocks=%i, failed_repair_foreign_blocks=0'
+            self.assertTrue(stat_rep%(cnt87+cnt86, 1, 2) in event87[2], event87[2])
+        finally:
+            if server:
+                server.stop()
+                server.join()
+            if server1:
+                server1.stop()
+                server1.join()
+
+    def _send_data_block(self, address, data):
+        client = FriClient()
+        checksum = hashlib.sha1(data).hexdigest()
+
+        params = {'checksum': checksum, 'wait_writes_count': 3}
+        packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
+
+        ret_packet = client.call_sync(address, packet_obj)
+        self.assertEqual(ret_packet.ret_code, 0, ret_packet.ret_message)
+        self.assertEqual(len(ret_packet.ret_parameters.get('key', '')), 40)
+        return ret_packet.ret_parameters['key']
 
     def _make_fake_hdd(self, name, size, dev='/dev/loop0'):
         os.system('dd if=/dev/zero of=/tmp/%s bs=1024 count=%s'%(name, size))

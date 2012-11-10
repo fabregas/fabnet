@@ -205,6 +205,9 @@ class FSHashRanges:
     def get_range_dir(self):
         return self.__range_dir
 
+    def get_replicas_dir(self):
+        return self.__replica_dir
+
     def is_equal(self, another_range):
         if self.__start == another_range.get_start() and \
             self.__end == another_range.get_end():
@@ -249,13 +252,18 @@ class FSHashRanges:
             logger.debug('Checking data block datetime at %s...'%f_name)
             f_obj = open(f_name, 'rb')
             try:
-                stored_header = f_obj.read(100)
-                new_header = data[:100]
+                stored_header = f_obj.read(DataBlock.header_len)
+                new_header = data[:DataBlock.header_len]
 
-                _, _, _, stored_dt = DataBlock.read_header(stored_header)
+                try:
+                    _, _, _, stored_dt = DataBlock.read_header(stored_header)
+                except Exception, err:
+                    logger.error('Bad local data block header. %s'%err)
+                    return #we can store newer data block
+
                 _, _, _, new_dt = DataBlock.read_header(new_header)
 
-                if new_dt <= stored_dt:
+                if new_dt < stored_dt:
                     raise FSHashRangesOldDataDetected('Data block is already saved with newer datetime')
             finally:
                 f_obj.close()
@@ -280,10 +288,14 @@ class FSHashRanges:
         except IOError, err:
             raise FSHashRangesException('Cant save data to file system. Details: %s'%err)
 
-    def __read_data(self, file_path):
+    def __read_data(self, file_path, header_only=False):
         f_obj = open(file_path, 'rb')
         try:
-            data = f_obj.read()
+            if header_only:
+                size = DataBlock.header_len
+            else:
+                size = -1
+            data = f_obj.read(size)
         except IOError, err:
             raise FSHashRangesException('Cant read data from file system. Details: %s'%err)
         finally:
@@ -311,7 +323,7 @@ class FSHashRanges:
             if not is_reserv:
                 self.__parallel_writes.dec()
 
-    def __get_data(self, key):
+    def __get_data(self, key, header_only=False):
         key = self._str_key(key)
         file_path = os.path.join(self.__range_dir, key)
         if not os.path.exists(file_path):
@@ -320,7 +332,7 @@ class FSHashRanges:
             if not os.path.exists(file_path):
                 raise FSHashRangesNoData('No data found for key %s'% key)
 
-        return self.__read_data(file_path)
+        return self.__read_data(file_path, header_only)
 
     def __join_data(self, child_ranges):
         for child_range in child_ranges:
@@ -392,19 +404,19 @@ class FSHashRanges:
         else:
             self.__put_data(key, data, save_to_reservation=True, check_dt=check_dt)
 
-    def get(self, key):
+    def get(self, key, header_only=False):
         '''WARNING: This method can fail when runned across split/join pocess'''
         if self.__child_ranges.size():
             for child_range in self.__child_ranges.copy():
                 if not child_range._in_range(key):
                     continue
                 try:
-                    data = child_range.get(key)
+                    data = child_range.get(key, header_only)
                     return data
                 except FSHashRangesNoData, err:
                     break
 
-        return self.__get_data(key)
+        return self.__get_data(key, header_only)
 
 
     def put_replica(self, key, data, check_dt=False):
@@ -413,13 +425,13 @@ class FSHashRanges:
         self.__write_data(f_name, data, check_dt)
 
 
-    def get_replica(self, key):
+    def get_replica(self, key, header_only=False):
         key = self._str_key(key)
         f_name = os.path.join(self.__replica_dir, key)
         if not os.path.exists(f_name):
             raise FSHashRangesNoData('No replica data found for key %s'% key)
 
-        return self.__read_data(f_name)
+        return self.__read_data(f_name, header_only)
 
 
     def extend(self, start_key, end_key):
@@ -496,24 +508,23 @@ class FSHashRanges:
             return True
         return False
 
-
-    def iter_reservation(self):
-        files = os.listdir(self.__reservation_dir)
-        for digest in files:
-            file_path = os.path.join(self.__reservation_dir, digest)
-            if self._ensure_not_write(file_path):
-                yield digest, self.__get_data(digest), file_path
-
-
-    def iter_replicas(self, foreign_only=True):
-        files = os.listdir(self.__replica_dir)
+    def __iter_data_blocks(self, proc_dir, foreign_only=False, header_only=False):
+        files = os.listdir(proc_dir)
         for digest in files:
             if foreign_only and self._in_range(digest):
                 continue
-            file_path = os.path.join(self.__replica_dir, digest)
+            file_path = os.path.join(proc_dir, digest)
             if self._ensure_not_write(file_path):
-                yield digest, self.__read_data(file_path), file_path
+                yield digest, self.__read_data(file_path, header_only), file_path
 
+    def iter_reservation(self, header_only=False):
+        return self.__iter_data_blocks(self.__reservation_dir, header_only=header_only)
+
+    def iter_replicas(self, foreign_only=True, header_only=False):
+        return self.__iter_data_blocks(self.__replica_dir, foreign_only, header_only)
+
+    def iter_data_blocks(self, header_only=False):
+        return self.__iter_data_blocks(self.__range_dir, header_only=header_only)
 
     def join_subranges(self):
         child_ranges = self.__child_ranges.copy()

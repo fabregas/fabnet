@@ -28,7 +28,8 @@ from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPER
                 KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, \
                 KEEP_ALIVE_MAX_WAIT_TIME, ONE_DIRECT_NEIGHBOURS_COUNT, \
                 NO_TOPOLOGY_DYSCOVERY_WINDOW, DISCOVERY_TOPOLOGY_TIMEOUT, \
-                MIN_TOPOLOGY_DISCOVERY_WAIT, MAX_TOPOLOGY_DISCOVERY_WAIT
+                MIN_TOPOLOGY_DISCOVERY_WAIT, MAX_TOPOLOGY_DISCOVERY_WAIT, \
+                ET_ALERT, ET_INFO
 
 from fabnet.operations.manage_neighbours import ManageNeighbour
 from fabnet.operations.discovery_operation import DiscoveryOperation
@@ -145,7 +146,12 @@ class Operator:
         """This method should be imlemented for some actions
             on received network nofitications
         """
-        pass
+        if notify_type == ET_ALERT:
+            logger.warning('[ALERT][%s] %s'%(notify_provider, message))
+        elif notify_type == ET_INFO:
+            logger.info('[INFORMATION][%s] %s'%(notify_provider, message))
+        else:
+            logger.info('[NOTIFICATION.%s][%s] %s'%(notify_type, notify_provider, message))
 
     def has_type(self, optype):
         if optype == self.OPTYPE:

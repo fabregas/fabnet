@@ -74,7 +74,7 @@ class FriBinaryProcessor:
         try:
             header = json.dumps(header_obj)
         except Exception, err:
-            raise FriException('Cant form FRI packet! Header is corrupted: %s'%err)
+            raise FriException('Cant form FRI packet! Header "%s" is corrupted: %s'%(header_obj, err))
 
         if bin_data and cls.NEED_COMPRESSION:
             bin_data = zlib.compress(bin_data)
@@ -144,7 +144,7 @@ class FabnetPacketResponse(FabnetPacket):
         self.message_id = packet.get('message_id', None)
         self.session_id = packet.get('session_id', None)
         self.ret_code = packet.get('ret_code', RC_OK)
-        self.ret_message = packet.get('ret_message', '')
+        self.ret_message = str(packet.get('ret_message', ''))
         self.ret_parameters = packet.get('ret_parameters', {})
         self.from_node = packet.get('from_node', None)
         self.binary_data = packet.get('binary_data', '')
