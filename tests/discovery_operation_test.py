@@ -14,6 +14,7 @@ from fabnet.operations.manage_neighbours import ManageNeighbour
 from fabnet.operations.discovery_operation import DiscoveryOperation
 from fabnet.operations.topology_cognition import TopologyCognition
 from fabnet.utils.logger import logger
+from fabnet.core.constants import NT_UPPER, NT_SUPERIOR
 
 logger.setLevel(logging.DEBUG)
 
@@ -82,10 +83,10 @@ class TestDiscoverytOperation(unittest.TestCase):
 
             time.sleep(1)
 
-            self.assertEqual(operator.upper_neighbours, ['127.0.0.1:1987'])
-            self.assertEqual(operator.superior_neighbours, ['127.0.0.1:1987'])
-            self.assertEqual(operator1.upper_neighbours, ['127.0.0.1:1986'])
-            self.assertEqual(operator1.superior_neighbours, ['127.0.0.1:1986'])
+            self.assertEqual(operator.get_neighbours(NT_UPPER), ['127.0.0.1:1987'])
+            self.assertEqual(operator.get_neighbours(NT_SUPERIOR), ['127.0.0.1:1987'])
+            self.assertEqual(operator1.get_neighbours(NT_UPPER), ['127.0.0.1:1986'])
+            self.assertEqual(operator1.get_neighbours(NT_SUPERIOR), ['127.0.0.1:1986'])
         finally:
             if server1:
                 server1.stop()

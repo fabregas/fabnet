@@ -93,6 +93,7 @@ class FabnetPacketRequest(FabnetPacket):
     def __init__(self, **packet):
         self.message_id = packet.get('message_id', None)
         self.session_id = packet.get('session_id', None)
+        self.is_multicast = packet.get('is_multicast', None)
         self.sync = packet.get('sync', False)
         if not self.message_id:
             self.message_id = str(uuid.uuid1())
@@ -129,6 +130,8 @@ class FabnetPacketRequest(FabnetPacket):
             ret_dict['parameters'] = self.parameters
         if self.session_id:
             ret_dict['session_id'] = self.session_id
+        if self.is_multicast:
+            ret_dict['is_multicast'] = self.is_multicast
 
         return ret_dict
 

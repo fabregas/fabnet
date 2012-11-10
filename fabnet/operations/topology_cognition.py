@@ -180,7 +180,8 @@ class TopologyCognition(OperationBase):
         intersec_count = len(set(superior_neighbours) & set(upper_neighbours))
         if intersec_count > 0 and (len(upper_neighbours) <= ONE_DIRECT_NEIGHBOURS_COUNT):
             parameters = { 'neighbour_type': NT_UPPER, 'operation': MNO_APPEND,
-                            'node_address': self.operator.self_address }
+                            'node_address': self.operator.self_address,
+                            'operator_type': self.operator.OPTYPE }
             rcode, rmsg = self._init_operation(node_address, 'ManageNeighbour', parameters)
             if not rcode:
                 self.__balanced.set()

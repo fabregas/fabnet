@@ -13,6 +13,7 @@ This module contains the implementation of FriServer class.
 import socket
 import threading
 import time
+import traceback
 from datetime import datetime
 from Queue import Queue
 
@@ -433,7 +434,9 @@ class FriWorker(threading.Thread):
                 else:
                     self.operator.callback(FabnetPacketResponse(**packet))
             except Exception, err:
-                ret_message = '%s error: %s' % (self.getName(), err)
+                ret_message = 'run() error: %s' % err
+                logger.write = logger.debug
+                traceback.print_exc(file=logger)
                 logger.error(ret_message)
                 try:
                     if sock:

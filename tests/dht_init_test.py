@@ -18,7 +18,9 @@ constants.MONITOR_DHT_RANGES_TIMEOUT = 1
 constants.CHECK_HASH_TABLE_TIMEOUT = 1
 constants.WAIT_FILE_MD_TIMEDELTA = 0.1
 constants.WAIT_DHT_TABLE_UPDATE = .2
+from fabnet.monitor.monitor_operator import MonitorOperator, MONITOR_DB
 from fabnet.dht_mgmt.dht_operator import DHTOperator
+from fabnet.core.operator import OPERMAP
 from fabnet.dht_mgmt import dht_operator
 from fabnet.dht_mgmt.operations import split_range_request
 from fabnet.operations.manage_neighbours import ManageNeighbour
@@ -35,33 +37,32 @@ from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTabl
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.constants import DS_NORMALWORK, RC_OLD_DATA
 
+import sqlite3
+
 logger.setLevel(logging.DEBUG)
 
 MAX_HASH = constants.MAX_HASH
 
 
-class MonitoredDHTOperator(DHTOperator):
-    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown'):
-        DHTOperator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name)
-        self.events = []
-
-    def on_network_notify(self, notify_type, notify_provider, message):
-        DHTOperator.on_network_notify(self, notify_type, notify_provider, message)
-        self.events.append((notify_type, notify_provider, message))
-
+MonitorOperator.OPERATIONS_MAP = OPERMAP
 
 class TestServerThread(threading.Thread):
-    def __init__(self, port, home_dir, init_node=False):
+    def __init__(self, port, home_dir, init_node=False, is_monitor=False):
         threading.Thread.__init__(self)
         self.port = port
         self.home_dir = home_dir
         self.stopped = True
         self.operator = None
         self.init_node = init_node
+        self.is_monitor = is_monitor
 
     def run(self):
         address = '127.0.0.1:%s'%self.port
-        operator = MonitoredDHTOperator(address, self.home_dir, is_init_node=self.init_node, node_name=self.port)
+        if self.is_monitor:
+            operator = MonitorOperator(address, self.home_dir, is_init_node=self.init_node, node_name=self.port)
+        else:
+            operator = DHTOperator(address, self.home_dir, is_init_node=self.init_node, node_name=self.port)
+
         self.operator = operator
 
         server = FriServer('0.0.0.0', self.port, operator, server_name='node_%s'%self.port)
@@ -403,12 +404,16 @@ class TestDHTInitProcedure(unittest.TestCase):
         try:
             home1 = '/tmp/node_1986_home'
             home2 = '/tmp/node_1987_home'
+            monitor_home = '/tmp/node_monitor_home'
             if os.path.exists(home1):
                 shutil.rmtree(home1)
             os.mkdir(home1)
             if os.path.exists(home2):
                 shutil.rmtree(home2)
             os.mkdir(home2)
+            if os.path.exists(monitor_home):
+                shutil.rmtree(monitor_home)
+            os.mkdir(monitor_home)
 
             server = TestServerThread(1986, home1, init_node=True)
             server.start()
@@ -416,11 +421,16 @@ class TestDHTInitProcedure(unittest.TestCase):
             server1 = TestServerThread(1987, home2)
             server1.start()
 
+            monitor = TestServerThread(1990, monitor_home, is_monitor=True)
+            monitor.start()
+
             time.sleep(1)
             self.assertNotEqual(server1.operator.status, DS_NORMALWORK)
 
             server1.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1986')
             server.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1987')
+            server.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1990', MonitorOperator.OPTYPE)
+            server1.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1990', MonitorOperator.OPTYPE)
             for i in range(10):
                 if server1.operator.status == DS_NORMALWORK:
                     break
@@ -444,20 +454,29 @@ class TestDHTInitProcedure(unittest.TestCase):
 
             time.sleep(.2)
             client = FriClient()
-            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', parameters={})
+            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters={})
             rcode, rmsg = client.call('127.0.0.1:1986', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
             time.sleep(1.5)
 
+            conn = sqlite3.connect(os.path.join(monitor_home, MONITOR_DB))
+            curs = conn.cursor()
+            curs.execute('SELECT notify_type, node_address, notify_msg FROM notification')
+            events = curs.fetchall()
+            curs.execute('DELETE FROM notification')
+            conn.commit()
+            curs.close()
+            conn.close()
+
             stat = 'processed_local_blocks=%i, invalid_local_blocks=0, repaired_foreign_blocks=0, failed_repair_foreign_blocks=0'
-            self.assertEqual(len(server.operator.events), 2)
-            event86 = server.operator.events[0]
+            self.assertEqual(len(events), 2)
+            event86 = events[0]
             self.assertEqual(event86[0], ET_INFO)
             self.assertEqual(event86[1], '127.0.0.1:1986')
             cnt86 = len(os.listdir(node86_range.get_range_dir())) + len(os.listdir(node86_range.get_replicas_dir()))
             self.assertTrue(stat%cnt86 in event86[2])
 
-            event87 = server.operator.events[1]
+            event87 = events[1]
             self.assertEqual(event87[0], ET_INFO)
             self.assertEqual(event87[1], '127.0.0.1:1987')
             cnt87 = len(os.listdir(node87_range.get_range_dir())) + len(os.listdir(node87_range.get_replicas_dir()))
@@ -467,13 +486,23 @@ class TestDHTInitProcedure(unittest.TestCase):
             server.join()
             server = None
             time.sleep(1)
-            server1.operator.events = []
-            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', parameters={})
+
+            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters={})
             rcode, rmsg = client.call('127.0.0.1:1987', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
             time.sleep(1.5)
-            self.assertEqual(len(server1.operator.events), 1)
-            event87 = server1.operator.events[0]
+
+            conn = sqlite3.connect(os.path.join(monitor_home, MONITOR_DB))
+            curs = conn.cursor()
+            curs.execute('SELECT notify_type, node_address, notify_msg FROM notification')
+            events = curs.fetchall()
+            curs.execute('DELETE FROM notification')
+            conn.commit()
+            curs.close()
+            conn.close()
+
+            self.assertEqual(len(events), 1)
+            event87 = events[0]
             self.assertEqual(event87[0], ET_INFO)
             self.assertEqual(event87[1], '127.0.0.1:1987')
             stat_rep = 'processed_local_blocks=%i, invalid_local_blocks=0, repaired_foreign_blocks=%i, failed_repair_foreign_blocks=0'
@@ -482,15 +511,24 @@ class TestDHTInitProcedure(unittest.TestCase):
             node87_range = server1.operator.get_dht_range()
             open(os.path.join(node87_range.get_range_dir(), data_key), 'wr').write('wrong data')
             open(os.path.join(node87_range.get_range_dir(), data_key2), 'ar').write('wrong data')
-            server1.operator.events = []
 
             time.sleep(.2)
-            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', parameters={})
+            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters={})
             rcode, rmsg = client.call('127.0.0.1:1987', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
             time.sleep(1.5)
-            self.assertEqual(len(server1.operator.events), 1)
-            event87 = server1.operator.events[0]
+
+            conn = sqlite3.connect(os.path.join(monitor_home, MONITOR_DB))
+            curs = conn.cursor()
+            curs.execute('SELECT notify_type, node_address, notify_msg FROM notification')
+            events = curs.fetchall()
+            curs.execute('DELETE FROM notification')
+            conn.commit()
+            curs.close()
+            conn.close()
+
+            self.assertEqual(len(events), 1)
+            event87 = events[0]
             self.assertEqual(event87[0], ET_INFO)
             self.assertEqual(event87[1], '127.0.0.1:1987')
             stat_rep = 'processed_local_blocks=%i, invalid_local_blocks=%i, repaired_foreign_blocks=%i, failed_repair_foreign_blocks=0'
@@ -502,6 +540,9 @@ class TestDHTInitProcedure(unittest.TestCase):
             if server1:
                 server1.stop()
                 server1.join()
+            if monitor:
+                monitor.stop()
+                monitor.join()
 
     def _send_data_block(self, address, data):
         client = FriClient()

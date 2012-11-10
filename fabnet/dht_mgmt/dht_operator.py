@@ -278,7 +278,7 @@ class CheckLocalHashTableThread(threading.Thread):
 
         while not self.stopped:
             try:
-                neighbours = self.operator.get_neighbours(NT_SUPERIOR)
+                neighbours = self.operator.get_neighbours(NT_SUPERIOR, self.operator.OPTYPE)
                 if not neighbours:
                     time.sleep(INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
                     continue

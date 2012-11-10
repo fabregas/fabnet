@@ -54,7 +54,9 @@ class ManageNeighbour(OperationBase):
         if node_address is None:
             raise Exception('Node address parameter is expected for ManageNeighbour operation')
 
-        return n_type, operation, node_address
+        op_type = parameters.get('operator_type', None)
+
+        return n_type, operation, node_address, op_type
 
     def _check_neighbours_count(self, n_type, neighbours, other_n_type, other_neighbours, ret_parameters):
         self._lock()
@@ -100,7 +102,7 @@ class ManageNeighbour(OperationBase):
             self._unlock()
 
         parameters = { 'neighbour_type': other_n_type, 'operation': MNO_APPEND,
-                    'node_address': self.operator.self_address }
+                    'node_address': self.operator.self_address, 'operator_type': self.operator.OPTYPE }
         ret_code, msg = self._init_operation(new_node, 'ManageNeighbour', parameters)
         if ret_code:
             self.__discovered_nodes[n_type].append(new_node)
@@ -146,7 +148,8 @@ class ManageNeighbour(OperationBase):
 
         self._lock()
         try:
-            parameters = {'operation': MNO_REMOVE, 'node_address': self.operator.self_address}
+            parameters = {'operation': MNO_REMOVE, 'node_address': self.operator.self_address, \
+                            'operator_type': self.operator.OPTYPE}
 
             for_delete = self._get_for_delete(superior_neighbours, NT_SUPERIOR, upper_neighbours)
             if for_delete:
@@ -172,17 +175,20 @@ class ManageNeighbour(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        n_type, operation, node_address = self._valiadate_packet(packet.parameters)
+        n_type, operation, node_address, op_type = self._valiadate_packet(packet.parameters)
         is_force = packet.parameters.get('force', False)
 
         ret_params = packet.parameters
 
         neighbours = self.operator.get_neighbours(n_type)
         if operation == MNO_APPEND:
+            if op_type is None:
+                raise Exception('Operator type parameter is expected for ManageNeighbour operation')
+
             if len(neighbours) >= (ONE_DIRECT_NEIGHBOURS_COUNT+1):
                 ret_params['dont_append'] = True
             else:
-                self.operator.set_neighbour(n_type, node_address)
+                self.operator.set_neighbour(n_type, node_address, op_type)
 
             self.__discovered_nodes[n_type].append(node_address)
         elif operation == MNO_REMOVE:
@@ -209,6 +215,7 @@ class ManageNeighbour(OperationBase):
 
         ret_params['node_address'] = self.operator.self_address
         ret_params['neighbour_type'] = n_type
+        ret_params['operator_type'] = self.operator.OPTYPE
 
         return FabnetPacketResponse(ret_parameters=ret_params)
 
@@ -242,15 +249,17 @@ class ManageNeighbour(OperationBase):
                 that should be resended to current node requestor
                 or None for disabling packet resending
         """
-        n_type, operation, node_address = self._valiadate_packet(packet.ret_parameters)
+        n_type, operation, node_address, op_type = self._valiadate_packet(packet.ret_parameters)
 
         self._lock()
         try:
             if operation == MNO_APPEND:
+                if op_type is None:
+                    raise Exception('Operator type parameter is expected for ManageNeighbour operation')
                 self.__discovered_nodes[n_type].append(node_address)
                 dont_append = packet.ret_parameters.get('dont_append', False)
                 if not dont_append:
-                    self.operator.set_neighbour(n_type, node_address)
+                    self.operator.set_neighbour(n_type, node_address, op_type)
 
             elif operation == MNO_REMOVE:
                 dont_remove = packet.ret_parameters.get('dont_remove', False)

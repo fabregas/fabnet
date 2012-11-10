@@ -42,6 +42,8 @@ from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS, MNO_REMOVE
 
 NEED_STAT = True
 
+NT_MAP = {NT_SUPERIOR: 'Superior', NT_UPPER: 'Upper'}
+
 class OperationStat:
     def __init__(self):
         self.call_cnt = 0
@@ -99,8 +101,8 @@ class Operator:
         self.node_name = node_name
         self.server = None
 
-        self.superior_neighbours = []
-        self.upper_neighbours = []
+        self.__neighbours = {NT_SUPERIOR: {}, NT_UPPER: {}}
+
         if key_storage:
             cert = key_storage.get_node_cert()
             ckey = key_storage.get_node_cert_key()
@@ -212,21 +214,26 @@ class Operator:
 
         return operation_obj
 
-    def set_neighbour(self, neighbour_type, address):
+    def set_neighbour(self, neighbour_type, address, optype=None):
+        if optype == None:
+            optype = self.OPTYPE
+
         self.__lock.acquire()
         try:
-            if neighbour_type == NT_SUPERIOR:
-                if address in self.superior_neighbours:
-                    return
-                self.superior_neighbours.append(address)
-                logger.info('Superior neighbour %s appended'%address)
-            elif neighbour_type == NT_UPPER:
-                if address in self.upper_neighbours:
-                    return
-                self.upper_neighbours.append(address)
-                logger.info('Upper neighbour %s appended'%address)
-            else:
+            neighbours = self.__neighbours.get(neighbour_type, None)
+            if neighbours is None:
                 raise OperException('Neigbour type "%s" is invalid!'%neighbour_type)
+
+            op_n_list = neighbours.get(optype, None)
+            if op_n_list is None:
+                op_n_list = []
+                neighbours[optype] = op_n_list
+
+            if address in op_n_list:
+                return
+
+            op_n_list.append(address)
+            logger.info('%s neighbour %s with type "%s" is appended'%(NT_MAP[neighbour_type], address, optype))
         finally:
             self.__lock.release()
 
@@ -234,30 +241,38 @@ class Operator:
     def remove_neighbour(self, neighbour_type, address):
         self.__lock.acquire()
         try:
-            if neighbour_type == NT_SUPERIOR:
-                if address not in self.superior_neighbours:
-                    return
-                del self.superior_neighbours[self.superior_neighbours.index(address)]
-                logger.info('Superior neighbour %s removed'%address)
-            elif neighbour_type == NT_UPPER:
-                if address not in self.upper_neighbours:
-                    return
-                del self.upper_neighbours[self.upper_neighbours.index(address)]
-                logger.info('Upper neighbour %s removed'%address)
-            else:
+            neighbours = self.__neighbours.get(neighbour_type, None)
+            if neighbours is None:
                 raise OperException('Neigbour type "%s" is invalid!'%neighbour_type)
+
+            for optype, n_list in neighbours.items():
+                try:
+                    del n_list[n_list.index(address)]
+                    logger.info('%s neighbour %s with type "%s" is removed'%(NT_MAP[neighbour_type], address, optype))
+                except ValueError, err:
+                    pass
         finally:
             self.__lock.release()
 
-    def get_neighbours(self, neighbour_type):
+
+    def get_neighbours(self, neighbour_type, optype=None):
         self.__lock.acquire()
         try:
-            if neighbour_type == NT_SUPERIOR:
-                return copy.copy(self.superior_neighbours)
-            elif neighbour_type == NT_UPPER:
-                return copy.copy(self.upper_neighbours)
-            else:
+            neighbours = self.__neighbours.get(neighbour_type, None)
+            if neighbours is None:
                 raise OperException('Neigbour type "%s" is invalid!'%neighbour_type)
+
+            if not neighbours:
+                return []
+
+            if optype:
+                return neighbours.get(optype)
+
+            ret_list = []
+            for types_list in neighbours.values():
+                ret_list += types_list
+
+            return ret_list
         finally:
             self.__lock.release()
 
@@ -290,6 +305,7 @@ class Operator:
 
     def call_network(self, packet):
         packet.sender = None
+        packet.is_multicast = True
 
         return self.fri_client.call(self.self_address, packet)
 
@@ -406,7 +422,11 @@ class Operator:
 
             operation_obj = self.__operations.get(packet.method, None)
             if operation_obj is None:
-                raise OperException('Method "%s" does not implemented!'%packet.method)
+                if packet.is_multicast:
+                    self._send_to_neighbours(packet)
+                    return
+                else:
+                    raise OperException('Method "%s" does not implemented!'%packet.method)
 
             operation_obj.check_role(role)
 
@@ -437,7 +457,8 @@ class Operator:
             if self.__stat is not None and t0:
                 self._lock()
                 try:
-                    self.__stat[packet.method].update(datetime.now()-t0)
+                    if packet.method in self.__stat:
+                        self.__stat[packet.method].update(datetime.now()-t0)
                 finally:
                     self._unlock()
 
@@ -458,7 +479,7 @@ class Operator:
 
         operation_obj = self.__operations.get(operation, None)
         if operation_obj is None:
-            raise OperException('Method "%s" does not implemented!'%operation)
+            return
 
         try:
             operation_obj.after_process(packet, ret_packet)
@@ -483,8 +504,10 @@ class Operator:
             self.__lock.release()
 
         operation_obj = self.__operations.get(operation, None)
+
         if operation_obj is None:
-            raise OperException('Method "%s" does not implemented!'%operation)
+            if sender:
+                return self.send_to_sender(sender, packet)
 
         s_packet = None
         try:

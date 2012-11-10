@@ -135,9 +135,9 @@ class DiscoveryOperation(OperationBase):
         logger.info('Discovered neigbours: %s and %s'%(self.__new_superior, self.__new_upper))
 
         parameters = { 'neighbour_type': NT_SUPERIOR, 'operation': MNO_APPEND,
-                        'node_address': self.operator.self_address }
+                        'node_address': self.operator.self_address, 'operator_type': self.operator.OPTYPE }
         self._init_operation(self.__new_superior, 'ManageNeighbour', parameters)
 
         parameters = { 'neighbour_type': NT_UPPER, 'operation': MNO_APPEND,
-                        'node_address': self.operator.self_address }
+                        'node_address': self.operator.self_address, 'operator_type': self.operator.OPTYPE }
         self._init_operation(self.__new_upper, 'ManageNeighbour', parameters)

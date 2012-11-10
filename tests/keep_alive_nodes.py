@@ -4,6 +4,7 @@ import os
 import logging
 import json
 import random
+from fabnet.core.constants import NT_UPPER, NT_SUPERIOR
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 constants.KEEP_ALIVE_MAX_WAIT_TIME = 0.2
@@ -52,10 +53,10 @@ class TestKeepAlive(unittest.TestCase):
             time.sleep(3)
             server1 = None
 
-            self.assertEqual(operator.upper_neighbours, ['127.0.0.1:1987'])
-            self.assertEqual(operator.superior_neighbours, ['127.0.0.1:1987'])
-            self.assertEqual(operator1.upper_neighbours, [])
-            self.assertEqual(operator1.superior_neighbours, [])
+            self.assertEqual(operator.get_neighbours(NT_UPPER), ['127.0.0.1:1987'])
+            self.assertEqual(operator.get_neighbours(NT_SUPERIOR), ['127.0.0.1:1987'])
+            self.assertEqual(operator1.get_neighbours(NT_UPPER), [])
+            self.assertEqual(operator1.get_neighbours(NT_SUPERIOR), [])
         finally:
             if server1:
                 server1.stop()

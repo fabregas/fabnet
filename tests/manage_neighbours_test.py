@@ -27,13 +27,13 @@ class TestServerThread(threading.Thread):
             n_type = random.randint(1, 2)
 
             if random.randint(0, 1):
-                d = {"sender": node, "parameters": {"node_address": node, "operation": operation, "neighbour_type": n_type}, "method": "ManageNeighbour"}
+                d = {"sender": node, "parameters": {"operator_type":"DHT", "node_address": node, "operation": operation, "neighbour_type": n_type}, "method": "ManageNeighbour"}
                 packet = FabnetPacketRequest(**d)
                 print self.manage_neighbours.process(packet).ret_parameters
             else:
                 d_append = [True, False][random.randint(0, 1)]
                 d_remove = [True, False][random.randint(0, 1)]
-                d = {"sender": node, "ret_parameters": {"node_address": node, "operation": operation, "neighbour_type": n_type, 'dont_append': d_append, 'dont_remove': d_remove}, "method": "ManageNeighbour"}
+                d = {"sender": node, "ret_parameters": {"operator_type":"DHT", "node_address": node, "operation": operation, "neighbour_type": n_type, 'dont_append': d_append, 'dont_remove': d_remove}, "method": "ManageNeighbour"}
                 packet = FabnetPacketResponse(**d)
                 print self.manage_neighbours.callback(packet)
 
