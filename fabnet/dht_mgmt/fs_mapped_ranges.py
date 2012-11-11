@@ -183,6 +183,7 @@ class FSHashRanges:
         self.__parallel_writes = SafeCounter()
         self.__block_flag = threading.Event()
         self.__no_free_space_flag = threading.Event()
+        self.__move_lock = threading.Lock()
         self.__ret_range_i = None
 
     def block_for_write(self):
@@ -435,58 +436,67 @@ class FSHashRanges:
 
 
     def extend(self, start_key, end_key):
-        start = self.__start
-        end = self.__end
-        start_key = self._long_key(start_key)
-        end_key = self._long_key(end_key)
-        if start_key >= end_key:
-            raise FSHashRangesException('Bad subrange [%040x-%040x]'%(start_key, end_key))
-
-        if self.__start == end_key+1:
-            start = start_key
-        elif self.__end == start_key-1:
-            end = end_key
-        else:
-            raise FSHashRangesException('Bad range for extend [%040x-%040x]'%(start_key, end_key))
-
-        self._block_range()
-        self._wait_write_buffers()
-        h_range = FSHashRanges(start, end, self.__save_path)
+        self.__move_lock.acquire()
         try:
-            self.move_to_reservation()
-        except Exception, err:
-            self.restore_from_reservation()
-            self._unblock_range()
-            raise err
+            start = self.__start
+            end = self.__end
+            start_key = self._long_key(start_key)
+            end_key = self._long_key(end_key)
+            if start_key >= end_key:
+                raise FSHashRangesException('Bad subrange [%040x-%040x]'%(start_key, end_key))
 
-        h_range.restore_from_reservation()
+            if self.__start == end_key+1:
+                start = start_key
+            elif self.__end == start_key-1:
+                end = end_key
+            else:
+                raise FSHashRangesException('Bad range for extend [%040x-%040x]'%(start_key, end_key))
+
+            self._block_range()
+            self._wait_write_buffers()
+            h_range = FSHashRanges(start, end, self.__save_path)
+            try:
+                self.move_to_reservation()
+            except Exception, err:
+                self.restore_from_reservation()
+                self._unblock_range()
+                raise err
+
+            h_range.restore_from_reservation()
+        finally:
+            self.__move_lock.release()
+
         return h_range
 
 
     def split_range(self, start_key, end_key):
-        start_key = self._long_key(start_key)
-        end_key = self._long_key(end_key)
-        if start_key == self.__start:
-            split_key = end_key
-            self.__ret_range_i = 0
-        elif end_key == self.__end:
-            split_key = start_key
-            self.__ret_range_i = 1
-        else:
-            raise FSHashRangesException('Bad subrange [%040x-%040x]'%(start_key, end_key))
+        self.__move_lock.acquire()
+        try:
+            start_key = self._long_key(start_key)
+            end_key = self._long_key(end_key)
+            if start_key == self.__start:
+                split_key = end_key
+                self.__ret_range_i = 0
+            elif end_key == self.__end:
+                split_key = start_key
+                self.__ret_range_i = 1
+            else:
+                raise FSHashRangesException('Bad subrange [%040x-%040x]'%(start_key, end_key))
 
-        if not self._in_range(split_key):
-            FSHashRangesNotFound('No key %040x found in range'%split_key)
+            if not self._in_range(split_key):
+                FSHashRangesNotFound('No key %040x found in range'%split_key)
 
-        key_long = split_key
-        first_rg = FSHashRanges(self.__start, key_long-1, self.__save_path)
-        second_rg = FSHashRanges(key_long, self.__end, self.__save_path)
+            key_long = split_key
+            first_rg = FSHashRanges(self.__start, key_long-1, self.__save_path)
+            second_rg = FSHashRanges(key_long, self.__end, self.__save_path)
 
-        self.__child_ranges.concat([first_rg, second_rg])
+            self.__child_ranges.concat([first_rg, second_rg])
 
-        self._wait_write_buffers()
+            self._wait_write_buffers()
 
-        self.__split_data()
+            self.__split_data()
+        finally:
+            self.__move_lock.release()
 
         return self.get_subranges()
 
@@ -509,13 +519,17 @@ class FSHashRanges:
         return False
 
     def __iter_data_blocks(self, proc_dir, foreign_only=False, header_only=False):
-        files = os.listdir(proc_dir)
-        for digest in files:
-            if foreign_only and self._in_range(digest):
-                continue
-            file_path = os.path.join(proc_dir, digest)
-            if self._ensure_not_write(file_path):
-                yield digest, self.__read_data(file_path, header_only), file_path
+        self.__move_lock.acquire()
+        try:
+            files = os.listdir(proc_dir)
+            for digest in files:
+                if foreign_only and self._in_range(digest):
+                    continue
+                file_path = os.path.join(proc_dir, digest)
+                if self._ensure_not_write(file_path):
+                    yield digest, self.__read_data(file_path, header_only), file_path
+        finally:
+            self.__move_lock.release()
 
     def iter_reservation(self, header_only=False):
         return self.__iter_data_blocks(self.__reservation_dir, header_only=header_only)
@@ -527,24 +541,28 @@ class FSHashRanges:
         return self.__iter_data_blocks(self.__range_dir, header_only=header_only)
 
     def join_subranges(self):
-        child_ranges = self.__child_ranges.copy()
-        if not child_ranges:
-            return
+        self.__move_lock.acquire()
+        try:
+            child_ranges = self.__child_ranges.copy()
+            if not child_ranges:
+                return
 
-        for child_range in child_ranges:
-            child_range._block_range()
+            for child_range in child_ranges:
+                child_range._block_range()
 
-        for child_range in child_ranges:
-            child_range._wait_write_buffers()
+            for child_range in child_ranges:
+                child_range._wait_write_buffers()
 
-        self.__join_data(child_ranges)
+            self.__join_data(child_ranges)
 
-        for child_range in child_ranges:
-            child_range._destroy()
+            for child_range in child_ranges:
+                child_range._destroy()
 
-        self.__child_ranges.clear()
+            self.__child_ranges.clear()
 
-        self.__ret_range_i = None
+            self.__ret_range_i = None
+        finally:
+            self.__move_lock.release()
 
 
     def get_subranges(self):

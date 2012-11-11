@@ -15,6 +15,7 @@ from datetime import datetime
 
 from fabnet.utils.db_conn import DBConnection
 from fabnet.core.operator import Operator
+from fabnet.utils.logger import logger
 
 MONITOR_DB = 'monitor.db'
 
@@ -41,7 +42,9 @@ class MonitorOperator(Operator):
         """
         conn = DBConnection(self.__monitor_db_path)
         try:
-            conn.execute("INSERT INTO notification (node_address, notify_type, notify_msg, notify_dt) VALUES ('%s', '%s', '%s', '%s')"% \
+
+            logger.info('[NOTIFICATION][%s][%s] %s'%(notify_type, notify_provider, message))
+            conn.execute("INSERT INTO notification (node_address, notify_type, notify_msg, notify_dt) VALUES (?, ?, ?, ?)", \
                         (notify_provider, notify_type, message, datetime.now()))
         finally:
             conn.close()

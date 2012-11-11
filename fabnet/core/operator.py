@@ -28,8 +28,7 @@ from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPER
                 KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, \
                 KEEP_ALIVE_MAX_WAIT_TIME, ONE_DIRECT_NEIGHBOURS_COUNT, \
                 NO_TOPOLOGY_DYSCOVERY_WINDOW, DISCOVERY_TOPOLOGY_TIMEOUT, \
-                MIN_TOPOLOGY_DISCOVERY_WAIT, MAX_TOPOLOGY_DISCOVERY_WAIT, \
-                ET_ALERT, ET_INFO
+                MIN_TOPOLOGY_DISCOVERY_WAIT, MAX_TOPOLOGY_DISCOVERY_WAIT
 
 from fabnet.operations.manage_neighbours import ManageNeighbour
 from fabnet.operations.discovery_operation import DiscoveryOperation
@@ -84,6 +83,9 @@ class Operator:
 
     @classmethod
     def update_operations_map(cls, operations_map):
+        base_map = copy.copy(cls.OPERATIONS_MAP)
+        cls.OPERATIONS_MAP = {}
+        cls.OPERATIONS_MAP.update(base_map)
         cls.OPERATIONS_MAP.update(operations_map)
 
     def __init__(self, self_address, home_dir='/tmp/', key_storage=None, is_init_node=False, node_name='unknown-node'):
@@ -142,18 +144,13 @@ class Operator:
             self.__unbind_neighbours(uppers, NT_SUPERIOR)
             self.__unbind_neighbours(superiors, NT_UPPER)
         except Exception, err:
-            logger.write('Operator stopping failed. Details: %s'%err)
+            logger.error('Operator stopping failed. Details: %s'%err)
 
     def on_network_notify(self, notify_type, notify_provider, message):
         """This method should be imlemented for some actions
             on received network nofitications
         """
-        if notify_type == ET_ALERT:
-            logger.warning('[ALERT][%s] %s'%(notify_provider, message))
-        elif notify_type == ET_INFO:
-            logger.info('[INFORMATION][%s] %s'%(notify_provider, message))
-        else:
-            logger.info('[NOTIFICATION.%s][%s] %s'%(notify_type, notify_provider, message))
+        pass
 
     def has_type(self, optype):
         if optype == self.OPTYPE:

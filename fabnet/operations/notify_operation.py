@@ -14,7 +14,7 @@ import os
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.utils.logger import logger
-from fabnet.core.constants import NODE_ROLE
+from fabnet.core.constants import NODE_ROLE, ET_INFO, ET_ALERT
 
 
 class NotifyOperation(OperationBase):
@@ -45,6 +45,14 @@ class NotifyOperation(OperationBase):
                 raise Exception('event_provider does not found!')
 
             event_message = packet.parameters.get('event_message', None)
+
+            if packet.sender is None: #this is sender
+                if event_type == ET_ALERT:
+                    logger.warning('[ALERT][%s] %s'%(event_provider, event_message))
+                elif event_type == ET_INFO:
+                    logger.info('[INFORMATION][%s] %s'%(event_provider, event_message))
+                else:
+                    logger.info('[NOTIFICATION.%s][%s] %s'%(event_type, event_provider, event_message))
 
             self.operator.on_network_notify(event_type, event_provider, event_message)
         except Exception, err:
