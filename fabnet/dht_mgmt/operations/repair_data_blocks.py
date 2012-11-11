@@ -30,18 +30,34 @@ class RepairDataBlocksOperation(OperationBase):
         self.__failed_repair_foreign_blocks = 0
         self.__processed_local_blocks = 0
 
-    def __init_stat(self):
+    def __init_stat(self, params):
         self.__processes_data_blocks = 0
         self.__invalid_local_blocks = 0
         self.__repaired_foreign_blocks = 0
         self.__failed_repair_foreign_blocks = 0
         self.__processed_local_blocks = 0
 
+        self.__check_range_start = params.get('check_range_start', None)
+        self.__check_range_end = params.get('check_range_end', None)
+        if self.__check_range_start:
+            self.__check_range_start = long(self.__check_range_start, 16)
+        if self.__check_range_end:
+            self.__check_range_end = long(self.__check_range_end, 16)
+
     def __get_stat(self):
         return 'processed_local_blocks=%s, invalid_local_blocks=%s, '\
                 'repaired_foreign_blocks=%s, failed_repair_foreign_blocks=%s'%\
                 (self.__processed_local_blocks, self.__invalid_local_blocks,
                 self.__repaired_foreign_blocks, self.__failed_repair_foreign_blocks)
+
+    def _in_check_range(self, key):
+        if not self.__check_range_start and not self.__check_range_end:
+            return True
+
+        if self.__check_range_start <= long(key, 16) <= self.__check_range_end:
+            return True
+
+        return False
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
@@ -53,7 +69,7 @@ class RepairDataBlocksOperation(OperationBase):
         """
         self._lock()
         try:
-            self.__init_stat()
+            self.__init_stat(packet.parameters)
             self.__repair_process()
             self._throw_event(ET_INFO, 'RepairDataBlocks statistic', self.__get_stat())
         except Exception, err:
@@ -68,12 +84,12 @@ class RepairDataBlocksOperation(OperationBase):
 
         logger.info('[RepairDataBlocks] Processing local DHT range...')
         for key, header, _ in dht_range.iter_data_blocks(header_only=True):
-            self.__process_data_block(key, header, is_replica=False)
+            self.__process_data_block(key, header, False)
         logger.info('[RepairDataBlocks] Local DHT range is processed!')
 
         logger.info('[RepairDataBlocks] Processing local replica data...')
         for key, header, _ in dht_range.iter_replicas(foreign_only=False, header_only=True):
-            self.__process_data_block(key, header, is_replica=True)
+            self.__process_data_block(key, header, True)
         logger.info('[RepairDataBlocks] Local replica data is processed!')
 
     def __process_data_block(self, key, raw_header, is_replica=False):
@@ -93,13 +109,15 @@ class RepairDataBlocksOperation(OperationBase):
             logger.error('[RepairDataBlocks] %s'%err)
             return
 
-        if is_replica:
+        if is_replica and self._in_check_range(data_keys[0]):
             self.__check_data_block(key, is_replica,  data_keys[0], checksum, is_replica=False)
 
         for repl_key in data_keys[1:]:
             if repl_key == key:
                 continue
-            self.__check_data_block(key, is_replica, repl_key, checksum, is_replica=True)
+
+            if self._in_check_range(repl_key):
+                self.__check_data_block(key, is_replica, repl_key, checksum, is_replica=True)
 
     def __validate_key(self, key):
         try:

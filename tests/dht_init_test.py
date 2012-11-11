@@ -481,7 +481,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             server = None
             time.sleep(1)
 
-            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters={})
+            params = {'check_range_start': '%040x'%node86_range.get_start(), 'check_range_end': '%040x'%node86_range.get_end()}
+            packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters=params)
             rcode, rmsg = client.call('127.0.0.1:1987', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
             time.sleep(1.5)

@@ -190,7 +190,7 @@ def destroy_data(address, nodenum):
     return size
 
 
-def call_repair_data(address, out_streem):
+def call_repair_data(address, out_streem, addr=None):
     dbpath = os.path.join(monitoring_home, MONITOR_DB)
     dbconn = DBConnection(dbpath)
     dbconn.execute("DELETE FROM notification")
@@ -198,22 +198,29 @@ def call_repair_data(address, out_streem):
     t0 = datetime.now()
 
     client = FriClient()
-    packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters={})
+    params = {}
+    if addr:
+        packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+        ret_packet = client.call_sync(addr, packet_obj)
+        dht_info = ret_packet.ret_parameters['dht_info']
+        start = dht_info['range_start']
+        end = dht_info['range_end']
+        params = {'check_range_start': '%040x'%start, 'check_range_end': '%040x'%end}
+
+    packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters=params)
     rcode, rmsg = client.call(address, packet_obj)
     if rcode != 0:
         raise Exception('RepairDataBlocks does not started. Details: %s'%rmsg)
 
     cnt = 0
     while cnt != len(hdds_size):
-        cnt = dbconn.select_one("SELECT count(*) FROM notification WHERE notify_type='%s'"%ET_INFO)
+        cnt = dbconn.select_one("SELECT count(*) FROM notification WHERE notify_topic='RepairDataBlocks statistic'")
         time.sleep(.2)
 
     dt = datetime.now() - t0
 
-    events = dbconn.select("SELECT node_address, notify_type, notify_msg, notify_dt FROM notification")
+    events = dbconn.select("SELECT node_address, notify_type, notify_msg, notify_dt FROM notification WHERE notify_topic='RepairDataBlocks statistic'")
     for event in events:
-        if event[1] != ET_INFO:
-            raise Exception('RepairDataBlocks are failed at %s: %s'%(event[0], event[2]))
         out_streem.write('[%s][%s][%s] %s\n'%(event[0], event[3], event[1], event[2]))
 
         packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
@@ -257,9 +264,20 @@ if __name__ == '__main__':
 
             destroyed = destroy_data(addresses[1], 1)
             destroyed += destroy_data(addresses[3], 3)
-            stat_f_obj.write('\n\n#process RepairDataBlocks operation after %.2f GB data lost from one node...\n'%(destroyed/1024./1024/1024))
+            stat_f_obj.write('\n\n#process RepairDataBlocks operation after %.2f GB data lost from 2 nodes...\n'%(destroyed/1024./1024/1024))
             proc_time = call_repair_data(addresses[0], stat_f_obj)
             stat_f_obj.write('Process time: %s\n'%proc_time)
+
+            destroyed = destroy_data(addresses[1], 1)
+            stat_f_obj.write('\n\n#process RepairDataBlocks operation after %.2f GB data lost from one node (CHECK ONE RANGE ONLY))...\n'%(destroyed/1024./1024/1024))
+            proc_time = call_repair_data(addresses[0], stat_f_obj, addresses[1])
+            stat_f_obj.write('Process time: %s\n'%proc_time)
+
+            test_network(addresses, stat_f_obj, 5)
+            stat_f_obj.write('\n\n#process RepairDataBlocks operation over ALL valid data (low free space on nodes)...\n')
+            proc_time = call_repair_data(addresses[0], stat_f_obj)
+            stat_f_obj.write('Process time: %s\n'%proc_time)
+
     finally:
         destroy_network(processes)
         stat_f_obj.close()
