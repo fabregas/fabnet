@@ -10,10 +10,10 @@ Copyright (C) 2012 Konstantin Andrusenko
 @date September 7, 2012
 """
 import os
-import sqlite3
 import threading
 from datetime import datetime
 
+from fabnet.utils.db_conn import DBConnection
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
@@ -42,13 +42,8 @@ class TopologyCognition(OperationBase):
         db = os.path.join(self.operator.home_dir, TOPOLOGY_DB)
         if not os.path.exists(db):
             return {}
-        conn = sqlite3.connect(db)
-
-        curs = conn.cursor()
-        curs.execute("SELECT node_address, superiors, uppers, old_data FROM fabnet_nodes")
-        rows = curs.fetchall()
-
-        curs.close()
+        conn = DBConnection(db)
+        rows = conn.select("SELECT node_address, superiors, uppers, old_data FROM fabnet_nodes")
         conn.close()
 
         nodes = {}
@@ -68,14 +63,11 @@ class TopologyCognition(OperationBase):
         """
         if packet.sender is None:
             self.__balanced = threading.Event()
-            conn = sqlite3.connect(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
+            conn = DBConnection(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
 
-            curs = conn.cursor()
-            curs.execute("CREATE TABLE IF NOT EXISTS fabnet_nodes(node_address TEXT, node_name TEXT, superiors TEXT, uppers TEXT, old_data INT)")
-            curs.execute("UPDATE fabnet_nodes SET old_data=1")
-            conn.commit()
+            conn.execute("CREATE TABLE IF NOT EXISTS fabnet_nodes(node_address TEXT, node_name TEXT, superiors TEXT, uppers TEXT, old_data INT)")
+            conn.execute("UPDATE fabnet_nodes SET old_data=1")
 
-            curs.close()
             conn.close()
 
         return packet
@@ -130,23 +122,20 @@ class TopologyCognition(OperationBase):
         if (node_address is None) or (superior_neighbours is None) or (upper_neighbours is None):
             raise Exception('TopologyCognition response packet is invalid! Packet: %s'%str(packet.to_dict()))
 
-        conn = sqlite3.connect(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
-        curs = conn.cursor()
+
+        conn = DBConnection(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
 
         self._lock()
         try:
-            curs.execute("SELECT old_data FROM fabnet_nodes WHERE node_address='%s'" % node_address)
-            rows = curs.fetchall()
+            rows = conn.select("SELECT old_data FROM fabnet_nodes WHERE node_address='%s'" % node_address)
             if rows:
-                curs.execute("UPDATE fabnet_nodes SET node_name='%s', superiors='%s', uppers='%s', old_data=0 WHERE node_address='%s'"% \
+                conn.execute("UPDATE fabnet_nodes SET node_name='%s', superiors='%s', uppers='%s', old_data=0 WHERE node_address='%s'"% \
                     (node_name, ','.join(superior_neighbours), ','.join(upper_neighbours), node_address))
             else:
-                curs.execute("INSERT INTO fabnet_nodes VALUES ('%s', '%s', '%s', '%s', 0)"% \
+                conn.execute("INSERT INTO fabnet_nodes VALUES ('%s', '%s', '%s', '%s', 0)"% \
                         (node_address, node_name, ','.join(superior_neighbours), ','.join(upper_neighbours)))
-            conn.commit()
         finally:
             self._unlock()
-            curs.close()
             conn.close()
 
         if packet.ret_parameters.get('need_rebalance', False):

@@ -18,6 +18,7 @@ constants.MONITOR_DHT_RANGES_TIMEOUT = 1
 constants.CHECK_HASH_TABLE_TIMEOUT = 1
 constants.WAIT_FILE_MD_TIMEDELTA = 0.1
 constants.WAIT_DHT_TABLE_UPDATE = .2
+from fabnet.utils.db_conn import DBConnection
 from fabnet.monitor.monitor_operator import MonitorOperator, MONITOR_DB
 from fabnet.dht_mgmt.dht_operator import DHTOperator
 from fabnet.core.operator import OPERMAP
@@ -36,8 +37,6 @@ from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTabl
 
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.constants import DS_NORMALWORK, RC_OLD_DATA
-
-import sqlite3
 
 logger.setLevel(logging.DEBUG)
 
@@ -459,20 +458,15 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(rcode, 0, rmsg)
             time.sleep(1.5)
 
-            conn = sqlite3.connect(os.path.join(monitor_home, MONITOR_DB))
-            curs = conn.cursor()
-            curs.execute('SELECT notify_type, node_address, notify_msg FROM notification')
-            events = curs.fetchall()
-            curs.execute('DELETE FROM notification')
-            conn.commit()
-            curs.close()
-            conn.close()
+            conn = DBConnection(os.path.join(monitor_home, MONITOR_DB))
+            events = conn.select('SELECT notify_type, node_address, notify_msg FROM notification')
+            conn.execute('DELETE FROM notification')
 
             stat = 'processed_local_blocks=%i, invalid_local_blocks=0, repaired_foreign_blocks=0, failed_repair_foreign_blocks=0'
             self.assertEqual(len(events), 2)
             event86 = events[0]
             self.assertEqual(event86[0], ET_INFO)
-            self.assertEqual(event86[1], '127.0.0.1:1986')
+            self.assertEqual(event86[1], '127.0.0.1:1986', events)
             cnt86 = len(os.listdir(node86_range.get_range_dir())) + len(os.listdir(node86_range.get_replicas_dir()))
             self.assertTrue(stat%cnt86 in event86[2])
 
@@ -492,14 +486,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(rcode, 0, rmsg)
             time.sleep(1.5)
 
-            conn = sqlite3.connect(os.path.join(monitor_home, MONITOR_DB))
-            curs = conn.cursor()
-            curs.execute('SELECT notify_type, node_address, notify_msg FROM notification')
-            events = curs.fetchall()
-            curs.execute('DELETE FROM notification')
-            conn.commit()
-            curs.close()
-            conn.close()
+            events = conn.select('SELECT notify_type, node_address, notify_msg FROM notification')
+            conn.execute('DELETE FROM notification')
 
             self.assertEqual(len(events), 1)
             event87 = events[0]
@@ -518,14 +506,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(rcode, 0, rmsg)
             time.sleep(1.5)
 
-            conn = sqlite3.connect(os.path.join(monitor_home, MONITOR_DB))
-            curs = conn.cursor()
-            curs.execute('SELECT notify_type, node_address, notify_msg FROM notification')
-            events = curs.fetchall()
-            curs.execute('DELETE FROM notification')
-            conn.commit()
-            curs.close()
-            conn.close()
+            events = conn.select('SELECT notify_type, node_address, notify_msg FROM notification')
+            conn.execute('DELETE FROM notification')
 
             self.assertEqual(len(events), 1)
             event87 = events[0]
@@ -533,6 +515,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(event87[1], '127.0.0.1:1987')
             stat_rep = 'processed_local_blocks=%i, invalid_local_blocks=%i, repaired_foreign_blocks=%i, failed_repair_foreign_blocks=0'
             self.assertTrue(stat_rep%(cnt87+cnt86, 1, 2) in event87[2], event87[2])
+            conn.close()
         finally:
             if server:
                 server.stop()

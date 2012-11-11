@@ -10,7 +10,6 @@ Copyright (C) 2012 Konstantin Andrusenko
 @date Novenber 5, 2012
 """
 import os
-import sqlite3
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse

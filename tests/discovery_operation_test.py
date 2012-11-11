@@ -5,7 +5,7 @@ import logging
 import threading
 import json
 import random
-import  sqlite3
+from fabnet.utils.db_conn import DBConnection
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
@@ -129,14 +129,9 @@ class TestDiscoverytOperation(unittest.TestCase):
             time.sleep(1)
 
 
-            conn = sqlite3.connect('/tmp/fabnet_topology.db')
-
-            curs = conn.cursor()
-            curs.execute("SELECT node_address, node_name, superiors, uppers FROM fabnet_nodes")
-            rows = curs.fetchall()
-            conn.commit()
-
-            curs.close()
+            conn = DBConnection('/tmp/fabnet_topology.db')
+            conn.connect()
+            rows = conn.select("SELECT node_address, node_name, superiors, uppers FROM fabnet_nodes")
             conn.close()
             nodes = {}
             for row in rows:
