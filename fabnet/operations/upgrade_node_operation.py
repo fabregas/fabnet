@@ -48,7 +48,7 @@ class UpgradeNodeOperation(OperationBase):
             if ret != 0:
                 raise Exception('upgrade-node script failed!')
         except Exception, err:
-            self._throw_event(ET_ALERT, 'UpgradeNodeOperation failed: %s'%err)
+            self._throw_event(ET_ALERT, 'UpgradeNodeOperation failed', err)
             logger.error('[UpgradeNodeOperation] %s'%err)
         finally:
             os.chdir(old_curdir)

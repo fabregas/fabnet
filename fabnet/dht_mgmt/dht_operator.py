@@ -332,9 +332,9 @@ class MonitorDHTRanges(threading.Thread):
         elif percents >= DANGER_USED_SIZE_PERCENTS:
             if self.__notification_flag:
                 return
-            message = 'HDD usage: %s percents'%percents
+            message = '%s percents'%percents
             params = {'event_type': ET_ALERT, 'event_message': message,\
-                        'event_provider': self.operator.self_address}
+                      'event_topic': 'HDD usage', 'event_provider': self.operator.self_address}
             packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=self.operator.self_address)
             rcode, rmsg = self.operator.call_network(packet)
             if rcode:

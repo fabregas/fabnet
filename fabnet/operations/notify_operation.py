@@ -41,6 +41,7 @@ class NotifyOperation(OperationBase):
         try:
             event_type = packet.parameters.get('event_type', None)
             event_provider = packet.parameters.get('event_provider', None)
+            event_topic = packet.parameters.get('event_topic', None)
             if event_provider is None:
                 raise Exception('event_provider does not found!')
 
@@ -48,13 +49,13 @@ class NotifyOperation(OperationBase):
 
             if packet.sender is None: #this is sender
                 if event_type == ET_ALERT:
-                    logger.warning('[ALERT][%s] %s'%(event_provider, event_message))
+                    logger.warning('[ALERT][%s] *%s* %s'%(event_provider, event_topic, event_message))
                 elif event_type == ET_INFO:
-                    logger.info('[INFORMATION][%s] %s'%(event_provider, event_message))
+                    logger.info('[INFORMATION][%s] *%s* %s'%(event_provider, event_topic,  event_message))
                 else:
-                    logger.info('[NOTIFICATION.%s][%s] %s'%(event_type, event_provider, event_message))
+                    logger.info('[NOTIFICATION.%s][%s] *%s* %s'%(event_type, event_provider, event_topic, event_message))
 
-            self.operator.on_network_notify(event_type, event_provider, event_message)
+            self.operator.on_network_notify(event_type, event_provider, event_topic, event_message)
         except Exception, err:
             logger.error('[NotifyOperation] %s'%err)
 

@@ -146,7 +146,7 @@ class Operator:
         except Exception, err:
             logger.error('Operator stopping failed. Details: %s'%err)
 
-    def on_network_notify(self, notify_type, notify_provider, message):
+    def on_network_notify(self, notify_type, notify_provider, notify_topic, message):
         """This method should be imlemented for some actions
             on received network nofitications
         """
@@ -432,6 +432,7 @@ class Operator:
             message_id = packet.message_id
             n_packet = operation_obj.before_resend(packet)
             if n_packet:
+                n_packet = copy.copy(n_packet)
                 n_packet.message_id = message_id
                 n_packet.sync = False
                 self._send_to_neighbours(n_packet)

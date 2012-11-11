@@ -55,9 +55,9 @@ class RepairDataBlocksOperation(OperationBase):
         try:
             self.__init_stat()
             self.__repair_process()
-            self._throw_event(ET_INFO, 'RepairDataBlocks statistic: %s'%self.__get_stat())
+            self._throw_event(ET_INFO, 'RepairDataBlocks statistic', self.__get_stat())
         except Exception, err:
-            self._throw_event(ET_ALERT, 'RepairDataBlocks failed: %s'%err)
+            self._throw_event(ET_ALERT, 'RepairDataBlocks error', err)
         finally:
             self._unlock()
 

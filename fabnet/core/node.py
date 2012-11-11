@@ -66,7 +66,8 @@ class Node:
             logger.warning('Neighbour %s does not respond!'%neighbour)
             return False
 
-        params = {'event_type': ET_INFO, 'event_message': 'Hello, fabnet!', 'event_provider': address}
+        params = {'event_type': ET_INFO, 'event_topic': 'NodeUpDown', \
+                'event_message': 'Hello, fabnet!', 'event_provider': address}
         packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=address)
         rcode, rmsg = self.server.operator.call_node(neighbour, packet)
         if rcode:
@@ -77,7 +78,8 @@ class Node:
     def stop(self):
         try:
             address = '%s:%s' % (self.hostname, self.port)
-            params = {'event_type': ET_INFO, 'event_message': 'Goodbye, fabnet :(', 'event_provider': address}
+            params = {'event_type': ET_INFO, 'event_topic': 'NodeUpDown', \
+                        'event_message': 'Goodbye, fabnet :(', 'event_provider': address}
             packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=address)
             rcode, rmsg = self.server.operator.call_network(packet)
             if rcode:

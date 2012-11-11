@@ -219,7 +219,7 @@ def call_repair_data(address, out_streem):
         packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
         client = FriClient()
         ret_packet = client.call_sync(event[0], packet_obj)
-        out_streem.write('[%s] stat: %s\n'%(event[0], ret_packet.parameters['methods_stat']))
+        out_streem.write('[%s] stat: %s\n'%(event[0], ret_packet.ret_parameters['methods_stat']))
 
     return dt
 
