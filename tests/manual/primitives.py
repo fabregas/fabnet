@@ -21,10 +21,6 @@ from fabnet.monitor.monitor_operator import MONITOR_DB
 
 from Crypto import Random
 
-GB_1 = 1024*1024
-GB_2 = 2*GB_1
-GB_1_5 = int(1.5*GB_1)
-
 
 monitoring_home = '/tmp/monitor_node_home'
 
@@ -46,7 +42,7 @@ def destroy_fake_hdd(name, dev='/dev/loop0'):
     os.system('sudo rm /tmp/%s'%name)
 
 
-def create_network(ip_addr):
+def create_network(ip_addr, hdds_size):
     addresses = []
     processes = []
 
@@ -79,6 +75,7 @@ def create_network(ip_addr):
     processes.append(p)
     logger.warning('{SNP} PROCESS STARTED')
 
+    time.sleep(3)
     print 'Network is started!'
     return addresses, processes
 
@@ -95,13 +92,16 @@ def destroy_network(processes):
     print 'Virtual HDD devices are destroyed!'
 
 
-def test_network(addresses, stat_buffer, perc=10):
+def put_data_to_network(addresses, stat_buffer, perc=10):
     client = FriClient()
     rs = 2**160
     print '-'*100
     for address in addresses:
         packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
         ret_packet = client.call_sync(address, packet_obj)
+        if ret_packet.ret_code:
+            raise Exception('ERROR! NodeStatistic failed on %s with message: %s'%(address, ret_packet.ret_message))
+
         dht_info = ret_packet.ret_parameters['dht_info']
         start = dht_info['range_start']
         end = dht_info['range_end']
@@ -128,29 +128,7 @@ def test_network(addresses, stat_buffer, perc=10):
                 print 'ERROR! Cant put data block to network! Details: %s'%ret_packet.ret_message
 
 
-        full_cnt = 0
-        dht_info_lst = []
-        max_perc = 0
-        for address in addresses:
-            packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
-            for i in xrange(3):
-                ret_packet = client.call_sync(address, packet_obj)
-                if ret_packet.ret_code == 0:
-                    break
-            else:
-                print 'ERROR! NodeStatistic failed on %s with message: %s'%(address, ret_packet.ret_message)
-                return
-
-            dht_info = ret_packet.ret_parameters['dht_info']
-
-            if max_perc < dht_info['free_size_percents']:
-                max_perc = dht_info['free_size_percents']
-
-            if dht_info['free_size_percents'] < perc:
-                full_cnt += 1
-
-            dht_info_lst.append((address, dht_info))
-
+        max_perc, full_cnt, dht_info_lst = get_maximum_free_space(addresses, perc)
         if full_cnt:
             print '='*100
             for address, dht_info in dht_info_lst:
@@ -169,6 +147,31 @@ def test_network(addresses, stat_buffer, perc=10):
                 return False
             return True
 
+def get_maximum_free_space(addresses, perc=0):
+    max_perc = 0
+    full_cnt = 0
+    dht_info_lst = []
+    client = FriClient()
+    for address in addresses:
+        packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+        for i in xrange(3):
+            ret_packet = client.call_sync(address, packet_obj)
+            if ret_packet.ret_code == 0:
+                break
+        else:
+            raise Exception('ERROR! NodeStatistic failed on %s with message: %s'%(address, ret_packet.ret_message))
+
+        dht_info = ret_packet.ret_parameters['dht_info']
+
+        if max_perc < dht_info['free_size_percents']:
+            max_perc = dht_info['free_size_percents']
+
+        if dht_info['free_size_percents'] < perc:
+            full_cnt += 1
+
+        dht_info_lst.append((address, dht_info))
+
+    return max_perc, full_cnt, dht_info_lst
 
 def destroy_data(address, nodenum):
     homedir = '/tmp/mnt_node%02i'%nodenum
@@ -190,22 +193,27 @@ def destroy_data(address, nodenum):
     return size
 
 
-def call_repair_data(address, out_streem, addr=None):
+def call_repair_data(address, out_streem, expect_res, invalid_node=None):
     dbpath = os.path.join(monitoring_home, MONITOR_DB)
     dbconn = DBConnection(dbpath)
     dbconn.execute("DELETE FROM notification")
 
-    t0 = datetime.now()
-
     client = FriClient()
     params = {}
-    if addr:
+    packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+    ret_packet = client.call_sync(address, packet_obj)
+    dht_info = ret_packet.ret_parameters['dht_info']
+    free_size = dht_info['free_size_percents']
+    if invalid_node:
         packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
-        ret_packet = client.call_sync(addr, packet_obj)
+        ret_packet = client.call_sync(invalid_node, packet_obj)
         dht_info = ret_packet.ret_parameters['dht_info']
         start = dht_info['range_start']
         end = dht_info['range_end']
-        params = {'check_range_start': '%040x'%start, 'check_range_end': '%040x'%end}
+        params = {'check_range_start': start, 'check_range_end': end}
+
+
+    t0 = datetime.now()
 
     packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters=params)
     rcode, rmsg = client.call(address, packet_obj)
@@ -213,8 +221,11 @@ def call_repair_data(address, out_streem, addr=None):
         raise Exception('RepairDataBlocks does not started. Details: %s'%rmsg)
 
     cnt = 0
-    while cnt != len(hdds_size):
-        cnt = dbconn.select_one("SELECT count(*) FROM notification WHERE notify_topic='RepairDataBlocks statistic'")
+    while cnt != expect_res:
+        try:
+            cnt = dbconn.select_one("SELECT count(*) FROM notification WHERE notify_topic='RepairDataBlocks statistic'")
+        except Exception, err:
+            print 'DB ERROR: %s'%err
         time.sleep(.2)
 
     dt = datetime.now() - t0
@@ -223,63 +234,19 @@ def call_repair_data(address, out_streem, addr=None):
     for event in events:
         out_streem.write('[%s][%s][%s] %s\n'%(event[0], event[3], event[1], event[2]))
 
-        packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
-        client = FriClient()
-        ret_packet = client.call_sync(event[0], packet_obj)
-        out_streem.write('[%s] stat: %s\n'%(event[0], ret_packet.ret_parameters['methods_stat']))
-
-    return dt
+        #packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+        #client = FriClient()
+        #ret_packet = client.call_sync(event[0], packet_obj)
+        #out_streem.write('[%s] stat: %s\n'%(event[0], ret_packet.ret_parameters['methods_stat']))
 
 
+    packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+    ret_packet = client.call_sync(address, packet_obj)
+    dht_info = ret_packet.ret_parameters['dht_info']
+    post_free_size = dht_info['free_size_percents']
 
-if __name__ == '__main__':
-    is_pull_test = False
-    if is_pull_test:
-        hdds_size = [GB_1_5, GB_1, GB_1, GB_2, GB_2, GB_1, GB_1_5, GB_2]
-    else:
-        hdds_size = [GB_2, GB_2, GB_2, GB_2, GB_2, GB_2, GB_2, GB_2]
+    if post_free_size < free_size:
+        out_streem.write('INVALID RESTORED RANGE FREE SIZE. BEFORE=%s, AFTER=%s\n'%(free_size, post_free_size))
 
-    addresses, processes = create_network('127.0.0.1')
-    try:
-        time.sleep(3)
-        stat_f_obj = open('/tmp/pull_subranges_test_results.csv', 'w')
-        stat_f_obj.write('#Address, RangeLen, RangePart, FreeSpace\n')
-
-        if is_pull_test:
-            while True:
-                is_all_full = test_network(addresses, stat_f_obj)
-                if is_all_full:
-                    break
-                time.sleep(40)
-        else:
-            test_network(addresses, stat_f_obj, 25)
-            stat_f_obj.write('\n\n#process RepairDataBlocks operation over ALL valid data...\n')
-            proc_time = call_repair_data(addresses[0], stat_f_obj)
-            stat_f_obj.write('Process time: %s\n'%proc_time)
-
-            destroyed = destroy_data(addresses[1], 1)
-            stat_f_obj.write('\n\n#process RepairDataBlocks operation after %.2f GB data lost from one node...\n'%(destroyed/1024./1024/1024))
-            proc_time = call_repair_data(addresses[0], stat_f_obj)
-            stat_f_obj.write('Process time: %s\n'%proc_time)
-
-            destroyed = destroy_data(addresses[1], 1)
-            destroyed += destroy_data(addresses[3], 3)
-            stat_f_obj.write('\n\n#process RepairDataBlocks operation after %.2f GB data lost from 2 nodes...\n'%(destroyed/1024./1024/1024))
-            proc_time = call_repair_data(addresses[0], stat_f_obj)
-            stat_f_obj.write('Process time: %s\n'%proc_time)
-
-            destroyed = destroy_data(addresses[1], 1)
-            stat_f_obj.write('\n\n#process RepairDataBlocks operation after %.2f GB data lost from one node (CHECK ONE RANGE ONLY))...\n'%(destroyed/1024./1024/1024))
-            proc_time = call_repair_data(addresses[0], stat_f_obj, addresses[1])
-            stat_f_obj.write('Process time: %s\n'%proc_time)
-
-            test_network(addresses, stat_f_obj, 5)
-            stat_f_obj.write('\n\n#process RepairDataBlocks operation over ALL valid data (low free space on nodes)...\n')
-            proc_time = call_repair_data(addresses[0], stat_f_obj)
-            stat_f_obj.write('Process time: %s\n'%proc_time)
-
-    finally:
-        destroy_network(processes)
-        stat_f_obj.close()
-        print 'statistic saved to /tmp/pull_subranges_test_results.csv'
+    out_streem.write('Process time: %s\n'%dt)
 

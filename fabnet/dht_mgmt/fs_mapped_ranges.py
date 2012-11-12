@@ -613,7 +613,11 @@ class FSHashRanges:
         return stat.st_size + rest
 
     def get_range_size(self):
-        return sum([self.__get_file_size(os.path.join(self.__range_dir, f)) for f in os.listdir(self.__range_dir)])
+        self.__move_lock.acquire()
+        try:
+            return sum([self.__get_file_size(os.path.join(self.__range_dir, f)) for f in os.listdir(self.__range_dir)])
+        finally:
+            self.__move_lock.release()
 
     def get_replicas_size(self):
         return sum([self.__get_file_size(os.path.join(self.__replica_dir, f)) for f in os.listdir(self.__replica_dir)])
