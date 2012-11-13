@@ -99,7 +99,7 @@ def then_see_collected_stats_for_all_nodes(step):
     qeury_nodes = 'SELECT node_address, node_name, status, superiors, uppers, statistic, last_check FROM nodes_info'
     nodes = conn.select(qeury_nodes)
     conn.close()
-    if len(nodes) != len(world.addresses):
+    if len(nodes) != len(world.processes):
         raise Exception('Expected %i nodes in nodes_info table. But %i occured!'%(len(world.addresses), len(nodes)))
     for node in nodes:
         for field in node:

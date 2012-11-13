@@ -13,6 +13,7 @@ import os
 import time
 import threading
 import random
+import json
 from datetime import datetime
 
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest
@@ -109,7 +110,7 @@ class MonitorOperator(Operator):
 
     def get_nodes_list(self):
         try:
-            return self._conn.select_row("SELECT node_address FROM nodes_info")
+            return self._conn.select_col("SELECT node_address FROM nodes_info WHERE status=%s", (UP,))
         except DBEmptyResult:
             return []
 
@@ -149,6 +150,8 @@ class MonitorOperator(Operator):
 
         if notify_topic == 'NodeUp':
             self.change_node_status(notify_provider, UP)
+        elif notify_topic == 'NodeDown':
+            self.change_node_status(notify_provider, DOWN)
 
 
 class CollectNodeStatisticsThread(threading.Thread):
@@ -161,17 +164,18 @@ class CollectNodeStatisticsThread(threading.Thread):
         self.stopped = False
         logger.info('Thread started!')
 
-        packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
         client = FriClient()
         while not self.stopped:
             dt = 0
             try:
                 t0 = datetime.now()
+                logger.info('Collecting nodes statistic...')
                 nodeaddrs = self.operator.get_nodes_list()
 
                 for nodeaddr in nodeaddrs:
                     logger.debug('Get statistic from %s'%nodeaddr)
 
+                    packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
                     ret_packet = client.call_sync(nodeaddr, packet_obj)
                     if ret_packet.ret_code:
                         self.operator.change_node_status(nodeaddr, DOWN)
@@ -181,7 +185,7 @@ class CollectNodeStatisticsThread(threading.Thread):
 
 
                 dt = total_seconds(datetime.now() - t0)
-                logger.debug('Nodes stat is collected. Processed secs: %s'%dt)
+                logger.info('Nodes stat is collected. Processed secs: %s'%dt)
             except Exception, err:
                 logger.error(str(err))
             finally:
