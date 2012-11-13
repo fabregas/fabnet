@@ -451,6 +451,9 @@ class TestDHTInitProcedure(unittest.TestCase):
             data = 'This is replica data!'
             data_key2 = self._send_data_block('127.0.0.1:1987', data)
 
+            conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
+            conn.execute('DELETE FROM notification')
+
             time.sleep(.2)
             client = FriClient()
             packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters={})
@@ -458,9 +461,9 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(rcode, 0, rmsg)
             time.sleep(1.5)
 
-            conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
             events = conn.select('SELECT notify_type, node_address, notify_msg FROM notification')
             conn.execute('DELETE FROM notification')
+
 
             stat = 'processed_local_blocks=%i, invalid_local_blocks=0, repaired_foreign_blocks=0, failed_repair_foreign_blocks=0'
             self.assertEqual(len(events), 2)

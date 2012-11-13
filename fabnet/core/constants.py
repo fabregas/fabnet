@@ -54,13 +54,6 @@ FRI_CLIENT_READ_TIMEOUT = 120
 MIN_WORKERS_COUNT = 5
 MAX_WORKERS_COUNT = 40
 
-#discovery topology thread constants
-NO_TOPOLOGY_DYSCOVERY_WINDOW = 60
-MIN_TOPOLOGY_DISCOVERY_WAIT = 10
-MAX_TOPOLOGY_DISCOVERY_WAIT = 60
-DISCOVERY_TOPOLOGY_TIMEOUT = 120 #FIXME:this value should be match bigger in real network
-
-
 
 #certificates constantns
 NODE_CERTIFICATE = 'nodes.idepositbox.com'

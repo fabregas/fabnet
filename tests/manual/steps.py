@@ -7,6 +7,9 @@ import re
 import time
 
 import primitives
+from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
+from fabnet.monitor.monitor_operator import MONITOR_DB
+
 
 LOG_DIR = '/tmp/fabnet-test-logs'
 
@@ -78,18 +81,46 @@ def and_check_range_from_node_with_nums(step, num):
     world.check_node_only = world.addresses[int(num)]
 
 
+@step(u'And clear monitoring stat')
+def and_clear_monitoring_stat(step):
+    conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
+    conn.execute('DELETE FROM notification')
+    conn.execute('DELETE FROM nodes_info')
+
+
+@step(u'And wait (\d+) seconds')
+def and_wait_n_seconds(step, secs):
+    secs = int(secs)
+    time.sleep(secs)
+
+@step(u'Then see collected stats for all nodes')
+def then_see_collected_stats_for_all_nodes(step):
+    conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
+    qeury_nodes = 'SELECT node_address, node_name, status, superiors, uppers, statistic, last_check FROM nodes_info'
+    nodes = conn.select(qeury_nodes)
+    conn.close()
+    if len(nodes) != len(world.addresses):
+        raise Exception('Expected %i nodes in nodes_info table. But %i occured!'%(len(world.addresses), len(nodes)))
+    for node in nodes:
+        for field in node:
+            if not field:
+                raise Exception('Invalid node info found: %s'%str(node))
+
+
 @before.each_scenario
 def try_start_network(feature):
     world.check_node_only = None
     world.hdds = []
     world.addresses = []
     world.processes = []
+    world.stat_f_obj = None
 
 @after.each_scenario
 def try_stop_network(feature):
     if world.processes:
         primitives.destroy_network(world.processes)
 
-    world.stat_f_obj.close()
+    if world.stat_f_obj:
+        world.stat_f_obj.close()
 
 
