@@ -13,7 +13,7 @@ from fabnet.utils.logger import logger
 class TestDBConn(unittest.TestCase):
     def test_dbconn(self):
         os.system('rm /tmp/test_dbconn.db')
-        db = db_conn.DBConnection('/tmp/test_dbconn.db')
+        db = db_conn.SqliteDBConnection('/tmp/test_dbconn.db')
         db.execute("CREATE TABLE test_table (ID NUMBER, NAME TEXT, DESCR TEXT)")
         try:
             db.execute("CREATE TABLE test_table (ID NUMBER, NAME TEXT, DESCR TEXT)")

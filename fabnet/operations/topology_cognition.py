@@ -13,7 +13,7 @@ import os
 import threading
 from datetime import datetime
 
-from fabnet.utils.db_conn import DBConnection
+from fabnet.utils.db_conn import SqliteDBConnection as DBConnection
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \

@@ -5,7 +5,7 @@ import logging
 import threading
 import json
 import random
-from fabnet.utils.db_conn import DBConnection
+from fabnet.utils.db_conn import SqliteDBConnection as DBConnection
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse

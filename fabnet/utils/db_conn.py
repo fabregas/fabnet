@@ -8,8 +8,8 @@ Copyright (C) 2012 Konstantin Andrusenko
 @author Konstantin Andrusenko
 @date November 12, 2012
 """
+import threading
 
-import sqlite3
 
 class DBException(Exception):
     pass
@@ -23,28 +23,33 @@ class DBOperationalException(DBException):
 class DBEmptyResult(DBOperationalException):
     pass
 
-class DBConnection:
+
+class AbstractDBConnection:
     def __init__(self, conn_string):
-        self.__conn_string = conn_string
-        self.__conn = None
+        self._conn_string = conn_string
+        self._conn = None
+        self.__lock = threading.Lock()
 
     def connect(self):
-        try:
-            self.__conn = sqlite3.connect(self.__conn_string)
-        except Exception, err: #FIXME
-            raise DBConnectionException(err)
+        raise Exception('Not implemented')
 
     def select(self, query, params=[]):
-        if not self.__conn:
-            self.connect()
-
-        curs = self.__conn.cursor()
+        self.__lock.acquire()
         try:
-            curs.execute(query, params)
-            return curs.fetchall()
-        finally:
-            curs.close()
+            if not self._conn:
+                self.connect()
 
+            curs = self._conn.cursor()
+            try:
+                curs.execute(query, params)
+                return curs.fetchall()
+            except Exception, err:
+                self._conn.rollback()
+                raise DBOperationalException(err)
+            finally:
+                curs.close()
+        finally:
+            self.__lock.release()
 
     def select_one(self, query, params=[]):
         rows = self.select(query, params)
@@ -65,24 +70,44 @@ class DBConnection:
         return [r[0] for r in rows]
 
     def execute(self, query, params=[]):
-        if not self.__conn:
-            self.connect()
-
-        curs = self.__conn.cursor()
+        self.__lock.acquire()
         try:
-            curs.execute(query, params)
-            self.__conn.commit()
-            return curs.lastrowid
-        except Exception, err:
-            self.__conn.rollback()
-            raise DBOperationalException(err)
+            if not self._conn:
+                self.connect()
+
+            curs = self._conn.cursor()
+            try:
+                curs.execute(query, params)
+                self._conn.commit()
+                return curs.lastrowid
+            except Exception, err:
+                self._conn.rollback()
+                raise DBOperationalException(err)
+            finally:
+                curs.close()
         finally:
-            curs.close()
+            self.__lock.release()
 
 
     def close(self):
-        if self.__conn:
-            self.__conn.close()
+        if self._conn:
+            self._conn.close()
 
-        self.__conn = None
+        self._conn = None
+
+class SqliteDBConnection(AbstractDBConnection):
+    def connect(self):
+        try:
+            import sqlite3
+            self._conn = sqlite3.connect(self._conn_string)
+        except Exception, err: #FIXME
+            raise DBConnectionException(err)
+
+class PostgresqlDBConnection(AbstractDBConnection):
+    def connect(self):
+        try:
+            import psycopg2
+            self._conn = psycopg2.connect(self._conn_string)
+        except Exception, err: #FIXME
+            raise DBConnectionException(err)
 

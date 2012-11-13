@@ -18,7 +18,7 @@ constants.MONITOR_DHT_RANGES_TIMEOUT = 1
 constants.CHECK_HASH_TABLE_TIMEOUT = 1
 constants.WAIT_FILE_MD_TIMEDELTA = 0.1
 constants.WAIT_DHT_TABLE_UPDATE = .2
-from fabnet.utils.db_conn import DBConnection
+from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.monitor.monitor_operator import MonitorOperator, MONITOR_DB
 from fabnet.dht_mgmt.dht_operator import DHTOperator
 from fabnet.core.operator import OPERMAP
@@ -458,7 +458,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(rcode, 0, rmsg)
             time.sleep(1.5)
 
-            conn = DBConnection(os.path.join(monitor_home, MONITOR_DB))
+            conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
             events = conn.select('SELECT notify_type, node_address, notify_msg FROM notification')
             conn.execute('DELETE FROM notification')
 

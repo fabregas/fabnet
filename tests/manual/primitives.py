@@ -16,7 +16,7 @@ from fabnet.utils.logger import logger
 
 from fabnet.core.constants import ET_INFO
 from fabnet.core.fri_server import FriClient, FabnetPacketRequest
-from fabnet.utils.db_conn import DBConnection
+from fabnet.utils.db_conn import SqliteDBConnection as DBConnection
 from fabnet.monitor.monitor_operator import MONITOR_DB
 
 from Crypto import Random
