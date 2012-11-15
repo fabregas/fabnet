@@ -44,7 +44,7 @@ class UpgradeNodeOperation(OperationBase):
             if ret != 0:
                 raise Exception('git pull failed')
 
-            ret = os.system('./fabnet/bin/upgrade-node')
+            ret = os.system('./fabnet/bin/upgrade-node %s'%self.operator.OPTYPE)
             if ret != 0:
                 raise Exception('upgrade-node script failed!')
         except Exception, err:

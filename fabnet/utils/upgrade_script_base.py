@@ -73,8 +73,19 @@ class BaseFabnetUpgradeScript:
         else:
             raise Exception('Unsupported platform: %s'%target_platf)
 
+    def get_target_node_roles(self):
+        """Return target node roles which should apply this upgrade
+        return empty list for all node roles"""
+        return []
+
     def run(self):
         try:
+            target_node_types = self.get_target_node_roles()
+            node_type = os.environ.get('NODE_TYPE', None)
+            if node_type and target_node_types and node_type not in target_node_types:
+                sys.stdout.write('This script is skipped for node type "%s"...\n'%node_type)
+                return 0
+
             self.__run_int()
         except Exception, err:
             sys.stderr.write('ERROR: %s\n'%err)
@@ -89,7 +100,7 @@ class BaseFabnetUpgradeScript:
             raise Exception('"%s" failed!'%cmd)
 
     def emerge_install(self, package):
-        cmd = 'sudo emerge -v %s'%package
+        cmd = 'sudo emerge -vu %s'%package
         print(cmd)
         ret = os.system(cmd)
         if ret:

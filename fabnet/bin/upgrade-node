@@ -3,6 +3,7 @@
 import os
 import sys
 import subprocess
+import json
 
 # UPGRADE_VERSION
 # fabnet/
@@ -14,21 +15,25 @@ UP_VER_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../UPG
 SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../upgrades/scripts'))
 PYPATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 
+sys.path.append(PYPATH)
+from fabnet.settings import OPERATORS_MAP
 
 def get_current_upgrade_ver():
     if not os.path.exists(UP_VER_FILE):
-        open(UP_VER_FILE, 'w').write('0')
+        open(UP_VER_FILE, 'w').write('{}')
 
     ver = open(UP_VER_FILE).read().strip()
     try:
-        ver = int(ver)
+        vers = json.loads(ver)
     except ValueError, err:
         raise Exception('UPGRADE_VERSION content "%s" is invalid!'%val)
 
-    return ver
+    return vers
 
-def update_current_upgrade_ver(ver):
-    open(UP_VER_FILE, 'w').write('%s'%ver)
+def update_current_upgrade_ver(node_type, ver):
+    vers = get_current_upgrade_ver()
+    vers[node_type] = ver
+    open(UP_VER_FILE, 'w').write('%s'%json.dumps(vers))
 
 def get_next_upgrade_script(cur_ver):
     files = os.listdir(SCRIPTS_DIR)
@@ -55,33 +60,43 @@ def get_next_upgrade_script(cur_ver):
         yield num, scripts[num]
 
 
-def run_script(script_name):
-    proc = subprocess.Popen(['python', os.path.join(SCRIPTS_DIR, script_name)], env={'PYTHONPATH': PYPATH})
+def run_script(script_name, node_type):
+    proc = subprocess.Popen(['python', os.path.join(SCRIPTS_DIR, script_name)], \
+                    env={'PYTHONPATH': PYPATH, 'NODE_TYPE': node_type})
 
     cout, cerr = proc.communicate()
 
     return proc.returncode
 
 
-def upgrade():
+def upgrade(node_type):
     try:
-        cur_ver = get_current_upgrade_ver()
+        cur_vers = get_current_upgrade_ver()
+        cur_ver = cur_vers.get(node_type, 0)
 
         for ver, script_name in get_next_upgrade_script(cur_ver):
             print('INFO: Starting %s script ...'%script_name)
-            ret = run_script(script_name)
+            ret = run_script(script_name, node_type)
             if ret:
                 raise Exception('Processing %s is failed!'%(script_name))
 
-            update_current_upgrade_ver(ver)
+            update_current_upgrade_ver(node_type, ver)
         print('Done')
     except Exception, err:
         print('ERROR: %s'%err)
         return 1
 
-
-
     return 0
 
+
+
 if __name__ == '__main__':
-    sys.exit(upgrade())
+    if len(sys.argv) != 2:
+        sys.stderr.write('Usage: %s <target node type>\n'%sys.argv[0])
+        sys.exit(1)
+
+    node_type = sys.argv[1]
+    if node_type not in OPERATORS_MAP.keys():
+        sys.stderr.write('Unsupported node type: %s\n'%node_type)
+        sys.exit(1)
+    sys.exit(upgrade(node_type))

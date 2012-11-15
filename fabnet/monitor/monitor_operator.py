@@ -73,7 +73,7 @@ class MonitorOperator(Operator):
 
         try:
             notification_tbl = """CREATE TABLE notification (
-                id serial NOT NULL,
+                id serial PRIMARY KEY,
                 node_address varchar(512) NOT NULL,
                 notify_type varchar(64) NOT NULL,
                 notify_topic varchar(512),
@@ -82,8 +82,8 @@ class MonitorOperator(Operator):
             )"""
 
             nodes_info_tbl = """CREATE TABLE nodes_info (
-                id serial NOT NULL,
-                node_address varchar(512) NOT NULL,
+                id serial PRIMARY KEY,
+                node_address varchar(512) UNIQUE NOT NULL,
                 node_name varchar(128) NOT NULL,
                 status integer NOT NULL DEFAULT 0,
                 superiors text,
