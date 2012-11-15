@@ -15,6 +15,7 @@ import threading
 import random
 import json
 from datetime import datetime
+from Queue import Queue
 
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest
 from fabnet.core.operator import Operator
@@ -39,9 +40,8 @@ class MonitorOperator(Operator):
     def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown'):
         Operator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name)
 
-        Config.update_config({'COLLECT_NODES_STAT_TIMEOUT': 30,
-                                'NO_TOPOLOGY_DYSCOVERY_WINDOW': 10,
-                                'DISCOVERY_TOPOLOGY_TIMEOUT': 30})
+        Config.update_config({'COLLECT_NODES_STAT_TIMEOUT': 40,
+                                'DISCOVERY_TOPOLOGY_TIMEOUT': 60})
 
         self.__monitor_db_path = "dbname=%s user=postgres"%MONITOR_DB
         self._conn = self._init_db()
@@ -205,13 +205,23 @@ class DiscoverTopologyThread(threading.Thread):
         threading.Thread.__init__(self)
         self.operator = operator
         self.stopped = True
+        self._self_discovery = True
+        self._nodes_queue = Queue()
 
     def run(self):
         self.stopped = False
         logger.info('Thread started!')
 
-        while not self.stopped:
+        while True:
             try:
+                for i in xrange(Config.DISCOVERY_TOPOLOGY_TIMEOUT):
+                    if self.stopped:
+                        break
+                    time.sleep(1)
+
+                if self.stopped:
+                    break
+
                 try:
                     tc_oper = self.operator.get_operation_instance('TopologyCognition')
                 except OperException, err:
@@ -219,27 +229,40 @@ class DiscoverTopologyThread(threading.Thread):
                     continue
 
                 while True:
-                    last_processed_dt = tc_oper.get_last_processed_dt()
-                    dt = datetime.now() - last_processed_dt
-                    if total_seconds(dt) < Config.NO_TOPOLOGY_DYSCOVERY_WINDOW:
-                        time.sleep(1)
-                        if self.stopped:
-                            return
+                    from_addr = self.next_discovery_node()
+                    if from_addr:
+                        logger.info('Starting topology discovery from %s...'%from_addr)
+                        params = {"need_rebalance": 1}
                     else:
+                        logger.info('Starting topology discovery from this node...')
+                        params = {}
+
+                    packet = FabnetPacketRequest(method='TopologyCognition', parameters=params)
+                    rcode, rmsg = self.operator.call_network(packet, from_addr)
+                    if rcode == 0:
                         break
 
-                logger.info('Starting topology discovery...')
-                packet = FabnetPacketRequest(method='TopologyCognition')# parameters={"need_rebalance": 1})
-                self.operator.call_network(packet)
-
-                for i in xrange(Config.DISCOVERY_TOPOLOGY_TIMEOUT):
-                    time.sleep(1)
-                    if self.stopped:
-                        return
+                    logger.error("Can't start topology discovery from %s. Details: %s"%(from_addr, rmsg))
             except Exception, err:
                 logger.error(str(err))
 
         logger.info('Thread stopped!')
+
+
+    def next_discovery_node(self):
+        if self._self_discovery:
+           from_address = None
+        else:
+            if self._nodes_queue.empty():
+                for nodeaddr in self.operator.get_nodes_list():
+                    self._nodes_queue.put(nodeaddr)
+            if self._nodes_queue.empty():
+                from_address = None
+            else:
+                from_address = self._nodes_queue.get()
+
+        self._self_discovery = not self._self_discovery
+        return from_address
 
 
     def stop(self):

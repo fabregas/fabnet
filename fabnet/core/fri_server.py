@@ -475,6 +475,8 @@ class CheckNeighboursThread(threading.Thread):
 
                 proc_dt = datetime.now() - t0
             except Exception, err:
+                logger.write = logger.debug
+                traceback.print_exc(file=logger)
                 logger.error('[CheckNeighboursThread] %s'%err)
             finally:
                 wait_seconds = CHECK_NEIGHBOURS_TIMEOUT - proc_dt.seconds

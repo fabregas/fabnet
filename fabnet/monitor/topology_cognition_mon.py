@@ -50,6 +50,8 @@ class TopologyCognitionMon(TopologyCognition):
 
         if packet.ret_parameters.get('need_rebalance', False):
             self._lock()
-            self.smart_neighbours_rebalance(node_address, superior_neighbours, upper_neighbours)
-            self._unlock()
+            try:
+                self.smart_neighbours_rebalance(node_address, superior_neighbours, upper_neighbours)
+            finally:
+                self._unlock()
 

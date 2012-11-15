@@ -30,6 +30,7 @@ class TopologyCognition(OperationBase):
     def __init__(self, operator):
         OperationBase.__init__(self, operator)
         self.__last_dt = datetime.now()
+        self.__balanced = threading.Event()
 
     def get_last_processed_dt(self):
         self._lock()
@@ -62,7 +63,6 @@ class TopologyCognition(OperationBase):
                 or None for disabling packet resend to neigbours
         """
         if packet.sender is None:
-            self.__balanced = threading.Event()
             conn = DBConnection(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
 
             conn.execute("CREATE TABLE IF NOT EXISTS fabnet_nodes(node_address TEXT, node_name TEXT, superiors TEXT, uppers TEXT, old_data INT)")
@@ -140,8 +140,10 @@ class TopologyCognition(OperationBase):
 
         if packet.ret_parameters.get('need_rebalance', False):
             self._lock()
-            self.smart_neighbours_rebalance(node_address, superior_neighbours, upper_neighbours)
-            self._unlock()
+            try:
+                self.smart_neighbours_rebalance(node_address, superior_neighbours, upper_neighbours)
+            finally:
+                self._unlock()
 
 
     def smart_neighbours_rebalance(self, node_address, superior_neighbours, upper_neighbours):

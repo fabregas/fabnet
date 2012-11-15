@@ -244,6 +244,11 @@ class Operator:
                     logger.info('%s neighbour %s with type "%s" is removed'%(NT_MAP[neighbour_type], address, optype))
                 except ValueError, err:
                     pass
+
+            if address in self.__upper_keep_alives:
+                del self.__upper_keep_alives[address]
+            if address in self.__superior_keep_alives:
+                del self.__superior_keep_alives[address]
         finally:
             self.__lock.release()
 
@@ -296,11 +301,14 @@ class Operator:
             return self.fri_client.call(node_address, packet)
 
 
-    def call_network(self, packet):
+    def call_network(self, packet, from_address=None):
         packet.sender = None
         packet.is_multicast = True
 
-        return self.fri_client.call(self.self_address, packet)
+        if not from_address:
+            from_address = self.self_address
+
+        return self.fri_client.call(from_address, packet)
 
     def _process_keep_alive(self, packet):
         if packet.sender not in self.get_neighbours(NT_UPPER):
@@ -338,14 +346,14 @@ class Operator:
             try:
                 if self.__superior_keep_alives.get(superior, None) is None:
                     self.__superior_keep_alives[superior] = 0
+
                 if resp.ret_code == RC_OK:
                     self.__superior_keep_alives[superior] = 0
                 elif resp.ret_code == RC_NOT_MY_NEIGHBOUR:
-                    del self.__superior_keep_alives[superior]
                     remove_nodes.append((NT_SUPERIOR, superior, False))
+                    continue
                 else:
                     self.__superior_keep_alives[superior] += 1
-
 
                 cnt = self.__superior_keep_alives[superior]
             finally:
@@ -355,8 +363,6 @@ class Operator:
                 logger.info('Neighbour %s does not respond. removing it...'%superior)
                 remove_nodes.append((NT_SUPERIOR, superior, True))
                 self.__lock.acquire()
-                del self.__superior_keep_alives[superior]
-                self.__lock.release()
 
 
         #check upper nodes...
@@ -372,9 +378,7 @@ class Operator:
 
                 if total_seconds(cur_dt - ka_dt) >= KEEP_ALIVE_MAX_WAIT_TIME:
                     logger.info('No keep alive packets from upper neighbour %s. removing it...'%upper)
-                    remove_nodes.append((NT_UPPER, upper, True))
-
-                    del self.__upper_keep_alives[upper]
+                    remove_nodes.append((NT_UPPER, upper, False))
         finally:
             self.__lock.release()
 
