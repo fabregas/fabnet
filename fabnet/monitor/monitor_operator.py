@@ -17,9 +17,10 @@ import json
 from datetime import datetime
 
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest
+from fabnet.core.operator import Operator
+from fabnet.core.config import Config
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.utils.db_conn import DBOperationalException, DBEmptyResult
-from fabnet.core.operator import Operator
 from fabnet.utils.logger import logger
 from fabnet.utils.internal import total_seconds
 
@@ -30,14 +31,6 @@ MONITOR_DB = 'fabnet_monitor_db'
 UP = 1
 DOWN = 0
 
-COLLECT_NODES_STAT_TIMEOUT = 30
-
-#discovery topology thread constants
-NO_TOPOLOGY_DYSCOVERY_WINDOW = 10
-MIN_TOPOLOGY_DISCOVERY_WAIT = 1
-MAX_TOPOLOGY_DISCOVERY_WAIT = 10
-DISCOVERY_TOPOLOGY_TIMEOUT = 30
-
 OPERMAP =  {'TopologyCognition': TopologyCognitionMon}
 
 class MonitorOperator(Operator):
@@ -45,6 +38,10 @@ class MonitorOperator(Operator):
 
     def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown'):
         Operator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name)
+
+        Config.update_config({'COLLECT_NODES_STAT_TIMEOUT': 30,
+                                'NO_TOPOLOGY_DYSCOVERY_WINDOW': 10,
+                                'DISCOVERY_TOPOLOGY_TIMEOUT': 30})
 
         self.__monitor_db_path = "dbname=%s user=postgres"%MONITOR_DB
         self._conn = self._init_db()
@@ -189,7 +186,7 @@ class CollectNodeStatisticsThread(threading.Thread):
             except Exception, err:
                 logger.error(str(err))
             finally:
-                wait_time = COLLECT_NODES_STAT_TIMEOUT - dt
+                wait_time = Config.COLLECT_NODES_STAT_TIMEOUT - dt
                 if wait_time > 0:
                     for i in xrange(int(wait_time)):
                         if self.stopped:
@@ -224,12 +221,10 @@ class DiscoverTopologyThread(threading.Thread):
                 while True:
                     last_processed_dt = tc_oper.get_last_processed_dt()
                     dt = datetime.now() - last_processed_dt
-                    if total_seconds(dt) < NO_TOPOLOGY_DYSCOVERY_WINDOW:
-                        w_seconds = random.randint(MIN_TOPOLOGY_DISCOVERY_WAIT, MAX_TOPOLOGY_DISCOVERY_WAIT)
-                        for i in xrange(w_seconds):
-                            time.sleep(1)
-                            if self.stopped:
-                                return
+                    if total_seconds(dt) < Config.NO_TOPOLOGY_DYSCOVERY_WINDOW:
+                        time.sleep(1)
+                        if self.stopped:
+                            return
                     else:
                         break
 
@@ -237,7 +232,7 @@ class DiscoverTopologyThread(threading.Thread):
                 packet = FabnetPacketRequest(method='TopologyCognition')# parameters={"need_rebalance": 1})
                 self.operator.call_network(packet)
 
-                for i in xrange(DISCOVERY_TOPOLOGY_TIMEOUT):
+                for i in xrange(Config.DISCOVERY_TOPOLOGY_TIMEOUT):
                     time.sleep(1)
                     if self.stopped:
                         return
