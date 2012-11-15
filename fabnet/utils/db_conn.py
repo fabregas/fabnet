@@ -44,7 +44,10 @@ class AbstractDBConnection:
                 curs.execute(query, params)
                 return curs.fetchall()
             except Exception, err:
-                self._conn.rollback()
+                try:
+                    self._conn.rollback()
+                except Exception, err:
+                    self._conn = None
                 raise DBOperationalException(err)
             finally:
                 curs.close()
@@ -81,7 +84,10 @@ class AbstractDBConnection:
                 self._conn.commit()
                 return curs.lastrowid
             except Exception, err:
-                self._conn.rollback()
+                try:
+                    self._conn.rollback()
+                except Exception, err:
+                    self._conn = None
                 raise DBOperationalException(err)
             finally:
                 curs.close()
