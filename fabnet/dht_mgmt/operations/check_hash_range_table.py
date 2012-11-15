@@ -15,8 +15,8 @@ import time
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_ERROR, NODE_ROLE
-from fabnet.dht_mgmt.constants import RC_NEED_UPDATE, DS_INITIALIZE, \
-                                RANGES_TABLE_FLAPPING_TIMEOUT
+from fabnet.dht_mgmt.constants import RC_NEED_UPDATE, DS_INITIALIZE
+from fabnet.core.config import Config
 from fabnet.utils.logger import logger
 
 class CheckHashRangeTableOperation(OperationBase):
@@ -24,7 +24,7 @@ class CheckHashRangeTableOperation(OperationBase):
 
     def _get_ranges_table(self, from_addr, mod_index):
         if not self.operator.ranges_table.empty():
-            for i in xrange(RANGES_TABLE_FLAPPING_TIMEOUT):
+            for i in xrange(Config.RANGES_TABLE_FLAPPING_TIMEOUT):
                 time.sleep(1)
                 c_mod_index = self.operator.ranges_table.get_mod_index()
                 if c_mod_index == mod_index:

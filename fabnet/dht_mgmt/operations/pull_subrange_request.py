@@ -12,8 +12,8 @@ Copyright (C) 2012 Konstantin Andrusenko
 import os
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.dht_mgmt.constants import MAX_USED_SIZE_PERCENTS
 from fabnet.utils.logger import logger
+from fabnet.core.config import Config
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
 
 
@@ -57,7 +57,7 @@ class PullSubrangeRequestOperation(OperationBase):
         subrange_size = int(subrange_size)
         estimated_data_size_perc = dht_range.get_estimated_data_percents(subrange_size)
 
-        if estimated_data_size_perc >= MAX_USED_SIZE_PERCENTS:
+        if estimated_data_size_perc >= Config.MAX_USED_SIZE_PERCENTS:
             raise Exception('Subrange is so big for this node ;(')
 
     def __extend_range(self, sender, dht_range, start_key, end_key):

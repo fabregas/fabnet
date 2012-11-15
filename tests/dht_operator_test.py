@@ -12,12 +12,8 @@ from fabnet.dht_mgmt import dht_operator
 from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTableOperation
 from fabnet.dht_mgmt.constants import RC_NEED_UPDATE
+from fabnet.core.config import Config
 
-dht_operator.WAIT_RANGE_TIMEOUT = 0.5
-dht_operator.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT = 0.1
-dht_operator.MONITOR_DHT_RANGES_TIMEOUT = 1
-dht_operator.WAIT_RANGES_TIMEOUT = 0.3
-dht_operator.RESERV_RANGE_FILE_MD_TIMEDELTA = 0.1
 
 logger.setLevel(logging.DEBUG)
 
@@ -41,6 +37,12 @@ class TestFSMappedRanges(unittest.TestCase):
             return 0, 'ok'
 
         operator = DHTOperator('127.0.0.1:1987', home_dir=TEST_FS_RANGE_DIR)
+        Config.update_config({'WAIT_RANGE_TIMEOUT': 0.5,
+                            'INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT': 0.1,
+                            'MONITOR_DHT_RANGES_TIMEOUT': 1,
+                            'WAIT_RANGES_TIMEOUT': 0.3,
+                            'RESERV_RANGE_FILE_MD_TIMEDELTA': 0.1})
+
 
         operator.ranges_table.append(0, 99, 'first_range_holder')
         operator.ranges_table.append(100, 149, 'second_range_holder')
@@ -81,7 +83,11 @@ class TestFSMappedRanges(unittest.TestCase):
             return 0, 'ok'
 
         operator = DHTOperator('127.0.0.1:1987', home_dir=TEST_FS_RANGE_DIR)
-
+        Config.update_config({'WAIT_RANGE_TIMEOUT': 0.5,
+                            'INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT': 0.1,
+                            'MONITOR_DHT_RANGES_TIMEOUT': 1,
+                            'WAIT_RANGES_TIMEOUT': 0.3,
+                            'RESERV_RANGE_FILE_MD_TIMEDELTA': 0.1})
         try:
             operator.ranges_table.append(0, 99, 'first_range_holder')
             mod_index = operator.ranges_table.get_mod_index()
@@ -135,6 +141,11 @@ class TestFSMappedRanges(unittest.TestCase):
 
         try:
             operator = DHTOperator('127.0.0.1:1987', home_dir=TEST_FS_RANGE_DIR)
+            Config.update_config({'WAIT_RANGE_TIMEOUT': 0.5,
+                            'INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT': 0.1,
+                            'MONITOR_DHT_RANGES_TIMEOUT': 1,
+                            'WAIT_RANGES_TIMEOUT': 0.3,
+                            'RESERV_RANGE_FILE_MD_TIMEDELTA': 0.1})
 
             operator.ranges_table.append(0, 99, 'first_range_holder')
             operator.ranges_table.append(100, 149, 'second_range_holder')
@@ -144,6 +155,11 @@ class TestFSMappedRanges(unittest.TestCase):
             operator.register_operation('CheckHashRangeTable', CheckHashRangeTableOperation)
 
             operator1 = DHTOperator('127.0.0.1:1986', home_dir=TEST_FS_RANGE_DIR)
+            Config.update_config({'WAIT_RANGE_TIMEOUT': 0.5,
+                            'INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT': 0.1,
+                            'MONITOR_DHT_RANGES_TIMEOUT': 1,
+                            'WAIT_RANGES_TIMEOUT': 0.3,
+                            'RESERV_RANGE_FILE_MD_TIMEDELTA': 0.1})
 
             operator1.ranges_table.append(0, 99, 'first_range_holder')
             operator1.ranges_table.append(100, 149, 'second_range_holder')

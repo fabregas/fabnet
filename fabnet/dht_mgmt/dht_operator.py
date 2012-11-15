@@ -20,12 +20,9 @@ from hash_ranges_table import HashRangesTable
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
+from fabnet.core.config import Config
 from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_DESTROYING, DS_NORMALWORK, \
-            CHECK_HASH_TABLE_TIMEOUT, MIN_HASH, MAX_HASH, DHT_CYCLE_TRY_COUNT, \
-            INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT, WAIT_RANGE_TIMEOUT, \
-            MONITOR_DHT_RANGES_TIMEOUT, RC_OLD_DATA, \
-            MAX_USED_SIZE_PERCENTS, DANGER_USED_SIZE_PERCENTS, \
-            PULL_SUBRANGE_SIZE_PERC, CRITICAL_FREE_SPACE_PERCENT
+            DEFAULT_DHT_CONFIG, MIN_HASH, MAX_HASH, RC_OLD_DATA
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_ALERT
 
 from fabnet.dht_mgmt.operations.get_range_data_request import GetRangeDataRequestOperation
@@ -67,6 +64,7 @@ class DHTOperator(Operator):
         Operator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name)
 
         self.status = DS_INITIALIZE
+        Config.update_config(DEFAULT_DHT_CONFIG)
         self.ranges_table = HashRangesTable()
         if is_init_node:
             self.ranges_table.append(MIN_HASH, MAX_HASH, self.self_address)
@@ -200,7 +198,7 @@ class DHTOperator(Operator):
 
         if new_range is None:
             #wait and try again
-            if self.__start_dht_try_count == DHT_CYCLE_TRY_COUNT:
+            if self.__start_dht_try_count == Config.DHT_CYCLE_TRY_COUNT:
                 logger.error('Cant initialize node as a part of DHT')
                 self.__start_dht_try_count = 0
                 return
@@ -208,7 +206,7 @@ class DHTOperator(Operator):
             logger.info('No ready range for me on network... So, sleep and try again')
             self.__start_dht_try_count += 1
             self.__split_requests_cache = []
-            time.sleep(WAIT_RANGE_TIMEOUT)
+            time.sleep(Config.WAIT_RANGE_TIMEOUT)
             return self.start_as_dht_member()
 
         if nochange:
@@ -280,7 +278,7 @@ class CheckLocalHashTableThread(threading.Thread):
             try:
                 neighbours = self.operator.get_neighbours(NT_SUPERIOR, self.operator.OPTYPE)
                 if not neighbours:
-                    time.sleep(INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
+                    time.sleep(Config.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
                     continue
 
                 for neighbour in neighbours:
@@ -292,7 +290,7 @@ class CheckLocalHashTableThread(threading.Thread):
                                 sender=self.operator.self_address, parameters=params)
                     rcode, rmsg = self.operator.call_node(neighbour, packet_obj)
 
-                    for i in xrange(CHECK_HASH_TABLE_TIMEOUT):
+                    for i in xrange(Config.CHECK_HASH_TABLE_TIMEOUT):
                         if self.stopped:
                             break
 
@@ -320,8 +318,8 @@ class MonitorDHTRanges(threading.Thread):
 
         free_percents = dht_range.get_free_size_percents()
         percents = 100 - free_percents
-        if percents >= MAX_USED_SIZE_PERCENTS:
-            if free_percents < CRITICAL_FREE_SPACE_PERCENT:
+        if percents >= Config.MAX_USED_SIZE_PERCENTS:
+            if free_percents < Config.CRITICAL_FREE_SPACE_PERCENT:
                 logger.warning('Critical free disk space! Blocking range for write!')
                 dht_range.block_for_write()
 
@@ -329,7 +327,7 @@ class MonitorDHTRanges(threading.Thread):
 
             if not self._pull_subrange(dht_range):
                 self._pull_subrange(dht_range)
-        elif percents >= DANGER_USED_SIZE_PERCENTS:
+        elif percents >= Config.DANGER_USED_SIZE_PERCENTS:
             if self.__notification_flag:
                 return
             message = '%s percents'%percents
@@ -345,7 +343,7 @@ class MonitorDHTRanges(threading.Thread):
             self.__notification_flag = False
 
     def _pull_subrange(self, dht_range, start_part=True):
-        split_part = int((dht_range.length() * PULL_SUBRANGE_SIZE_PERC) / 100)
+        split_part = int((dht_range.length() * Config.PULL_SUBRANGE_SIZE_PERC) / 100)
         if self.__last_is_start_part:
             dest_key = dht_range.get_start() - 1
             start_subrange = dht_range.get_start()
@@ -438,7 +436,7 @@ class MonitorDHTRanges(threading.Thread):
             except Exception, err:
                 logger.error('[MonitorDHTRanges] %s'% err)
             finally:
-                for i in xrange(MONITOR_DHT_RANGES_TIMEOUT):
+                for i in xrange(Config.MONITOR_DHT_RANGES_TIMEOUT):
                     if self.stopped:
                         break
                     time.sleep(1)

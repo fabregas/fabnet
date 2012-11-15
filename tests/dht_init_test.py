@@ -12,12 +12,7 @@ from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, Fa
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT
 from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.dht_mgmt import constants
-constants.WAIT_RANGE_TIMEOUT = 0.1
-constants.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT = 0.1
-constants.MONITOR_DHT_RANGES_TIMEOUT = 1
-constants.CHECK_HASH_TABLE_TIMEOUT = 1
-constants.WAIT_FILE_MD_TIMEDELTA = 0.1
-constants.WAIT_DHT_TABLE_UPDATE = .2
+from fabnet.core.config import Config
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.monitor.monitor_operator import MonitorOperator, MONITOR_DB
 from fabnet.dht_mgmt.dht_operator import DHTOperator
@@ -42,7 +37,6 @@ logger.setLevel(logging.DEBUG)
 
 MAX_HASH = constants.MAX_HASH
 
-
 MonitorOperator.OPERATIONS_MAP = OPERMAP
 
 class TestServerThread(threading.Thread):
@@ -63,6 +57,14 @@ class TestServerThread(threading.Thread):
             operator = DHTOperator(address, self.home_dir, is_init_node=self.init_node, node_name=self.port)
 
         self.operator = operator
+
+        config = {'WAIT_RANGE_TIMEOUT': 0.1,
+                 'INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT': 0.1,
+                 'MONITOR_DHT_RANGES_TIMEOUT': 1,
+                 'CHECK_HASH_TABLE_TIMEOUT': 1,
+                 'WAIT_FILE_MD_TIMEDELTA': 0.1,
+                 'WAIT_DHT_TABLE_UPDATE': 0.2}
+        Config.update_config(config)
 
         server = FriServer('0.0.0.0', self.port, operator, server_name='node_%s'%self.port)
         ret = server.start()
@@ -508,7 +510,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters={})
             rcode, rmsg = client.call('127.0.0.1:1987', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
-            time.sleep(1.5)
+            time.sleep(2)
 
             events = conn.select('SELECT notify_type, node_address, notify_msg FROM notification')
             conn.execute('DELETE FROM notification')

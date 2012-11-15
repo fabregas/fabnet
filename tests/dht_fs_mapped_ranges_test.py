@@ -7,11 +7,11 @@ import json
 import shutil
 from datetime import datetime
 
-from fabnet.dht_mgmt import constants
-constants.WAIT_FILE_MD_TIMEDELTA = 0.1
-
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
+
+from fabnet.core.config import Config
+Config.update_config({'WAIT_FILE_MD_TIMEDELTA': 0.1})
 
 logger.setLevel(logging.DEBUG)
 

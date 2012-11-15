@@ -14,7 +14,8 @@ import time
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.constants import DS_NORMALWORK, DS_INITIALIZE, \
-                            MAX_HASH, MIN_HASH, WAIT_DHT_TABLE_UPDATE
+                            MAX_HASH, MIN_HASH
+from fabnet.core.config import Config
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
 from fabnet.dht_mgmt.hash_ranges_table import HashRange
 from fabnet.utils.logger import logger
@@ -52,7 +53,7 @@ class UpdateHashRangeTableOperation(OperationBase):
                 append_lst = [(new_dht_range.get_start(), new_dht_range.get_end(), self.operator.self_address)]
 
                 logger.info('Extended range by next neighbours')
-                time.sleep(WAIT_DHT_TABLE_UPDATE)
+                time.sleep(Config.WAIT_DHT_TABLE_UPDATE)
                 self._init_network_operation('UpdateHashRangeTable', {'append': append_lst, 'remove': rm_lst})
 
                 return self._check_near_range()

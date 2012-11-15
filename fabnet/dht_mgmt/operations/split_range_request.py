@@ -12,9 +12,9 @@ Copyright (C) 2012 Konstantin Andrusenko
 import os
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.dht_mgmt.constants import ALLOW_USED_SIZE_PERCENTS
 from fabnet.utils.logger import logger
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
+from fabnet.core.config import Config
 
 
 class SplitRangeRequestOperation(OperationBase):
@@ -69,7 +69,7 @@ class SplitRangeRequestOperation(OperationBase):
             dht_range = self.operator.get_dht_range()
             subrange_size = int(packet.ret_parameters['range_size'])
             estimated_data_size_perc = dht_range.get_estimated_data_percents(subrange_size)
-            if estimated_data_size_perc >= ALLOW_USED_SIZE_PERCENTS:
+            if estimated_data_size_perc >= Config.ALLOW_USED_SIZE_PERCENTS:
                 logger.info('Requested range is huge for me :( canceling...')
                 self._init_operation(packet.from_node, 'SplitRangeCancel', {})
             else:

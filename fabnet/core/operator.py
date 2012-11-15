@@ -24,6 +24,7 @@ from fabnet.core.operation_base import OperationBase
 from fabnet.core.message_container import MessageContainer
 from fabnet.core.constants import MC_SIZE
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.config import Config
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPERIOR, NT_UPPER, \
                 KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, \
                 KEEP_ALIVE_MAX_WAIT_TIME, ONE_DIRECT_NEIGHBOURS_COUNT
@@ -34,6 +35,8 @@ from fabnet.operations.topology_cognition import TopologyCognition
 from fabnet.operations.node_statistic import NodeStatisticOperation
 from fabnet.operations.upgrade_node_operation import UpgradeNodeOperation
 from fabnet.operations.notify_operation import NotifyOperation
+from fabnet.operations.update_node_config import UpdateNodeConfigOperation
+from fabnet.operations.get_node_config import GetNodeConfigOperation
 
 from fabnet.operations.constants import NB_NORMAL, NB_MORE, NB_LESS, MNO_REMOVE
 
@@ -72,7 +75,9 @@ OPERMAP =  {'ManageNeighbour': ManageNeighbour,
             'TopologyCognition': TopologyCognition,
             'NodeStatistic': NodeStatisticOperation,
             'UpgradeNode': UpgradeNodeOperation,
-            'NotifyOperation': NotifyOperation}
+            'NotifyOperation': NotifyOperation,
+            'GetNodeConfig': GetNodeConfigOperation,
+            'UpdateNodeConfig': UpdateNodeConfigOperation}
 
 
 class Operator:

@@ -18,8 +18,8 @@ from datetime import datetime
 
 from fabnet.utils.logger import logger
 from fabnet.utils.internal import total_seconds
-from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH, \
-        WAIT_FILE_MD_TIMEDELTA, CRITICAL_FREE_SPACE_PERCENT
+from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH
+from fabnet.core.config import Config
 from fabnet.dht_mgmt.data_block import DataBlock
 
 class FSHashRangesException(Exception):
@@ -272,7 +272,7 @@ class FSHashRanges:
     def __write_data(self, f_name, data, check_dt=False):
         try:
             if self.__no_free_space_flag.is_set():
-                if self.get_free_size_percents() > CRITICAL_FREE_SPACE_PERCENT:
+                if self.get_free_size_percents() > Config.CRITICAL_FREE_SPACE_PERCENT:
                     self.__no_free_space_flag.clear()
                     logger.info('Range is unlocked for write...')
                 else:
@@ -514,7 +514,7 @@ class FSHashRanges:
 
     def _ensure_not_write(self, file_path):
         f_dm = datetime.fromtimestamp(os.path.getmtime(file_path))
-        if total_seconds(datetime.now() - f_dm) > WAIT_FILE_MD_TIMEDELTA:
+        if total_seconds(datetime.now() - f_dm) > Config.WAIT_FILE_MD_TIMEDELTA:
             return True
         return False
 
