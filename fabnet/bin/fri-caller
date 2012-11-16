@@ -1,6 +1,11 @@
 #!/usr/bin/python
+import os
 import sys
 import json
+
+PYPATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
+sys.path.insert(0, PYPATH)
+
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest
 
 def usage():

@@ -57,7 +57,7 @@ class FriAgent(threading.Thread):
 
                 if sync_event is not None:
                     resp = self.fri_client.call_sync(address, packet)
-                    self.ret_queue.put(resp.message_id, resp)
+                    self.ret_queue.put(packet.message_id, resp)
                     sync_event.set()
                 else:
                     rcode, rmsg = self.fri_client.call(address, packet)

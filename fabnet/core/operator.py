@@ -401,7 +401,6 @@ class Operator:
             if cnt == KEEP_ALIVE_TRY_COUNT:
                 logger.info('Neighbour %s does not respond. removing it...'%superior)
                 remove_nodes.append((NT_SUPERIOR, superior, True))
-                self.__lock.acquire()
 
 
         #check upper nodes...

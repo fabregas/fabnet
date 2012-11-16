@@ -149,6 +149,10 @@ def then_i_get_and_check_all_data_blocks(step):
     primitives.get_data_blocks(world.addresses, world.keys)
 
 
+@step(u'Then I collect topology from every node')
+def then_i_collect_topology_from_every_node(step):
+    primitives.collect_topology_from_nodes(world.addresses)
+
 @before.each_scenario
 def try_start_network(scenario):
     world.check_node_only = None

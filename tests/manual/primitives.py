@@ -375,3 +375,35 @@ def get_data_blocks(addresses, keys):
         if hashlib.sha1(data).hexdigest() != ret_packet.ret_parameters['checksum']:
             raise Exception('Data block checksum failed!')
 
+def collect_topology_from_nodes(addresses):
+    for address in addresses:
+        p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address, '{"need_rebalance": 1}'])
+        node_i = address.split(':')[-1]
+        wait_topology(node_i, len(addresses))
+        #os.system('python ./tests/topology_to_tgf /tmp/node_%s/fabnet_topology.db /tmp/fabnet_topology.%s-orig.tgf'%(node_i, len(ADDRESSES)))
+
+def wait_topology(node_i, nodes_count):
+    conn = None
+    while True:
+        try:
+            db = '/tmp/node_%s/fabnet_topology.db'%node_i
+
+            while not os.path.exists(db):
+                print '%s not exists!'%db
+                time.sleep(0.2)
+
+            time.sleep(.5)
+            conn = sqlite3.connect(db)
+            curs = conn.cursor()
+            curs.execute("SELECT count(node_address) FROM fabnet_nodes WHERE old_data=0")
+            rows = curs.fetchall()
+            print 'nodes discovered: %s'%rows[0][0]
+            if int(rows[0][0]) != nodes_count:
+                time.sleep(.5)
+            else:
+                break
+        finally:
+            if conn:
+                curs.close()
+                conn.close()
+
