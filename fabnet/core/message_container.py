@@ -12,22 +12,23 @@ This module contains the MessageContainer class implementation
 """
 
 import threading
-import Queue
 
 class MessageContainer:
     def __init__(self, size):
-        self.__ordered_ids = Queue.Queue(size)
+        self.__ordered_ids = []
+        self.__size = size
         self.__lock = threading.RLock()
         self.__messages = {}
 
     def put(self, message_id, message):
         self.__lock.acquire()
         try:
-            if self.__ordered_ids.full():
-                del_id = self.__ordered_ids.get()
+            if len(self.__ordered_ids) >= self.__size:
+                del_id = self.__ordered_ids[0]
+                del self.__ordered_ids[0]
                 del self.__messages[del_id]
 
-            self.__ordered_ids.put(message_id)
+            self.__ordered_ids.append(message_id)
 
             self.__messages[message_id] = message
         finally:
@@ -44,14 +45,19 @@ class MessageContainer:
         finally:
             self.__lock.release()
 
-    def get(self, message_id, default=None):
+    def get(self, message_id, default=None, remove=False):
         self.__lock.acquire()
         try:
-            return self.__messages.get(message_id, default)
+            ret_msg = self.__messages.get(message_id, default)
+            if remove and message_id in self.__messages:
+                del self.__messages[message_id]
+                del self.__ordered_ids[self.__ordered_ids.index(message_id)]
+
+            return ret_msg
         finally:
             self.__lock.release()
 
-'''
+
 if __name__ == '__main__':
     mc = MessageContainer(2)
     mc.put(1, 'im first')
@@ -69,4 +75,3 @@ if __name__ == '__main__':
     print 'inserted 4:', mc.put_safe(4, 'im fourth')
     print '4: ', mc.get(4)
 
-'''

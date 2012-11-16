@@ -60,8 +60,8 @@ class TestAbstractOperator(unittest.TestCase):
                         'binary_data': data}
             t0 = datetime.now()
             packet_obj = FabnetPacketRequest(**packet)
-            rcode, rmsg = operator.call_node('127.0.0.1:1986', packet_obj)
-            self.assertEqual(rcode, 0, rmsg)
+            operator.call_node('127.0.0.1:1986', packet_obj)
+
 
             operator.wait_response(323232, 20)
             print 'Echo big data time: %s'%(datetime.now()-t0)

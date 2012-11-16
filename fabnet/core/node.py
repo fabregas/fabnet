@@ -61,17 +61,12 @@ class Node:
 
         packet = FabnetPacketRequest(method='DiscoveryOperation', sender=address)
 
-        rcode, rmsg = self.server.operator.call_node(neighbour, packet)
-        if rcode:
-            logger.warning('Neighbour %s does not respond!'%neighbour)
-            return False
+        self.server.operator.call_node(neighbour, packet)
 
         params = {'event_type': ET_INFO, 'event_topic': 'NodeUp', \
                 'event_message': 'Hello, fabnet!', 'event_provider': address}
         packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=address)
-        rcode, rmsg = self.server.operator.call_node(neighbour, packet)
-        if rcode:
-            logger.warning('Cant send notification to network. Details: %s'%rmsg)
+        self.server.operator.call_node(neighbour, packet)
 
         return True
 
@@ -81,9 +76,7 @@ class Node:
             params = {'event_type': ET_INFO, 'event_topic': 'NodeDown', \
                         'event_message': 'Goodbye, fabnet :(', 'event_provider': address}
             packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=address)
-            rcode, rmsg = self.server.operator.call_network(packet)
-            if rcode:
-                raise Exception(rmsg)
+            self.server.operator.call_network(packet)
         except Exception, err:
             logger.warning('Cant send notification to network. Details: %s'%err)
 

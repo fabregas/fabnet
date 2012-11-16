@@ -14,7 +14,7 @@ from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.operations.constants import MNO_APPEND
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
                         ONE_DIRECT_NEIGHBOURS_COUNT, \
-                        NODE_ROLE, CLIENT_ROLE
+                        NODE_ROLE, CLIENT_ROLE, RC_OK
 from fabnet.utils.logger import logger
 
 class DiscoveryOperation(OperationBase):
@@ -51,6 +51,10 @@ class DiscoveryOperation(OperationBase):
                 that should be resended to current node requestor
                 or None for disabling packet resending
         """
+        if packet.ret_code != RC_OK:
+            logger.error('No discovery response from neighbour.. It makes me sad panda :(')
+            return
+
         node = packet.ret_parameters['node']
         uppers = packet.ret_parameters.get('uppers', [])
         superiors = packet.ret_parameters.get('superiors', [])

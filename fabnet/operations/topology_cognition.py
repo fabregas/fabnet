@@ -173,8 +173,7 @@ class TopologyCognition(OperationBase):
             parameters = { 'neighbour_type': NT_UPPER, 'operation': MNO_APPEND,
                             'node_address': self.operator.self_address,
                             'operator_type': self.operator.OPTYPE }
-            rcode, rmsg = self._init_operation(node_address, 'ManageNeighbour', parameters)
-            if not rcode:
-                self.__balanced.set()
+            self._init_operation(node_address, 'ManageNeighbour', parameters)
+            self.__balanced.set()
 
 

@@ -16,18 +16,20 @@ import traceback
 import time
 import random
 from datetime import datetime, timedelta
+from Queue import Queue
 
 from fabnet.utils.logger import logger
 from fabnet.utils.internal import total_seconds
 
 from fabnet.core.operation_base import OperationBase
 from fabnet.core.message_container import MessageContainer
-from fabnet.core.constants import MC_SIZE
+from fabnet.core.agents_manager import FriAgentsManager
+from fabnet.core.constants import MC_SIZE, RQ_SIZE
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.config import Config
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPERIOR, NT_UPPER, \
                 KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, \
-                KEEP_ALIVE_MAX_WAIT_TIME, ONE_DIRECT_NEIGHBOURS_COUNT
+                KEEP_ALIVE_MAX_WAIT_TIME, ONE_DIRECT_NEIGHBOURS_COUNT, WAIT_SYNC_OPERATION_TIMEOUT
 
 from fabnet.operations.manage_neighbours import ManageNeighbour
 from fabnet.operations.discovery_operation import DiscoveryOperation
@@ -115,6 +117,13 @@ class Operator:
             cert = ckey = None
         self.fri_client = FriClient(bool(cert), cert, ckey)
 
+        self.__fri_requests_queue = Queue()
+        self.__fri_responses_queue = MessageContainer(RQ_SIZE)
+        self.__fri_agents_manager = FriAgentsManager(self.__fri_requests_queue, \
+                                        self.__fri_responses_queue, key_storage, prefix=node_name)
+        self.__fri_agents_manager.setName('%s-FriAgentsManager'%(node_name,))
+        self.__fri_agents_manager.start()
+
         self.__upper_keep_alives = {}
         self.__superior_keep_alives = {}
 
@@ -131,6 +140,22 @@ class Operator:
             req = FabnetPacketRequest(method='ManageNeighbour', sender=self.self_address, parameters=parameters)
             self.call_node(neighbour, req)
 
+    def __call_operation(self, address, packet):
+        is_sync = getattr(packet, 'sync', False)
+        if is_sync:
+            event = threading.Event()
+        else:
+            event = None
+
+        self.__fri_requests_queue.put((address, packet, event, self.callback))
+
+        if is_sync:
+            ok = event.wait(WAIT_SYNC_OPERATION_TIMEOUT)
+            if not ok:
+                raise OperException('Operation %s timeouted on %s'%(packet.method, address))
+
+            ret_packet = self.__fri_responses_queue.get(packet.message_id, remove=True)
+            return ret_packet
 
     def stop(self):
         try:
@@ -141,6 +166,18 @@ class Operator:
             self.__unbind_neighbours(superiors, NT_UPPER)
         except Exception, err:
             logger.error('Operator stopping failed. Details: %s'%err)
+        finally:
+            try:
+                self.stop_inherited()
+            except Exception, err:
+                logger.error('Inherired operator does not stopped! Details: %s'%err)
+
+            self.__fri_agents_manager.stop()
+
+    def stop_inherited(self):
+        """This method should be imlemented for destroy
+        inherited operator objects"""
+        pass
 
     def on_network_notify(self, notify_type, notify_provider, notify_topic, message):
         """This method should be imlemented for some actions
@@ -175,6 +212,10 @@ class Operator:
         count, busy = self.server.workers_stat()
         ret_params['workers_count'] = count
         ret_params['workers_busy'] = busy
+
+        count, busy = self.__fri_agents_manager.get_workers_stat()
+        ret_params['agents_count'] = count
+        ret_params['agents_busy'] = busy
 
         methods_stat = {}
         self._lock()
@@ -287,7 +328,7 @@ class Operator:
         if self.__stat is not None:
             self.__stat[op_name] = OperationStat()
 
-    def call_node(self, node_address, packet, sync=False):
+    def call_node(self, node_address, packet):
         if node_address != self.self_address:
             self.msg_container.put(packet.message_id,
                             {'operation': packet.method,
@@ -295,10 +336,7 @@ class Operator:
                                 'responses_count': 0,
                                 'datetime': datetime.now()})
 
-        if sync:
-            return self.fri_client.call_sync(node_address, packet)
-        else:
-            return self.fri_client.call(node_address, packet)
+        return self.__call_operation(node_address, packet)
 
 
     def call_network(self, packet, from_address=None):
@@ -308,7 +346,8 @@ class Operator:
         if not from_address:
             from_address = self.self_address
 
-        return self.fri_client.call(from_address, packet)
+        return self.__call_operation(from_address, packet)
+
 
     def _process_keep_alive(self, packet):
         if packet.sender not in self.get_neighbours(NT_UPPER):
@@ -482,6 +521,8 @@ class Operator:
         try:
             operation_obj.after_process(packet, ret_packet)
         except Exception, err:
+            logger.write = logger.debug
+            traceback.print_exc(file=logger)
             logger.error('%s after_process routine failed. Details: %s'%(operation, err))
 
 
@@ -555,19 +596,14 @@ class Operator:
         neighbours = self.get_neighbours(NT_SUPERIOR)
 
         for neighbour in neighbours:
-            ret, message = self.fri_client.call(neighbour, packet)
-            if ret != RC_OK:
-                logger.info('Neighbour %s does not respond! Details: %s'%(neighbour, message))
-
+            self.__call_operation(neighbour, packet)
 
     def send_to_sender(self, sender, packet):
         if sender is None:
             self.callback(packet)
             return
 
-        rcode, rmsg = self.fri_client.call(sender, packet)
-        if rcode:
-            logger.error('[Operator.send_back to %s] %s %s.'%(sender, rcode, rmsg))
+        self.__call_operation(sender, packet)
 
 
 

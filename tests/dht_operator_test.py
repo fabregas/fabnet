@@ -119,24 +119,13 @@ class TestFSMappedRanges(unittest.TestCase):
             self.assertEqual(call_stack[2][1], 125)
             self.assertEqual(call_stack[2][2], 149)
 
-            def call_node_error_simulator(nodeaddr, request):
-                if nodeaddr == 'second_range_holder':
-                    return 666, 'No route to host!'
-
-                call_stack.append((nodeaddr, request.parameters['start_key'], request.parameters['end_key']))
-                return 0, 'ok'
-            operator.call_node = call_node_error_simulator
-            operator.start_as_dht_member()
-            self.assertEqual(call_stack[3][0], 'third_range_holder')
-            self.assertEqual(call_stack[3][1], 400)
-            self.assertEqual(call_stack[3][2], 499)
         finally:
             operator.stop()
 
     def test04_check_hash_table(self):
         call_stack = []
-        def call_node_simulator(nodeaddr, request, sync):
-            call_stack.append((nodeaddr, sync, request))
+        def call_node_simulator(nodeaddr, request):
+            call_stack.append((nodeaddr, getattr(request,'sync',False), request))
             return 0, 'ok'
 
         try:

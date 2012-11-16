@@ -78,14 +78,7 @@ class OperationBase:
         """Initiate new operation"""
         req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, \
                 parameters=parameters, binary_data=binary_data, sync=sync)
-        resp = self.operator.call_node(node_address, req, sync)
-        if sync:
-            return resp
-        else:
-            rcode, rmsg = resp
-            if rcode:
-                logger.error('Operation %s failed on %s. Details: %s'%(operation, node_address, rmsg))
-            return rcode, rmsg
+        return self.operator.call_node(node_address, req)
 
     def _init_network_operation(self, operation, parameters):
         """Initiate new operation over fabnet network"""

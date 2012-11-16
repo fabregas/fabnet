@@ -45,8 +45,7 @@ class TestKeepAlive(unittest.TestCase):
                         'sender': '127.0.0.1:1987',
                         'parameters': {}}
             packet_obj = FabnetPacketRequest(**packet)
-            rcode, rmsg = operator1.call_node('127.0.0.1:1986', packet_obj)
-            self.assertEqual(rcode, 0, rmsg)
+            operator1.call_node('127.0.0.1:1986', packet_obj)
 
             operator1.wait_response(323232, 1)
             server1.stop()

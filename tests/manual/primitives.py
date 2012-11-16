@@ -37,6 +37,8 @@ def make_fake_hdd(name, size, dev='/dev/loop0'):
     return '/tmp/mnt_%s'%name
 
 def destroy_fake_hdd(name, dev='/dev/loop0'):
+    if not os.path.exists('/tmp/%s'%name):
+        return
     os.system('sudo umount /tmp/mnt_%s'%name)
     os.system('sudo losetup -d %s'%dev)
     os.system('sudo rm /tmp/%s'%name)
@@ -79,7 +81,7 @@ def create_network(ip_addr, hdds_size):
     print 'Network is started!'
     return addresses, processes
 
-def destroy_network(processes):
+def destroy_network(processes, destroy_hdds=True):
     for proc in processes:
         proc.send_signal(signal.SIGINT)
 
@@ -87,9 +89,10 @@ def destroy_network(processes):
         proc.wait()
 
     print 'Network is destroyed!'
-    for i in xrange(len(processes)):
-        destroy_fake_hdd('node%02i'%i, '/dev/loop%i'%i)
-    print 'Virtual HDD devices are destroyed!'
+    if destroy_hdds:
+        for i in xrange(len(processes)):
+            destroy_fake_hdd('node%02i'%i, '/dev/loop%i'%i)
+        print 'Virtual HDD devices are destroyed!'
 
 
 def put_data_to_network(addresses, stat_buffer, perc=10):
@@ -249,4 +252,126 @@ def call_repair_data(address, out_streem, expect_res, invalid_node=None):
         out_streem.write('INVALID RESTORED RANGE FREE SIZE. BEFORE=%s, AFTER=%s\n'%(free_size, post_free_size))
 
     out_streem.write('Process time: %s\n'%dt)
+
+
+def create_virt_net(nodes_count, port_move=0):
+    addresses = []
+    processes = []
+    for unuse in range(nodes_count):
+        if not addresses:
+            i = 1900+port_move
+            if port_move:
+                n_node = '127.0.0.1:%i'%(i-1)
+            else:
+                n_node = 'init-fabnet'
+        else:
+            n_node = random.choice(addresses)
+            i = int(addresses[-1].split(':')[-1])+1
+            wait_node(n_node)
+
+        address = '127.0.0.1:%s'%i
+        addresses.append(address)
+
+        home = '/tmp/node_%s'%i
+        if os.path.exists(home):
+            shutil.rmtree(home)
+        os.mkdir(home)
+
+        args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, 'DHT']
+        #if DEBUG:
+        #    args.append('--debug')
+        p = subprocess.Popen(args)
+        time.sleep(0.1)
+
+        processes.append(p)
+        if len(addresses) > 2:
+            check_stat(address)
+
+    return addresses, processes
+
+def wait_node(node):
+    client = FriClient()
+    while True:
+        packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+        ret_packet = client.call_sync(node, packet_obj)
+        if ret_packet.ret_code:
+            print 'Node does not init FRI server yet. Waiting it...'
+            time.sleep(.5)
+            continue
+        break
+
+def check_stat(address):
+    client = FriClient()
+
+    while True:
+        try:
+            packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+            ret_packet = client.call_sync(address, packet_obj)
+            if ret_packet.ret_code:
+                time.sleep(.5)
+                continue
+
+            uppers_balance = int(ret_packet.ret_parameters[u'uppers_balance'])
+            superiors_balance = int(ret_packet.ret_parameters[u'superiors_balance'])
+            if uppers_balance >= 0 and superiors_balance >= 0:
+                if ret_packet.ret_parameters['dht_info']['status'] == 'normwork':
+                    break
+                print 'Node %s is not initialized as DHT member yet! Waiting...'%(address)
+            else:
+                print 'Node %s is not balanced yet! Waiting...'%address
+            time.sleep(.5)
+        except Exception, err:
+            logger.error('ERROR: %s'%err)
+            raise err
+
+
+def print_ranges(addresses, out_streem):
+    client = FriClient()
+    out_streem.write('\nRANGES SIZES:\n')
+    for address in addresses:
+        packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+        ret_packet = client.call_sync(address, packet_obj)
+        if ret_packet.ret_code:
+            raise Exception('NodeStatistic failed on %s: %s'%(address, ret_packet.ret_message))
+        start = ret_packet.ret_parameters['dht_info']['range_start']
+        end = ret_packet.ret_parameters['dht_info']['range_end']
+        len_r = long(end, 16) - long(start, 16)
+        out_streem.write('On node %s: {%s-%s}[%s] = %s KB (%s KB)\n'%(address, start, end, len_r,\
+                 ret_packet.ret_parameters['dht_info']['range_size']/1024, ret_packet.ret_parameters['dht_info']['replicas_size']/1024))
+
+
+def put_data_blocks(addresses, block_size=1024, blocks_count=1000):
+    client = FriClient()
+    keys = []
+    for i in xrange(blocks_count):
+        data = Random.new().read(block_size)
+        checksum =  hashlib.sha1(data).hexdigest()
+
+        params = {'checksum': checksum, 'wait_writes_count': 2}
+        packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
+        nodeaddr = random.choice(addresses)
+
+        ret_packet = client.call_sync(nodeaddr, packet_obj)
+        if ret_packet.ret_code != 0:
+            raise Exception('ClientPutData failed on %s: %s'%(nodeaddr, ret_packet.ret_message))
+
+        keys.append(ret_packet.ret_parameters.get('key'))
+
+    return keys
+
+def get_data_blocks(addresses, keys):
+    client = FriClient()
+
+    for key in keys:
+        params = {'key': key, 'replica_count':2}
+        packet_obj = FabnetPacketRequest(method='ClientGetData', parameters=params, sync=True)
+        nodeaddr = random.choice(addresses)
+
+        ret_packet = client.call_sync(nodeaddr, packet_obj)
+        if ret_packet.ret_code != 0:
+            raise Exception('ClientGetData failed on %s: %s'%(nodeaddr, ret_packet.ret_message))
+
+        data = ret_packet.binary_data
+        if hashlib.sha1(data).hexdigest() != ret_packet.ret_parameters['checksum']:
+            raise Exception('Data block checksum failed!')
 

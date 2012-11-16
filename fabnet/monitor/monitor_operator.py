@@ -54,11 +54,9 @@ class MonitorOperator(Operator):
         self.__discovery_topology_thrd.setName('%s-DiscoverTopologyThread'%self.node_name)
         self.__discovery_topology_thrd.start()
 
-    def stop(self):
+    def stop_inherited(self):
         self.__collect_nodes_stat_thread.stop()
         self.__discovery_topology_thrd.stop()
-
-        Operator.stop(self)
 
         self.__collect_nodes_stat_thread.join()
         self.__discovery_topology_thrd.join()

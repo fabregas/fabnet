@@ -29,7 +29,7 @@ class TestServerThread(threading.Thread):
 
     def run(self):
         address = '127.0.0.1:%s'%self.port
-        operator = Operator(address)
+        operator = Operator(address, node_name=str(self.port))
         self.operator = operator
 
         operator.register_operation('ManageNeighbour', ManageNeighbour)
@@ -56,8 +56,9 @@ class TestServerThread(threading.Thread):
 class TestDiscoverytOperation(unittest.TestCase):
     def test_discovery_operation(self):
         server1 = server2 = None
+        #os.system('rm /tmp/fabnet_topology.db')
         try:
-            operator = Operator('127.0.0.1:1986')
+            operator = Operator('127.0.0.1:1986', '1986')
             operator.register_operation('ManageNeighbour', ManageNeighbour)
             operator.register_operation('DiscoveryOperation', DiscoveryOperation)
             operator.register_operation('TopologyCognition', TopologyCognition)
@@ -65,7 +66,7 @@ class TestDiscoverytOperation(unittest.TestCase):
             ret = server1.start()
             self.assertEqual(ret, True)
 
-            operator1 = Operator('127.0.0.1:1987')
+            operator1 = Operator('127.0.0.1:1987', '1987')
             operator1.register_operation('ManageNeighbour', ManageNeighbour)
             operator1.register_operation('DiscoveryOperation', DiscoveryOperation)
             operator1.register_operation('TopologyCognition', TopologyCognition)
@@ -78,8 +79,7 @@ class TestDiscoverytOperation(unittest.TestCase):
                         'sender': '127.0.0.1:1987',
                         'parameters': {}}
             packet_obj = FabnetPacketRequest(**packet)
-            rcode, rmsg = operator1.call_node('127.0.0.1:1986', packet_obj)
-            self.assertEqual(rcode, 0, rmsg)
+            operator1.call_node('127.0.0.1:1986', packet_obj)
 
             time.sleep(1)
 
@@ -97,6 +97,7 @@ class TestDiscoverytOperation(unittest.TestCase):
     def test_topology_cognition(self):
         servers = []
         addresses = []
+        #os.system('rm /tmp/fabnet_topology.db')
         try:
             for i in range(1900, 1900+NODES_COUNT):
                 address = '127.0.0.1:%s'%i
@@ -104,7 +105,7 @@ class TestDiscoverytOperation(unittest.TestCase):
                 server.start()
                 servers.append(server)
 
-                time.sleep(.5)
+                time.sleep(1)
 
                 if addresses:
                     part_address = random.choice(addresses)
@@ -112,8 +113,7 @@ class TestDiscoverytOperation(unittest.TestCase):
                                 'sender': address,
                                 'parameters': {}}
                     packet_obj = FabnetPacketRequest(**packet)
-                    rcode, rmsg = server.operator.call_node(part_address, packet_obj)
-                    self.assertEqual(rcode, 0, rmsg)
+                    server.operator.call_node(part_address, packet_obj)
 
                 addresses.append(address)
 
@@ -123,8 +123,7 @@ class TestDiscoverytOperation(unittest.TestCase):
                         'sender': None,
                         'parameters': {}}
             packet_obj = FabnetPacketRequest(**packet)
-            rcode, rmsg = servers[0].operator.call_network(packet_obj)
-            self.assertEqual(rcode, 0, rmsg)
+            servers[0].operator.call_network(packet_obj)
 
             time.sleep(1)
 
@@ -137,6 +136,7 @@ class TestDiscoverytOperation(unittest.TestCase):
             for row in rows:
                 nodes[row[0]] = row
 
+            print 'NODES LIST: %s'%str(nodes)
 
             for i in range(1900, 1900+NODES_COUNT):
                 address = '127.0.0.1:%s'%i

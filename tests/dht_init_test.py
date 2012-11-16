@@ -278,8 +278,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             print 'Starting discovery...'
 
             packet_obj = FabnetPacketRequest(method='DiscoveryOperation', sender='127.0.0.1:1987')
-            rcode, rmsg = server1.operator.call_node('127.0.0.1:1986', packet_obj)
-            self.assertEqual(rcode, 0, rmsg)
+            server1.operator.call_node('127.0.0.1:1986', packet_obj)
 
             time.sleep(1)
 

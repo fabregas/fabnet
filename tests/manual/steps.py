@@ -5,6 +5,7 @@ import sys
 import os
 import re
 import time
+import random
 
 import primitives
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
@@ -34,7 +35,6 @@ def given_i_have_nodes_with_hdds(step, hdds_str):
 @step(u'When start network')
 def when_start_network(step):
     world.addresses, world.processes = primitives.create_network('127.0.0.1', world.hdds)
-    world.stat_f_obj = get_log_file(step.scenario.feature.name, step.scenario.name)
 
 @step(u'And put data until HDDs are full')
 def and_put_data_until_hdds_are_full(step):
@@ -107,16 +107,58 @@ def then_see_collected_stats_for_all_nodes(step):
                 raise Exception('Invalid node info found: %s'%str(node))
 
 
+
+@step(u'When start virtual network with (\d+) nodes')
+def when_start_virtual_network(step, nodes_count):
+    addresses, processes = primitives.create_virt_net(int(nodes_count), len(world.addresses))
+    world.addresses += addresses
+    world.processes += processes
+
+@step(u'When stop (\d+) nodes')
+def when_stop_n_nodes(step, nodes_count):
+    stop_nodes = []
+    stop_addrs = []
+    for i in xrange(int(nodes_count)):
+        while True:
+            proc = random.choice(world.processes)
+            if proc not in stop_nodes:
+                stop_addrs.append(world.addresses[world.processes.index(proc)])
+                stop_nodes.append(proc)
+                break
+
+    primitives.destroy_network(stop_nodes, destroy_hdds=False)
+
+    for proc in stop_nodes:
+        del world.processes[world.processes.index(proc)]
+
+    for addr in stop_addrs:
+        world.stat_f_obj.write('\nStopping %s node...\n'%addr)
+        del world.addresses[world.addresses.index(addr)]
+
+@step(u'Then I collect DHT statistic')
+def then_i_collect_dht_statistic(step):
+    primitives.print_ranges(world.addresses, world.stat_f_obj)
+
+@step(u'Then I put (\d+) blocks \(one block size - (\d+) bytes\)')
+def then_i_put_n_blocks_one_block_size_m_bytes(step, blocks, block_size):
+    world.keys = primitives.put_data_blocks(world.addresses, int(block_size), int(blocks))
+
+
+@step(u'Then I get and check all data blocks')
+def then_i_get_and_check_all_data_blocks(step):
+    primitives.get_data_blocks(world.addresses, world.keys)
+
+
 @before.each_scenario
-def try_start_network(feature):
+def try_start_network(scenario):
     world.check_node_only = None
     world.hdds = []
     world.addresses = []
     world.processes = []
-    world.stat_f_obj = None
+    world.stat_f_obj = get_log_file(scenario.feature.name, scenario.name)
 
 @after.each_scenario
-def try_stop_network(feature):
+def try_stop_network(scenario):
     if world.processes:
         primitives.destroy_network(world.processes)
 

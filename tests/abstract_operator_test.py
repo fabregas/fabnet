@@ -68,8 +68,7 @@ class TestAbstractOperator(unittest.TestCase):
                 packet['session_id'] = keystorage.get_node_cert_key()
 
             packet_obj = FabnetPacketRequest(**packet)
-            rcode, rmsg = operator.call_node('127.0.0.1:1986', packet_obj)
-            self.assertEqual(rcode, 0, rmsg)
+            operator.call_node('127.0.0.1:1986', packet_obj)
 
             operator.wait_response(323232, 1)
 
@@ -117,8 +116,7 @@ class TestAbstractOperator(unittest.TestCase):
                         'sender': '127.0.0.1:1987',
                         'parameters': {'message': 'test message'}}
             packet_obj = FabnetPacketRequest(**packet)
-            rcode, rmsg = operator.call_node('127.0.0.1:1986', packet_obj)
-            self.assertEqual(rcode, 1, rmsg)
+            operator.call_node('127.0.0.1:1986', packet_obj)
 
             time.sleep(.1)
         finally:

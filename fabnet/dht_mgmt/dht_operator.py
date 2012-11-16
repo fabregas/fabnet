@@ -124,14 +124,12 @@ class DHTOperator(Operator):
         self.call_network(req)
 
 
-    def stop(self):
+    def stop_inherited(self):
         self.status = DS_DESTROYING
         for range_obj in self.ranges_table.iter_table():
             if range_obj.node_address == self.self_address:
                 self._move_range(range_obj)
                 break
-
-        Operator.stop(self)
 
         self.__check_hash_table_thread.stop()
         self.__monitor_dht_ranges.stop()
@@ -221,11 +219,7 @@ class DHTOperator(Operator):
         logger.info('Call SplitRangeRequest to %s'%(new_range.node_address,))
         parameters = { 'start_key': new_dht_range.get_start(), 'end_key': new_dht_range.get_end() }
         req = FabnetPacketRequest(method='SplitRangeRequest', sender=self.self_address, parameters=parameters)
-        ret_code, ret_msg = self.call_node(new_range.node_address, req)
-        if ret_code != RC_OK:
-            logger.error('Cant start SplitRangeRequest operation on node %s. Details: %s'%(new_range.node_address, ret_msg))
-            return self.start_as_dht_member()
-
+        self.call_node(new_range.node_address, req)
 
     def get_dht_range(self):
         self._lock()
@@ -288,7 +282,7 @@ class CheckLocalHashTableThread(threading.Thread):
 
                     packet_obj = FabnetPacketRequest(method='CheckHashRangeTable',
                                 sender=self.operator.self_address, parameters=params)
-                    rcode, rmsg = self.operator.call_node(neighbour, packet_obj)
+                    self.operator.call_node(neighbour, packet_obj)
 
                     for i in xrange(Config.CHECK_HASH_TABLE_TIMEOUT):
                         if self.stopped:
@@ -371,7 +365,7 @@ class MonitorDHTRanges(threading.Thread):
             logger.info('Call PullSubrangeRequest to %s'%(k_range.node_address,))
             parameters = { 'start_key': pull_subrange.get_start(), 'end_key': pull_subrange.get_end(), 'subrange_size': subrange_size }
             req = FabnetPacketRequest(method='PullSubrangeRequest', sender=self.operator.self_address, parameters=parameters, sync=True)
-            resp = self.operator.call_node(k_range.node_address, req, sync=True)
+            resp = self.operator.call_node(k_range.node_address, req)
             if resp.ret_code != RC_OK:
                 raise Exception(resp.ret_message)
 
@@ -412,7 +406,7 @@ class MonitorDHTRanges(threading.Thread):
         req = FabnetPacketRequest(method='PutDataBlock', sender=self.operator.self_address,\
                 parameters=params, binary_data=data, sync=True)
 
-        resp = self.operator.call_node(k_range.node_address, req, sync=True)
+        resp = self.operator.call_node(k_range.node_address, req)
 
         if resp.ret_code not in (RC_OK, RC_OLD_DATA):
             logger.error('PutDataBlock error on %s: %s'%(k_range.node_address, resp.ret_message))

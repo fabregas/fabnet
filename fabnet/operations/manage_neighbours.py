@@ -13,7 +13,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 from fabnet.core.operation_base import OperationBase
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
                         ONE_DIRECT_NEIGHBOURS_COUNT, \
-                        NODE_ROLE, CLIENT_ROLE
+                        NODE_ROLE, CLIENT_ROLE, RC_OK
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.operations.constants import MNO_APPEND, MNO_REMOVE
 from fabnet.utils.logger import logger
@@ -103,10 +103,8 @@ class ManageNeighbour(OperationBase):
 
         parameters = { 'neighbour_type': other_n_type, 'operation': MNO_APPEND,
                     'node_address': self.operator.self_address, 'operator_type': self.operator.OPTYPE }
-        ret_code, msg = self._init_operation(new_node, 'ManageNeighbour', parameters)
-        if ret_code:
-            self.__discovered_nodes[n_type].append(new_node)
-            self._check_neighbours_count(n_type, neighbours, other_n_type, other_neighbours, ret_parameters)
+        self._init_operation(new_node, 'ManageNeighbour', parameters)
+        self.__discovered_nodes[n_type].append(new_node)
 
 
     def rebalance_append(self, ret_parameters):
@@ -249,6 +247,12 @@ class ManageNeighbour(OperationBase):
                 that should be resended to current node requestor
                 or None for disabling packet resending
         """
+        if packet.ret_code != RC_OK:
+            self.rebalance_remove()
+            self.rebalance_append({'neighbour_type': NT_SUPERIOR})
+            self.rebalance_append({'neighbour_type': NT_UPPER})
+            return
+
         n_type, operation, node_address, op_type = self._valiadate_packet(packet.ret_parameters)
 
         self._lock()
