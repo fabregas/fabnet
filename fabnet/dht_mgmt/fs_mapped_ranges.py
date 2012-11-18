@@ -116,7 +116,7 @@ class SafeList:
 
 class FSHashRanges:
     @staticmethod
-    def discovery_range(save_path):
+    def discovery_range(save_path, ret_full=False):
         items = os.listdir(save_path)
 
         discovered_ranges = []
@@ -144,14 +144,16 @@ class FSHashRanges:
 
             discovered_ranges.append(hash_range)
 
-        if not max_range:
-            return FSHashRanges(MIN_HASH, MAX_HASH, save_path)
-
         for h_range in discovered_ranges:
             if h_range != max_range:
                 h_range.move_to_reservation()
 
-        max_range.restore_from_reservation()
+        if ret_full or (not max_range):
+            max_range = FSHashRanges(MIN_HASH, MAX_HASH, save_path)
+
+        if max_range:
+            max_range.restore_from_reservation()
+
         return max_range
 
 

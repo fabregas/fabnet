@@ -73,8 +73,8 @@ class DHTOperator(Operator):
         if not os.path.exists(self.save_path):
             os.mkdir(self.save_path)
 
-        self.__dht_range = FSHashRanges.discovery_range(self.save_path)
         self.__split_requests_cache = []
+        self.__dht_range = FSHashRanges.discovery_range(self.save_path, ret_full=is_init_node)
         self.__start_dht_try_count = 0
         self.__init_dht_thread = None
         if is_init_node:
