@@ -134,6 +134,7 @@ class DHTOperator(Operator):
         self.__check_hash_table_thread.stop()
         self.__monitor_dht_ranges.stop()
 
+        time.sleep(Config.DHT_STOP_TIMEOUT)
         self.__check_hash_table_thread.join()
         self.__monitor_dht_ranges.join()
 
@@ -190,6 +191,7 @@ class DHTOperator(Operator):
                 if (new_range.start != curr_start or new_range.end != curr_end):
                     nochange = True
                 if new_range.node_address == self.self_address:
+                    #FIXME: range can be not valid in this case...
                     self.set_status_to_normalwork()
                     return
 
@@ -239,7 +241,7 @@ class DHTOperator(Operator):
         dht_range = self.get_dht_range()
         logger.info('New node range: %040x-%040x'%(dht_range.get_start(), dht_range.get_end()))
 
-    def check_dht_range(self):
+    def check_dht_range(self, reinit=True):
         if self.status == DS_INITIALIZE:
             return
 
@@ -252,9 +254,14 @@ class DHTOperator(Operator):
 
         range_obj = self.ranges_table.find(start)
         if not range_obj or range_obj.start != start or range_obj.end != end or range_obj.node_address != self.self_address:
-            logger.error('DHT range on this node is not found in ranges_table')
-            logger.info('Trying reinit node as DHT member...')
-            self.start_as_dht_member()
+            if reinit:
+                logger.warning('DHT range on this node is not found in ranges_table')
+                logger.info('Self range: %040x-%040x, In hash table: %040x-%040x(%s)'%\
+                    (start, end, range_obj.start, range_obj.end, range_obj.node_address))
+                logger.info('Trying reinit node as DHT member...')
+                self.start_as_dht_member()
+            return True
+
 
 
 
@@ -278,7 +285,10 @@ class CheckLocalHashTableThread(threading.Thread):
                 for neighbour in neighbours:
                     logger.debug('Checking range table at %s'%neighbour)
                     mod_index = self.operator.ranges_table.get_mod_index()
-                    params = {'mod_index': mod_index}
+                    ranges_count = self.operator.ranges_table.count()
+                    params = {'mod_index': mod_index, 'ranges_count': ranges_count, \
+                                'range_start': self.operator.get_dht_range().get_start(), \
+                                'range_end': self.operator.get_dht_range().get_end()}
 
                     packet_obj = FabnetPacketRequest(method='CheckHashRangeTable',
                                 sender=self.operator.self_address, parameters=params)
@@ -381,7 +391,7 @@ class MonitorDHTRanges(threading.Thread):
         dht_range = self.operator.get_dht_range()
 
         for digest, data, file_path in dht_range.iter_reservation():
-            logger.info('Processing %s from reservation range'%digest)
+            logger.debug('Processing %s from reservation range'%digest)
             if self._put_data(digest, data):
                 logger.debug('data block with key=%s is send from reservation range'%digest)
                 os.unlink(file_path)
@@ -389,7 +399,7 @@ class MonitorDHTRanges(threading.Thread):
     def _process_replicas(self):
         dht_range = self.operator.get_dht_range()
         for digest, data, file_path in dht_range.iter_replicas():
-            logger.info('Processing replica %s'%digest)
+            logger.debug('Processing replica %s'%digest)
             if self._put_data(digest, data, is_replica=True):
                 logger.debug('data block with key=%s is send from replicas range'%digest)
                 os.unlink(file_path)

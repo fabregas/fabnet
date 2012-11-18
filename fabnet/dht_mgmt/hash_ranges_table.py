@@ -49,6 +49,13 @@ class HashRangesTable:
     def is_blocked(self):
         return self.__blocked.is_set()
 
+    def count(self):
+        self.__lock.acquire()
+        try:
+            return len(self.__ranges)
+        finally:
+            self.__lock.release()
+
     def get_checksum(self):
         self.__lock.acquire()
         try:

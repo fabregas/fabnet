@@ -26,6 +26,7 @@ DEFAULT_DHT_CONFIG = { 'WAIT_RANGE_TIMEOUT': 120, #if no ranges found for init D
                         'MONITOR_DHT_RANGES_TIMEOUT': 30,
                         'WAIT_FILE_MD_TIMEDELTA': 10,
                         'WAIT_DHT_TABLE_UPDATE': 3,
-                        'RANGES_TABLE_FLAPPING_TIMEOUT': 3}
+                        'RANGES_TABLE_FLAPPING_TIMEOUT': 3,
+                        'DHT_STOP_TIMEOUT': 2} #wait sending messages from agents threads
 
 

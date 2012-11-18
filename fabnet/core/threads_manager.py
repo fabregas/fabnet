@@ -76,7 +76,7 @@ class ThreadsManager(threading.Thread):
                 ret_message = '%s error: %s' % (self.getName(), err)
                 logger.error(ret_message)
 
-        logger.info('Workers manager is stopped!')
+        logger.info('%s is stopped!'%self.getName())
 
     def __spawn_work_threads(self):
         logger.debug('starting new work thread')

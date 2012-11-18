@@ -13,7 +13,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 from fabnet.core.operation_base import OperationBase
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
                         ONE_DIRECT_NEIGHBOURS_COUNT, \
-                        NODE_ROLE, CLIENT_ROLE, RC_OK
+                        NODE_ROLE, CLIENT_ROLE, RC_OK, RC_ERROR
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.operations.constants import MNO_APPEND, MNO_REMOVE
 from fabnet.utils.logger import logger
@@ -173,6 +173,8 @@ class ManageNeighbour(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
+        if self.operator.stopped:
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Node does not started...')
         n_type, operation, node_address, op_type = self._valiadate_packet(packet.parameters)
         is_force = packet.parameters.get('force', False)
 
@@ -224,6 +226,9 @@ class ManageNeighbour(OperationBase):
         @param packet - object of FabnetPacketRequest class
         @param ret_packet - object of FabnetPacketResponse class
         """
+        if self.operator.stopped:
+            return
+
         if ret_packet:
             if packet.parameters.get('operation', MNO_APPEND) == MNO_APPEND \
                     and ret_packet.ret_parameters.get('dont_append', False) == False:
@@ -247,7 +252,11 @@ class ManageNeighbour(OperationBase):
                 that should be resended to current node requestor
                 or None for disabling packet resending
         """
+        if self.operator.stopped:
+            return
+
         if packet.ret_code != RC_OK:
+            logger.warning('ManageNeighbour: neighbour does not process request...')
             self.rebalance_remove()
             self.rebalance_append({'neighbour_type': NT_SUPERIOR})
             self.rebalance_append({'neighbour_type': NT_UPPER})

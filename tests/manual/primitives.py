@@ -18,6 +18,7 @@ from fabnet.core.constants import ET_INFO
 from fabnet.core.fri_server import FriClient, FabnetPacketRequest
 from fabnet.utils.db_conn import SqliteDBConnection as DBConnection
 from fabnet.monitor.monitor_operator import MONITOR_DB
+from fabnet.dht_mgmt.hash_ranges_table import HashRangesTable
 
 from Crypto import Random
 
@@ -279,7 +280,7 @@ def create_virt_net(nodes_count, port_move=0):
 
         args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, 'DHT']
         #if DEBUG:
-        #    args.append('--debug')
+        #args.append('--debug')
         p = subprocess.Popen(args)
         time.sleep(0.1)
 
@@ -328,17 +329,37 @@ def check_stat(address):
 def print_ranges(addresses, out_streem):
     client = FriClient()
     out_streem.write('\nRANGES SIZES:\n')
+    ranges = {}
     for address in addresses:
         packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
         ret_packet = client.call_sync(address, packet_obj)
         if ret_packet.ret_code:
             raise Exception('NodeStatistic failed on %s: %s'%(address, ret_packet.ret_message))
+
         start = ret_packet.ret_parameters['dht_info']['range_start']
         end = ret_packet.ret_parameters['dht_info']['range_end']
-        len_r = long(end, 16) - long(start, 16)
-        out_streem.write('On node %s: {%s-%s}[%s] = %s KB (%s KB)\n'%(address, start, end, len_r,\
-                 ret_packet.ret_parameters['dht_info']['range_size']/1024, ret_packet.ret_parameters['dht_info']['replicas_size']/1024))
+        range_size = ret_packet.ret_parameters['dht_info']['range_size']
+        replicas_size = ret_packet.ret_parameters['dht_info']['replicas_size']
+        ranges[address] = (start, end, range_size, replicas_size)
 
+    h_ranges = HashRangesTable()
+    for address, (start, end, _, _) in ranges.items():
+        h_ranges.append(long(start,16), long(end,16), address)
+
+    for h_range in h_ranges.iter_table():
+        start = h_range.start
+        end = h_range.end
+        address = h_range.node_address
+        len_r = end - start
+        out_streem.write('On node %s: {%040x-%040x}[%040x] = %s KB (%s KB)\n'%(address, start, end, len_r,\
+                 ranges[address][2]/1024, ranges[address][3]/1024))
+    out_streem.flush()
+
+    end = -1
+    for h_range in h_ranges.iter_table():
+        if end+1 != h_range.start:
+            raise Exception('Distributed range table is not full!')
+        end = h_range.end
 
 def put_data_blocks(addresses, block_size=1024, blocks_count=1000):
     client = FriClient()

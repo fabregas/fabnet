@@ -133,6 +133,8 @@ class Operator:
         for op_name, op_class in self.OPERATIONS_MAP.items():
             self.register_operation(op_name, op_class)
 
+        self.stopped = False
+
     def __unbind_neighbours(self, neighbours, n_type):
         for neighbour in neighbours:
             parameters = { 'neighbour_type': n_type, 'operation': MNO_REMOVE, 'force': True,
@@ -159,6 +161,7 @@ class Operator:
 
     def stop(self):
         try:
+            self.stopped = True
             uppers = self.get_neighbours(NT_UPPER)
             superiors = self.get_neighbours(NT_SUPERIOR)
 

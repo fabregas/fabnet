@@ -152,13 +152,14 @@ class TestFSMappedRanges(unittest.TestCase):
 
             operator1.ranges_table.append(0, 99, 'first_range_holder')
             operator1.ranges_table.append(100, 149, 'second_range_holder')
-            operator1.ranges_table.append(300, 499, 'third_range_holder')
+            operator1.ranges_table.append(300, 499, operator.self_address)
 
             operator1.call_node = call_node_simulator
             operator1.register_operation('CheckHashRangeTable', CheckHashRangeTableOperation)
 
             mod_index = operator.ranges_table.get_mod_index()
-            params = {'mod_index': mod_index}
+            params = {'mod_index': mod_index, 'ranges_count': operator.ranges_table.count(), \
+                        'range_start': 300, 'range_end': 499}
             packet = FabnetPacketRequest(method='CheckHashRangeTable', sender=operator.self_address, parameters=params)
             resp = operator1.process(packet)
             self.assertEqual(resp.ret_code, 0)
@@ -168,10 +169,17 @@ class TestFSMappedRanges(unittest.TestCase):
             packet = FabnetPacketRequest(method='CheckHashRangeTable', sender=operator.self_address, parameters=params)
             resp = operator1.process(packet)
             self.assertEqual(resp.ret_code, RC_NEED_UPDATE)
-            callback_resp = resp
 
+            params['range_end'] = 234
+            packet = FabnetPacketRequest(method='CheckHashRangeTable', sender=operator.self_address, parameters=params)
+            resp = operator1.process(packet)
+            self.assertEqual(resp.ret_code, RC_NEED_UPDATE)
+
+            callback_resp = resp
             mod_index = operator.ranges_table.get_mod_index()
-            params = {'mod_index': mod_index}
+
+            params = {'mod_index': mod_index, 'ranges_count': operator.ranges_table.count(), \
+                        'range_start': 300, 'range_end': 499}
             packet = FabnetPacketRequest(message_id=packet.message_id, method='CheckHashRangeTable', \
                                     sender=operator1.self_address, parameters=params)
             resp = operator.process(packet)

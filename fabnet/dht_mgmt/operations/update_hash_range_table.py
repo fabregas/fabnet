@@ -36,6 +36,10 @@ class UpdateHashRangeTableOperation(OperationBase):
         if self.operator.status != DS_NORMALWORK:
             return
 
+        failed_range = self.operator.check_dht_range(reinit=False)
+        if failed_range:
+            return
+
         self_dht_range = self.operator.get_dht_range()
 
         if self_dht_range.get_end() != MAX_HASH:
@@ -55,8 +59,7 @@ class UpdateHashRangeTableOperation(OperationBase):
                 logger.info('Extended range by next neighbours')
                 time.sleep(Config.WAIT_DHT_TABLE_UPDATE)
                 self._init_network_operation('UpdateHashRangeTable', {'append': append_lst, 'remove': rm_lst})
-
-                return self._check_near_range()
+                return
 
         first_range = self.operator.ranges_table.find(MIN_HASH)
         if not first_range:
@@ -95,14 +98,12 @@ class UpdateHashRangeTableOperation(OperationBase):
 
             logger.debug('RM RANGE: %s'%', '.join([r.to_str() for r in rm_obj_list]))
             logger.debug('APP RANGE: %s'%', '.join([a.to_str() for a in ap_obj_list]))
+
+            self._check_near_range()
         except Exception, err:
             logger.error('UpdateHashRangeTable error: %s'%err)
-        finally:
-            self._unlock()
-
-        self._lock()
-        try:
-            self._check_near_range()
+            if not packet.sender:
+                self.operator.check_dht_range()
         finally:
             self._unlock()
 
