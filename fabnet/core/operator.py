@@ -28,7 +28,7 @@ from fabnet.core.constants import MC_SIZE, RQ_SIZE
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.config import Config
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPERIOR, NT_UPPER, \
-                KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, \
+                KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, CHECK_NEIGHBOURS_TIMEOUT,\
                 KEEP_ALIVE_MAX_WAIT_TIME, ONE_DIRECT_NEIGHBOURS_COUNT, WAIT_SYNC_OPERATION_TIMEOUT
 
 from fabnet.operations.manage_neighbours import ManageNeighbour
@@ -124,6 +124,10 @@ class Operator:
         self.__fri_agents_manager.setName('%s-FriAgentsManager'%(node_name,))
         self.__fri_agents_manager.start()
 
+        self.__check_neighbours_thread = CheckNeighboursThread(self)
+        self.__check_neighbours_thread.setName('%s-CheckNeighbours'%(node_name,))
+        self.__check_neighbours_thread.start()
+
         self.__upper_keep_alives = {}
         self.__superior_keep_alives = {}
 
@@ -162,6 +166,8 @@ class Operator:
     def stop(self):
         try:
             self.stopped = True
+            self.__check_neighbours_thread.stop()
+
             uppers = self.get_neighbours(NT_UPPER)
             superiors = self.get_neighbours(NT_SUPERIOR)
 
@@ -176,6 +182,7 @@ class Operator:
                 logger.error('Inherired operator does not stopped! Details: %s'%err)
 
             self.__fri_agents_manager.stop()
+            self.__check_neighbours_thread.join()
 
     def stop_inherited(self):
         """This method should be imlemented for destroy
@@ -606,6 +613,42 @@ class Operator:
             return
 
         self.__call_operation(sender, packet)
+
+
+
+
+class CheckNeighboursThread(threading.Thread):
+    def __init__(self, operator):
+        threading.Thread.__init__(self)
+        self.operator = operator
+        self.stopped = True
+
+    def run(self):
+        self.stopped = False
+        logger.info('Check neighbours thread is started!')
+
+        while not self.stopped:
+            try:
+                t0 = datetime.now()
+
+                self.operator.check_neighbours()
+
+                proc_dt = datetime.now() - t0
+            except Exception, err:
+                logger.write = logger.debug
+                traceback.print_exc(file=logger)
+                logger.error('[CheckNeighboursThread] %s'%err)
+            finally:
+                wait_seconds = CHECK_NEIGHBOURS_TIMEOUT - proc_dt.seconds
+                for i in range(wait_seconds):
+                    if self.stopped:
+                        break
+                    time.sleep(1)
+
+        logger.info('Check neighbours thread is stopped!')
+
+    def stop(self):
+        self.stopped = True
 
 
 

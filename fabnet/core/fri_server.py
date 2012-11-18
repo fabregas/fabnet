@@ -26,8 +26,7 @@ from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse,\
 
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_REQ_CERTIFICATE, \
                 STOP_THREAD_EVENT, S_ERROR, S_PENDING, S_INWORK, \
-                BUF_SIZE, CHECK_NEIGHBOURS_TIMEOUT, \
-                MIN_WORKERS_COUNT, MAX_WORKERS_COUNT
+                BUF_SIZE, MIN_WORKERS_COUNT, MAX_WORKERS_COUNT
 
 from fabnet.core.threads_manager import ThreadsManager
 from fabnet.core.sessions_manager import SessionsManager
@@ -53,8 +52,6 @@ class FriServer:
         self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.queue, keystorage)
         self.__conn_handler_thread.setName('%s-FriConnectionHandler'%(server_name,))
 
-        self.__check_neighbours_thread = CheckNeighboursThread(self.operator)
-        self.__check_neighbours_thread.setName('%s-CheckNeighbours'%(server_name,))
         cur_thread = threading.current_thread()
         cur_thread.setName('%s-MAIN'%server_name)
 
@@ -66,7 +63,6 @@ class FriServer:
 
         self.__workers_manager_thread.start()
         self.__conn_handler_thread.start()
-        self.__check_neighbours_thread.start()
 
         while self.__conn_handler_thread.status == S_PENDING:
             time.sleep(.1)
@@ -85,7 +81,6 @@ class FriServer:
 
         self.operator.stop()
         self.__conn_handler_thread.stop()
-        self.__check_neighbours_thread.stop()
         sock = None
         try:
             if self.keystorage:
@@ -118,7 +113,6 @@ class FriServer:
         #waiting threads finishing... 
         self.__workers_manager_thread.join()
         self.__conn_handler_thread.join()
-        self.__check_neighbours_thread.join()
         self.stopped = True
 
 
@@ -324,41 +318,5 @@ class FriWorker(threading.Thread):
             sock.close()
         except Exception, err:
             logger.error('Closing client socket error: %s'%err)
-
-
-
-
-class CheckNeighboursThread(threading.Thread):
-    def __init__(self, operator):
-        threading.Thread.__init__(self)
-        self.operator = operator
-        self.stopped = True
-
-    def run(self):
-        self.stopped = False
-        logger.info('Check neighbours thread is started!')
-
-        while not self.stopped:
-            try:
-                t0 = datetime.now()
-
-                self.operator.check_neighbours()
-
-                proc_dt = datetime.now() - t0
-            except Exception, err:
-                logger.write = logger.debug
-                traceback.print_exc(file=logger)
-                logger.error('[CheckNeighboursThread] %s'%err)
-            finally:
-                wait_seconds = CHECK_NEIGHBOURS_TIMEOUT - proc_dt.seconds
-                for i in range(wait_seconds):
-                    if self.stopped:
-                        break
-                    time.sleep(1)
-
-        logger.info('Check neighbours thread is stopped!')
-
-    def stop(self):
-        self.stopped = True
 
 

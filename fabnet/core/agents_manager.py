@@ -62,7 +62,8 @@ class FriAgent(threading.Thread):
                 else:
                     rcode, rmsg = self.fri_client.call(address, packet)
                     if rcode != RC_OK:
-                        logger.error("Can't call async operation %s on %s. Details: %s"%(getattr(packet, 'method', 'callback'), address, rmsg))
+                        logger.error("Can't call async operation %s on %s. Details: %s. Packet: %s"%\
+                            (getattr(packet, 'method', 'callback'), address, rmsg, packet))
                         ret_packet = FabnetPacketResponse(message_id=packet.message_id, \
                                         ret_code=RC_DONT_STARTED, ret_message=rmsg)
                         async_callback(ret_packet)

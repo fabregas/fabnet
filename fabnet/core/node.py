@@ -65,7 +65,8 @@ class Node:
 
         params = {'event_type': ET_INFO, 'event_topic': 'NodeUp', \
                 'event_message': 'Hello, fabnet!', 'event_provider': address}
-        packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=address)
+        packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=None)
+        logger.info('SINDING NOTIFICATION TO %s'%neighbour)
         self.server.operator.call_node(neighbour, packet)
 
         return True

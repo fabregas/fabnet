@@ -1,0 +1,39 @@
+import re
+import os
+import sys
+
+def process_line(line, out_dir):
+    found = re.findall('(\d+:\d+:\d+).+FABNET (\w+) \[(\d+)\-([\w#]+)\](.+)', line)
+    if not found:
+        print 'Not fabnet msg: %s'%line
+        return
+
+    dtime, log_level, node, thread, msg = found[0]
+
+    open(os.path.join(out_dir, node +'_full.log'), 'a').write('%s %s [%s] %s\n'%(dtime, log_level, thread, msg))
+
+    node_dir = os.path.join(out_dir, node)
+    thread_file = os.path.join(node_dir, thread)
+    if not os.path.exists(node_dir):
+        os.mkdir(node_dir)
+
+    open(thread_file, 'a').write('%s %s %s\n'%(dtime, log_level, msg))
+
+def process_log(log_file, out_dir):
+    if not os.path.exists(log_file):
+        print 'Log file %s does not found!'%log_file
+        return 1
+
+    if not os.path.exists(out_dir):
+        print 'Direcotory %s does not found!'%out_dir
+        return 1
+
+    f_obj = open(log_file)
+    while True:
+        line = f_obj.readline()
+        if not line:
+            break
+        process_line(line, out_dir)
+    f_obj.close()
+
+process_log(sys.argv[1], sys.argv[2])

@@ -40,4 +40,6 @@ Feature: DHT Init
         Then I collect DHT statistic
         Then I collect topology from every node
 
-
+        When stop 15 nodes
+        And wait 240 seconds
+        Then I put 1000 blocks (one block size - 1024 bytes)

@@ -338,11 +338,8 @@ class MonitorDHTRanges(threading.Thread):
             params = {'event_type': ET_ALERT, 'event_message': message,\
                       'event_topic': 'HDD usage', 'event_provider': self.operator.self_address}
             packet = FabnetPacketRequest(method='NotifyOperation', parameters=params, sender=self.operator.self_address)
-            rcode, rmsg = self.operator.call_network(packet)
-            if rcode:
-                logger.error('Cant initiate NotifyOperation for ALERT "%s". Details: %s'%(message, rmsg))
-            else:
-                self.__notification_flag = True
+            self.operator.call_network(packet)
+            self.__notification_flag = True
         else:
             self.__notification_flag = False
 
@@ -429,6 +426,11 @@ class MonitorDHTRanges(threading.Thread):
         logger.info('started')
         self.stopped = False
         while not self.stopped:
+            for i in xrange(Config.MONITOR_DHT_RANGES_TIMEOUT):
+                if self.stopped:
+                    break
+                time.sleep(1)
+
             try:
                 logger.debug('MonitorDHTRanges iteration...')
 
@@ -439,11 +441,6 @@ class MonitorDHTRanges(threading.Thread):
                 self._process_replicas()
             except Exception, err:
                 logger.error('[MonitorDHTRanges] %s'% err)
-            finally:
-                for i in xrange(Config.MONITOR_DHT_RANGES_TIMEOUT):
-                    if self.stopped:
-                        break
-                    time.sleep(1)
 
         logger.info('stopped')
 

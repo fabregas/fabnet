@@ -73,9 +73,12 @@ class ClientPutOperation(OperationBase):
                 else:
                     resp = self._init_operation(range_obj.node_address, 'PutDataBlock', params, sync=True, binary_data=data)
                     if resp.ret_code:
-                        logger.debug('[ClientPutOperation] PutDataBlock error from %s: %s'%(range_obj.node_address, resp.ret_message))
-                    else:
-                        succ_count += 1
+                        logger.error('[ClientPutOperation] PutDataBlock error from %s: %s'%(range_obj.node_address, resp.ret_message))
+
+                        resp = self._init_operation(self.operator.self_address, 'PutDataBlock', params, sync=True, binary_data=data)
+                        if resp.ret_code:
+                            continue
+                    succ_count += 1
 
             is_replica = True
 
