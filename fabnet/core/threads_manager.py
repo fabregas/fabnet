@@ -57,7 +57,7 @@ class ThreadsManager(threading.Thread):
 
         while not self.stopped:
             try:
-                time.sleep(.2)
+                time.sleep(.4)
                 if self.queue.qsize() > 0:
                     not_empty_queue_count += 1
                     empty_queue_count = 0

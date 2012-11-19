@@ -186,9 +186,8 @@ class TestFSMappedRanges(unittest.TestCase):
             self.assertEqual(resp.ret_code, 0, resp.ret_message)
 
             operator.callback(callback_resp)
-            self.assertEqual(len(call_stack), 1)
-            self.assertEqual(call_stack[0][0], '127.0.0.1:1986')
-            self.assertEqual(call_stack[0][2].method, 'GetRangesTable')
+            self.assertEqual(call_stack[-1][0], '127.0.0.1:1986')
+            self.assertEqual(call_stack[-1][2].method, 'GetRangesTable')
 
             print 'GENERATE EXCEPTION'
             packet = FabnetPacketRequest(method='CheckHashRangeTable', sender=operator.self_address)

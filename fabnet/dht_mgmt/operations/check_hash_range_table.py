@@ -14,7 +14,7 @@ import time
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.core.constants import RC_ERROR, NODE_ROLE
+from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE, RC_DONT_STARTED
 from fabnet.dht_mgmt.constants import RC_NEED_UPDATE, DS_INITIALIZE
 from fabnet.core.config import Config
 from fabnet.utils.logger import logger
@@ -93,6 +93,16 @@ class CheckHashRangeTableOperation(OperationBase):
         return False
 
 
+    def _remove_node_range(self, nodeaddr):
+        for range_obj in self.operator.ranges_table.iter_table():
+            if range_obj.node_address == nodeaddr:
+                logger.info('Node %s went from DHT. Updating hash range table on network...'%range_obj.node_address)
+                rm_lst = [(range_obj.start, range_obj.end, range_obj.node_address)]
+                parameters = {'append': [], 'remove': rm_lst}
+                self._init_network_operation('UpdateHashRangeTable', parameters)
+                break
+
+
     def callback(self, packet, sender=None):
         """In this method should be implemented logic of processing
         response packet from requested node
@@ -104,10 +114,15 @@ class CheckHashRangeTableOperation(OperationBase):
                 that should be resended to current node requestor
                 or None for disabling packet resending
         """
-        if packet.ret_code == RC_ERROR:
+        if packet.ret_code == RC_DONT_STARTED:
+            self._remove_node_range(packet.from_node)
+            time.sleep(Config.WAIT_DHT_TABLE_UPDATE)
+            self.operator.check_near_range()
+        elif packet.ret_code == RC_OK:
+            self.operator.check_near_range()
+        elif packet.ret_code == RC_ERROR:
             logger.error('CheckHashRangeTable failed on %s. Details: %s %s'%(packet.from_node, \
                     packet.ret_code, packet.ret_message))
         elif packet.ret_code == RC_NEED_UPDATE:
             self._get_ranges_table(packet.from_node, packet.ret_parameters['mod_index'], \
                     packet.ret_parameters['ranges_count'])
-

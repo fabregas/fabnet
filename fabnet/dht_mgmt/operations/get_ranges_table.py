@@ -58,6 +58,6 @@ class GetRangesTableOperation(OperationBase):
             logger.info('Starting node as DHT member')
             self.operator.start_as_dht_member()
         else:
-            self.operator.check_dht_range()
+            self.operator.check_near_range(reinit_dht=True)
 
 

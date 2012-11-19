@@ -9,13 +9,11 @@ Copyright (C) 2012 Konstantin Andrusenko
 @author Konstantin Andrusenko
 @date September 26, 2012
 """
-import time
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.constants import DS_NORMALWORK, DS_INITIALIZE, \
                             MAX_HASH, MIN_HASH
-from fabnet.core.config import Config
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
 from fabnet.dht_mgmt.hash_ranges_table import HashRange
 from fabnet.utils.logger import logger
@@ -31,48 +29,6 @@ class UpdateHashRangeTableOperation(OperationBase):
                 or None for disabling packet resend to neigbours
         """
         return packet
-
-    def _check_near_range(self):
-        if self.operator.status != DS_NORMALWORK:
-            return
-
-        failed_range = self.operator.check_dht_range(reinit=False)
-        if failed_range:
-            return
-
-        self_dht_range = self.operator.get_dht_range()
-
-        if self_dht_range.get_end() != MAX_HASH:
-            next_range = self.operator.ranges_table.find(self_dht_range.get_end()+1)
-            if not next_range:
-                next_exists_range = self.operator.ranges_table.find_next(self_dht_range.get_end()-1)
-                if next_exists_range:
-                    end = next_exists_range.start-1
-                else:
-                    end = MAX_HASH
-                new_dht_range = self_dht_range.extend(self_dht_range.get_end()+1, end)
-                self.operator.update_dht_range(new_dht_range)
-
-                rm_lst = [(self_dht_range.get_start(), self_dht_range.get_end(), self.operator.self_address)]
-                append_lst = [(new_dht_range.get_start(), new_dht_range.get_end(), self.operator.self_address)]
-
-                logger.info('Extended range by next neighbours')
-                time.sleep(Config.WAIT_DHT_TABLE_UPDATE)
-                self._init_network_operation('UpdateHashRangeTable', {'append': append_lst, 'remove': rm_lst})
-                return
-
-        first_range = self.operator.ranges_table.find(MIN_HASH)
-        if not first_range:
-            first_range = self.operator.ranges_table.get_first()
-            if not first_range:
-                return
-            if first_range.node_address == self.operator.self_address:
-                new_dht_range = self_dht_range.extend(MIN_HASH, first_range.start-1)
-                self.operator.update_dht_range(new_dht_range)
-                rm_lst = [(self_dht_range.get_start(), self_dht_range.get_end(), self.operator.self_address)]
-                append_lst = [(new_dht_range.get_start(), new_dht_range.get_end(), self.operator.self_address)]
-                logger.info('Extended range by first range')
-                self._init_network_operation('UpdateHashRangeTable', {'append': append_lst, 'remove': rm_lst})
 
 
     def process(self, packet):
@@ -98,8 +54,6 @@ class UpdateHashRangeTableOperation(OperationBase):
 
             logger.debug('RM RANGE: %s'%', '.join([r.to_str() for r in rm_obj_list]))
             logger.debug('APP RANGE: %s'%', '.join([a.to_str() for a in ap_obj_list]))
-
-            self._check_near_range()
         except Exception, err:
             logger.error('UpdateHashRangeTable error: %s'%err)
             if not packet.sender:

@@ -13,6 +13,7 @@ import os
 import time
 import threading
 import hashlib
+import random
 from datetime import datetime
 
 from fabnet.core.operator import Operator
@@ -104,25 +105,13 @@ class DHTOperator(Operator):
         stat['dht_info'] = dht_i
         return stat
 
-
-    def on_neigbour_not_respond(self, neighbour_type, neighbour_address):
-        if neighbour_type != NT_SUPERIOR:
-            return
-
-        for range_obj in self.ranges_table.iter_table():
-            if range_obj.node_address == neighbour_address:
-                self._move_range(range_obj)
-                break
-
-
     def _move_range(self, range_obj):
-        logger.info('Node %s went from DHT. Updating hash range table on network...'%range_obj.node_address)
+        logger.info('Node %s (it me) went from DHT. Updating hash range table on network...'%range_obj.node_address)
         rm_lst = [(range_obj.start, range_obj.end, range_obj.node_address)]
         parameters = {'append': [], 'remove': rm_lst}
 
         req = FabnetPacketRequest(method='UpdateHashRangeTable', sender=self.self_address, parameters=parameters)
         self.call_network(req)
-
 
     def stop_inherited(self):
         self.status = DS_DESTROYING
@@ -256,11 +245,60 @@ class DHTOperator(Operator):
         if not range_obj or range_obj.start != start or range_obj.end != end or range_obj.node_address != self.self_address:
             if reinit:
                 logger.warning('DHT range on this node is not found in ranges_table')
-                logger.info('Self range: %040x-%040x, In hash table: %040x-%040x(%s)'%\
-                    (start, end, range_obj.start, range_obj.end, range_obj.node_address))
+                if range_obj:
+                    logger.info('Self range: %040x-%040x, In hash table: %040x-%040x(%s)'%\
+                        (start, end, range_obj.start, range_obj.end, range_obj.node_address))
                 logger.info('Trying reinit node as DHT member...')
                 self.start_as_dht_member()
             return True
+
+    def check_near_range(self, reinit_dht=False):
+        if self.status != DS_NORMALWORK:
+            return
+
+        failed_range = self.check_dht_range(reinit=reinit_dht)
+        if failed_range:
+            return
+
+        self_dht_range = self.get_dht_range()
+
+        if self_dht_range.get_end() != MAX_HASH:
+            next_range = self.ranges_table.find(self_dht_range.get_end()+1)
+            if not next_range:
+                next_exists_range = self.ranges_table.find_next(self_dht_range.get_end()-1)
+                if next_exists_range:
+                    end = next_exists_range.start-1
+                else:
+                    end = MAX_HASH
+                new_dht_range = self_dht_range.extend(self_dht_range.get_end()+1, end)
+                self.update_dht_range(new_dht_range)
+
+                rm_lst = [(self_dht_range.get_start(), self_dht_range.get_end(), self.self_address)]
+                append_lst = [(new_dht_range.get_start(), new_dht_range.get_end(), self.self_address)]
+
+                logger.info('Extended range by next neighbours')
+
+                req = FabnetPacketRequest(method='UpdateHashRangeTable', \
+                        sender=self.self_address, parameters={'append': append_lst, 'remove': rm_lst})
+                self.call_network(req)
+                return
+
+        first_range = self.ranges_table.find(MIN_HASH)
+        if not first_range:
+            first_range = self.ranges_table.get_first()
+            if not first_range:
+                return
+            if first_range.node_address == self.self_address:
+                new_dht_range = self_dht_range.extend(MIN_HASH, first_range.start-1)
+                self.update_dht_range(new_dht_range)
+                rm_lst = [(self_dht_range.get_start(), self_dht_range.get_end(), self.self_address)]
+                append_lst = [(new_dht_range.get_start(), new_dht_range.get_end(), self.self_address)]
+
+                logger.info('Extended range by first range')
+
+                req = FabnetPacketRequest(method='UpdateHashRangeTable', \
+                        sender=self.self_address, parameters={'append': append_lst, 'remove': rm_lst})
+                self.call_network(req)
 
 
 
@@ -277,30 +315,38 @@ class CheckLocalHashTableThread(threading.Thread):
 
         while not self.stopped:
             try:
-                neighbours = self.operator.get_neighbours(NT_SUPERIOR, self.operator.OPTYPE)
-                if not neighbours:
-                    time.sleep(Config.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
-                    continue
+                ranges_count = self.operator.ranges_table.count()
+                mod_index = self.operator.ranges_table.get_mod_index()
+                range_start = self.operator.get_dht_range().get_start()
+                range_end = self.operator.get_dht_range().get_end()
 
-                for neighbour in neighbours:
-                    logger.debug('Checking range table at %s'%neighbour)
-                    mod_index = self.operator.ranges_table.get_mod_index()
-                    ranges_count = self.operator.ranges_table.count()
-                    params = {'mod_index': mod_index, 'ranges_count': ranges_count, \
-                                'range_start': self.operator.get_dht_range().get_start(), \
-                                'range_end': self.operator.get_dht_range().get_end()}
+                if ranges_count < 2:
+                    neighbours = self.operator.get_neighbours(NT_SUPERIOR, self.operator.OPTYPE)
+                    if not neighbours:
+                        logger.debug('Waiting neighbours...')
+                        time.sleep(Config.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
+                        continue
+                    neighbour = random.choice(neighbours)
+                else:
+                    neighbour_range = self.operator.ranges_table.find_next(range_start)
+                    if not neighbour_range:
+                        neighbour_range = self.operator.ranges_table.get_first()
+                    neighbour = neighbour_range.node_address
 
-                    packet_obj = FabnetPacketRequest(method='CheckHashRangeTable',
-                                sender=self.operator.self_address, parameters=params)
-                    self.operator.call_node(neighbour, packet_obj)
+                logger.debug('Checking range table at %s'%neighbour)
+                params = {'mod_index': mod_index, 'ranges_count': ranges_count, \
+                            'range_start': range_start, 'range_end': range_end}
 
-                    for i in xrange(Config.CHECK_HASH_TABLE_TIMEOUT):
-                        if self.stopped:
-                            break
-
-                        time.sleep(1)
+                packet_obj = FabnetPacketRequest(method='CheckHashRangeTable',
+                            sender=self.operator.self_address, parameters=params)
+                self.operator.call_node(neighbour, packet_obj)
             except Exception, err:
                 logger.error(str(err))
+
+            for i in xrange(Config.CHECK_HASH_TABLE_TIMEOUT):
+                if self.stopped:
+                    break
+                time.sleep(1)
 
 
         logger.info('Thread stopped!')

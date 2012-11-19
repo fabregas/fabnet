@@ -234,9 +234,9 @@ class ManageNeighbour(OperationBase):
                     and ret_packet.ret_parameters.get('dont_append', False) == False:
                 self.rebalance_remove()
 
-            if packet.parameters.get('operation', MNO_APPEND) == MNO_REMOVE \
-                    and ret_packet.ret_parameters.get('dont_remove', False) == True:
-                self.rebalance_remove()
+            #if packet.parameters.get('operation', MNO_APPEND) == MNO_REMOVE \
+            #        and ret_packet.ret_parameters.get('dont_remove', False) == True:
+            #    self.rebalance_remove()
 
         self.rebalance_append(packet.parameters)
 
