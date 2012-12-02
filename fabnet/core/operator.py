@@ -157,7 +157,7 @@ class Operator:
 
         if is_sync:
             ok = event.wait(WAIT_SYNC_OPERATION_TIMEOUT)
-            if not ok:
+            if (ok is not None) and (not ok):
                 raise OperException('Operation %s timeouted on %s'%(packet.method, address))
 
             ret_packet = self.__fri_responses_queue.get(packet.message_id, remove=True)
