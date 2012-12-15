@@ -226,21 +226,16 @@ class DiscoverTopologyThread(threading.Thread):
                     time.sleep(1)
                     continue
 
-                while True:
-                    from_addr = self.next_discovery_node()
-                    if from_addr:
-                        logger.info('Starting topology discovery from %s...'%from_addr)
-                        params = {"need_rebalance": 1}
-                    else:
-                        logger.info('Starting topology discovery from this node...')
-                        params = {}
+                from_addr = self.next_discovery_node()
+                if from_addr:
+                    logger.info('Starting topology discovery from %s...'%from_addr)
+                    params = {"need_rebalance": 1}
+                else:
+                    logger.info('Starting topology discovery from this node...')
+                    params = {}
 
-                    packet = FabnetPacketRequest(method='TopologyCognition', parameters=params)
-                    rcode, rmsg = self.operator.call_network(packet, from_addr)
-                    if rcode == 0:
-                        break
-
-                    logger.error("Can't start topology discovery from %s. Details: %s"%(from_addr, rmsg))
+                packet = FabnetPacketRequest(method='TopologyCognition', parameters=params)
+                self.operator.call_network(packet, from_addr)
             except Exception, err:
                 logger.error(str(err))
 

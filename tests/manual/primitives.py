@@ -16,7 +16,7 @@ from fabnet.utils.logger import logger
 
 from fabnet.core.constants import ET_INFO
 from fabnet.core.fri_server import FriClient, FabnetPacketRequest
-from fabnet.utils.db_conn import SqliteDBConnection as DBConnection
+from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.monitor.monitor_operator import MONITOR_DB
 from fabnet.dht_mgmt.hash_ranges_table import HashRangesTable
 
@@ -198,8 +198,7 @@ def destroy_data(address, nodenum):
 
 
 def call_repair_data(address, out_streem, expect_res, invalid_node=None):
-    dbpath = os.path.join(monitoring_home, MONITOR_DB)
-    dbconn = DBConnection(dbpath)
+    dbconn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
     dbconn.execute("DELETE FROM notification")
 
     client = FriClient()
@@ -253,6 +252,7 @@ def call_repair_data(address, out_streem, expect_res, invalid_node=None):
         out_streem.write('INVALID RESTORED RANGE FREE SIZE. BEFORE=%s, AFTER=%s\n'%(free_size, post_free_size))
 
     out_streem.write('Process time: %s\n'%dt)
+    dbconn.close()
 
 
 def create_virt_net(nodes_count, port_move=0):

@@ -43,3 +43,16 @@ Feature: DHT Init
         When stop 15 nodes
         And wait 240 seconds
         Then I put 1000 blocks (one block size - 1024 bytes)
+
+
+    Scenario: Failed half of network nodes
+        When start virtual network with 32 nodes
+        Then I collect DHT statistic
+        Then I put 1000 blocks (one block size - 1024 bytes)
+        Then I collect DHT statistic
+        Then I get and check all data blocks
+
+        When stop 16 nodes
+        And wait 500 seconds
+        Then I collect DHT statistic
+

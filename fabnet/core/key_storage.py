@@ -62,7 +62,7 @@ class AbstractKeyStorage:
         if cert_end_dt < datetime.utcnow().utctimetuple():
             raise Exception('Certificate is out of date')
 
-        cert_type = cert.get_subject().CN
+        cert_type = cert.get_subject().OU
         role = None
         if cert_type == NODE_CERTIFICATE:
             root_pubkey = self._nodes_base_pubkey
