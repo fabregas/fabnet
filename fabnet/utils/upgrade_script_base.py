@@ -65,6 +65,7 @@ class BaseFabnetUpgradeScript:
         elif target_platf == TP_MACOS:
             self.upgrade_macos(os_release, is64bit)
         elif target_platf == TP_RHEL:
+            os.system('yum clean metadata')
             self.upgrade_rpm(os_release, is64bit)
         elif target_platf == TP_DEBIAN:
             self.upgrade_deb(os_release, is64bit)

@@ -6,6 +6,7 @@ import signal
 import time
 import logging
 import getpass
+import daemon
 
 PYPATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 sys.path.insert(0, PYPATH)
@@ -17,43 +18,25 @@ from fabnet.utils.logger import logger
 
 fabnet_node = None
 started = True
-INIT_ARGS = None
-NEIGHBOUR = None
 
 DEFAULT_PORT = 1987
 INIT_NEIGHBOUR = 'init-fabnet'
 
-#import yappi
-#yappi.start()
-
-
-def reload_node(s, p):
-    global node, fabnet_node, started, INIT_ARGS, NEIGHBOUR
-    stop(s, p)
-    try:
-        fabnet_node = node.Node(*INIT_ARGS)
-        started = fabnet_node.start(NEIGHBOUR)
-    except Exception, err:
-        logger.error('Reload node exception: %s'%err)
-
-    if not started:
-        logger.error('Node does not reloaded!')
-        sys.exit(1)
-    logger.info('Node is reloaded successfully.')
 
 def stop(s, p):
     global fabnet_node, started
     try:
-        fabnet_node.stop()
-        started = False
+        if fabnet_node:
+            fabnet_node.stop()
+            started = False
+            logger.info('Node is stopped')
     except Exception, err:
         logger.error('Stoping fabnet node error: %s'%err)
 
-    #yappi.print_stats(sort_type=2)
 
 def start(args):
     try:
-        global fabnet_node, started, INIT_ARGS, NEIGHBOUR
+        global fabnet_node, started
         if len(args) < 5:
             logger.error('Usage: fabnet-node <node address> <neighbour address>|init-fabnet <node_name> <home_dir> <node_type> [<keystore path>]')
             sys.exit(1)
@@ -85,18 +68,25 @@ def start(args):
         if ks_path and not ks_passwd:
             ks_passwd = getpass.getpass('Key storage password: ')
 
-        fabnet_node = node.Node(hostname, port, home_dir, node_name, ks_path, ks_passwd, node_type)
-        started = fabnet_node.start(neighbour)
-        if not started:
-            logger.error('Node does not started!')
-            sys.exit(1)
+        with daemon.DaemonContext():
+            try:
+                open(os.path.join(home_dir, 'node-daemon.pid'), 'w').write(str(os.getpid()))
+            except Exception, err:
+                logger.error('Cant write pid file. Details: %s'%err)
 
-        INIT_ARGS = (hostname, port, home_dir, node_name, ks_path, ks_passwd)
-        NEIGHBOUR = neighbour
-        signal.signal(signal.SIGINT, stop)
-        signal.signal(signal.SIGHUP, reload_node)
-        while started:
-            time.sleep(1)
+            try:
+                fabnet_node = node.Node(hostname, port, home_dir, node_name, ks_path, ks_passwd, node_type)
+                started = fabnet_node.start(neighbour)
+                if not started:
+                    logger.error('Node does not started!')
+                    sys.exit(1)
+
+                signal.signal(signal.SIGINT, stop)
+
+                while started:
+                    time.sleep(1)
+            except Exception, err:
+                logger.error('init fabnet node error: %s'%err)
     except Exception, err:
         logger.error('fabnet node error: %s. exit!'%err)
         stop(None, None)

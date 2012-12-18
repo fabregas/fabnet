@@ -1,12 +1,15 @@
 #!/usr/bin/python
 import os
 import sys
+import signal
+import time
+import subprocess
 
 NODE_SCRIPT = os.path.abspath(os.path.join(os.path.dirname(__file__), 'fabnet-node'))
 PYPATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 
 DEFAULT_PORT = 1987
-DEFAULT_HOME = '~/fabnet_node_home'
+DEFAULT_HOME = os.path.abspath(os.path.join(os.environ.get('HOME', '/tmp'), 'fabnet_node_home'))
 
 
 def usage():
@@ -15,7 +18,55 @@ def usage():
     print('       %s reload'%sys.argv[0])
     print('           or')
     print('       %s stop'%sys.argv[0])
+    print('           or')
+    print('       %s status'%sys.argv[0])
 
+
+def stop_node():
+    home_dir = os.environ.get('FABNET_NODE_HOME', DEFAULT_HOME)
+    PID_FILE = os.path.join(home_dir, 'node-daemon.pid')
+    print('Stopping fabnet node...')
+    if not os.path.exists(PID_FILE):
+        sys.stderr.write('No pid file found at %s\n'%PID_FILE)
+        sys.exit(1)
+    pid = int(open(PID_FILE).read())
+    os.kill(pid, signal.SIGINT)
+    for i in xrange(30):
+        time.sleep(1)
+        if not os.path.exists('/proc/%i'%pid):
+            break
+    else:
+        sys.stderr.write('Cant stop fabnet node! See logs for details...\n')
+        sys.exit(1)
+    print('Fabnet node is stopped!')
+    os.remove(PID_FILE)
+
+
+def start_node(node_address, neighbour, node_name, home_dir, node_type, keystore=''):
+    print('starting fabnet node...')
+    home_dir = os.path.abspath(home_dir)
+    if not os.path.exists(home_dir):
+        os.makedirs(home_dir)
+
+    cmd = '%s %s %s %s %s %s' \
+             %(NODE_SCRIPT, node_address, neighbour, node_name, \
+                home_dir, node_type)
+    cmd = cmd.split()
+    if keystore:
+        cmd.append(os.path.abspath(keystore))
+
+    sp = subprocess.Popen(cmd)
+    sp.communicate()
+    print('Fabnet node is started! See syslog for details')
+
+def is_node_started():
+    home_dir = os.environ.get('FABNET_NODE_HOME', DEFAULT_HOME)
+    PID_FILE = os.path.join(home_dir, 'node-daemon.pid')
+    if not os.path.exists(PID_FILE):
+        return False
+    if not os.path.exists('/proc/%s'%open(PID_FILE).read()):
+        return False
+    return True
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
@@ -40,18 +91,26 @@ if __name__ == '__main__':
         home_dir = os.environ.get('FABNET_NODE_HOME', DEFAULT_HOME)
         node_address = '%s:%s'%(ip_addr, port)
 
-        if not os.path.exists(home_dir):
-            os.makedirs(home_dir)
-
-        os.system('PYTHONPATH="%s" nohup %s %s %s %s %s %s %s > /dev/null &' \
-                 %(PYPATH, NODE_SCRIPT, node_address, neighbour, node_name, \
-                    home_dir, node_type, keystore))
-
+        start_node(node_address, neighbour, node_name, home_dir, node_type, keystore)
     elif sys.argv[1] == 'stop':
-        os.system('killall -s INT fabnet-node')
-        os.system('killall -s INT git_server.py')
+        stop_node()
     elif sys.argv[1] == 'reload':
-        os.system('killall -s HUP fabnet-node')
+        home_dir = os.environ.get('FABNET_NODE_HOME', DEFAULT_HOME)
+        PID_FILE = os.path.join(home_dir, 'node-daemon.pid')
+        if not os.path.exists(PID_FILE):
+            sys.stderr.write('No pid file found at %s\n'%PID_FILE)
+            sys.exit(1)
+
+        cmd = open('/proc/%s/cmdline'%open(PID_FILE).read()).read()
+        cmd = cmd.strip('\x00').split('\x00')
+
+        stop_node()
+        start_node(*cmd[2:])
+    elif sys.argv[1] == 'status':
+        if is_node_started():
+            print ('Fabnet node is started!')
+        else:
+            print ('Fabnet node is stopped!')
     else:
         usage()
         sys.exit(1)
