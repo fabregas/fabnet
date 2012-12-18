@@ -434,7 +434,7 @@ class MonitorDHTRanges(threading.Thread):
         dht_range = self.operator.get_dht_range()
 
         for digest, data, file_path in dht_range.iter_reservation():
-            logger.debug('Processing %s from reservation range'%digest)
+            logger.info('Processing %s from reservation range'%digest)
             if self._put_data(digest, data):
                 logger.debug('data block with key=%s is send from reservation range'%digest)
                 os.unlink(file_path)
@@ -442,7 +442,7 @@ class MonitorDHTRanges(threading.Thread):
     def _process_replicas(self):
         dht_range = self.operator.get_dht_range()
         for digest, data, file_path in dht_range.iter_replicas():
-            logger.debug('Processing replica %s'%digest)
+            logger.info('Processing replica %s'%digest)
             if self._put_data(digest, data, is_replica=True):
                 logger.debug('data block with key=%s is send from replicas range'%digest)
                 os.unlink(file_path)
