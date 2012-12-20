@@ -74,7 +74,7 @@ class AbstractKeyStorage:
             raise Exception('Unknown certificate type: %s'%cert_type)
 
         if not cert.verify(root_pubkey):
-            raise Exception('Certification')
+            raise Exception('Certificate verification is failed!')
 
         return role
 

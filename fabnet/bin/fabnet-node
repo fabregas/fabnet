@@ -28,8 +28,8 @@ def stop(s, p):
     try:
         if fabnet_node:
             fabnet_node.stop()
+            logger.info('Fabnet node is stopped')
             started = False
-            logger.info('Node is stopped')
     except Exception, err:
         logger.error('Stoping fabnet node error: %s'%err)
 
@@ -37,6 +37,12 @@ def stop(s, p):
 def start(args):
     try:
         global fabnet_node, started
+        if args[-1] == '--nodaemon':
+            nodaemon = True
+            args = args[:-1]
+        else:
+            nodaemon = False
+
         if len(args) < 5:
             logger.error('Usage: fabnet-node <node address> <neighbour address>|init-fabnet <node_name> <home_dir> <node_type> [<keystore path>]')
             sys.exit(1)
@@ -68,7 +74,8 @@ def start(args):
         if ks_path and not ks_passwd:
             ks_passwd = getpass.getpass('Key storage password: ')
 
-        with daemon.DaemonContext():
+        def main_routine():
+            global fabnet_node, started
             try:
                 open(os.path.join(home_dir, 'node-daemon.pid'), 'w').write(str(os.getpid()))
             except Exception, err:
@@ -87,6 +94,13 @@ def start(args):
                     time.sleep(1)
             except Exception, err:
                 logger.error('init fabnet node error: %s'%err)
+
+
+        if nodaemon:
+            main_routine()
+        else:
+            with daemon.DaemonContext():
+                main_routine()
     except Exception, err:
         logger.error('fabnet node error: %s. exit!'%err)
         stop(None, None)

@@ -51,9 +51,6 @@ class TestNodeStatistic(unittest.TestCase):
             self.assertEqual(ret_packet.ret_parameters['methods_stat']['NodeStatistic']['avg_proc_time'], '0')
 
             time.sleep(.2)
-        except Exception, err:
-            print 'ERROR: %s'%err
-            raise err
         finally:
             if server:
                 server.stop()

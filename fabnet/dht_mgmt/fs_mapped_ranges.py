@@ -145,8 +145,9 @@ class FSHashRanges:
             discovered_ranges.append(hash_range)
 
         for h_range in discovered_ranges:
-            if h_range != max_range:
-                h_range.move_to_reservation()
+            if not ret_full and h_range == max_range:
+                continue
+            h_range.move_to_reservation()
 
         if ret_full or (not max_range):
             max_range = FSHashRanges(MIN_HASH, MAX_HASH, save_path)
@@ -595,7 +596,7 @@ class FSHashRanges:
         files = os.listdir(self.__reservation_dir)
         perc_part = len(files)/10
 
-        logger.info('Restore reservation to range...')
+        logger.info('Restoring reservation data...')
 
         for cnt, digest in enumerate(files):
             if perc_part and (cnt) % perc_part == 0:
@@ -605,7 +606,7 @@ class FSHashRanges:
             if self._in_range(digest) and self._ensure_not_write(r_file_path):
                 self._move_from(r_file_path, rewrite=False)
 
-        logger.info('Range is restored from reservation!')
+        logger.info('Data is restored from reservation!')
 
     def __get_file_size(self, file_path):
         stat = os.stat(file_path)

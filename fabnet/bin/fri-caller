@@ -2,14 +2,16 @@
 import os
 import sys
 import json
+import getpass
 
 PYPATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 sys.path.insert(0, PYPATH)
 
 from fabnet.core.fri_base import FriClient, FabnetPacketRequest
+from fabnet.core.key_storage import init_keystore
 
 def usage():
-    print('Usage: %s <operation> <node address> [parameters in json format] [sync]'%sys.argv[0])
+    print('Usage: %s <operation> <node address> <parameters in json format> sync|async [<key storage path>]'%sys.argv[0])
 
 def print_resp(params, prefix=''):
     for key, value in params.items():
@@ -19,7 +21,7 @@ def print_resp(params, prefix=''):
         else:
             print '%s%s: %s'%(prefix, key, value)
 
-def call_operation(operation, node_address, params, sync):
+def call_operation(operation, node_address, params, sync, ks_path):
     try:
         params = json.loads(params)
     except Exception, err:
@@ -27,7 +29,16 @@ def call_operation(operation, node_address, params, sync):
         return 1
 
     packet = FabnetPacketRequest(method=operation, sender=None, parameters=params, sync=sync)
-    client = FriClient()
+
+    if ks_path:
+        ks_passwd = getpass.getpass('Key storage password: ')
+        key_storage = init_keystore(ks_path, ks_passwd)
+        cert = key_storage.get_node_cert()
+        ckey = key_storage.get_node_cert_key()
+    else:
+        cert = ckey = None
+
+    client = FriClient(bool(cert), cert, ckey)
     if not sync:
         rcode, rmsg = client.call(node_address, packet)
 
@@ -47,20 +58,29 @@ def call_operation(operation, node_address, params, sync):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 5:
         usage()
         sys.exit(1)
 
     operation = sys.argv[1]
     node_address = sys.argv[2]
-    params = '{}'
-    if len(sys.argv) > 3:
-        params = sys.argv[3]
-
-    if 'sync' in sys.argv:
+    params = sys.argv[3]
+    if sys.argv[4] == 'sync':
         sync = True
-    else:
+    elif sys.argv[4] == 'async':
         sync = False
+    else:
+        print 'Unknown operation mode "%s". Supported modes: sync and async'%sys.argv[4]
 
-    rcode = call_operation(operation, node_address, params, sync)
+    if len(sys.argv) > 5:
+        ks_path = sys.argv[5]
+    else:
+        ks_path = ''
+
+    try:
+        rcode = call_operation(operation, node_address, params, sync, ks_path)
+    except Exception, err:
+        print 'Error! %s'%err
+        sys.exit(1)
+
     sys.exit(rcode)

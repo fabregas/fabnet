@@ -52,7 +52,7 @@ class TestMonitorNode(unittest.TestCase):
                 ntype = 'Monitor'
             else:
                 ntype = 'DHT'
-            args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, ntype]
+            args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, ntype, '--nodaemon']
             if DEBUG:
                 args.append('--debug')
             p = subprocess.Popen(args)
@@ -102,6 +102,9 @@ class TestMonitorNode(unittest.TestCase):
                 raise err
 
     def test00_initnet(self):
+        conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
+        conn.select('select 1')
+        conn.close()
         os.system('dropdb -U postgres %s'%MONITOR_DB)
         self.create_net(4)
 
@@ -130,7 +133,7 @@ class TestMonitorNode(unittest.TestCase):
         self.assertTrue(nodes_info[0][5]==None, nodes_info[0][5])
         self.assertTrue(nodes_info[0][6]==None, nodes_info[0][6])
 
-        p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', ADDRESSES[0]])
+        p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', ADDRESSES[0], '{}', 'async'])
         time.sleep(2)
 
         nodes_info = conn.select(qeury_nodes)

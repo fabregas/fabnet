@@ -21,7 +21,7 @@ TEST_FS_RANGE_DIR = '/tmp/test_fs_ranges'
 
 
 class TestFSMappedRanges(unittest.TestCase):
-    def test00_init(self):
+    def setUp(self):
         if os.path.exists(TEST_FS_RANGE_DIR):
             shutil.rmtree(TEST_FS_RANGE_DIR)
         os.mkdir(TEST_FS_RANGE_DIR)
@@ -52,30 +52,33 @@ class TestFSMappedRanges(unittest.TestCase):
         operator.start_as_dht_member()
         operator.start_as_dht_member()
         operator.start_as_dht_member()
+        time.sleep(0.3)
 
-        self.assertEqual(len(call_stack), 3)
-        self.assertEqual(call_stack[0][0], 'third_range_holder')
-        self.assertEqual(call_stack[0][1], 400)
-        self.assertEqual(call_stack[0][2], 499)
+        try:
+            self.assertEqual(len(call_stack), 3)
+            self.assertEqual(call_stack[0][0], 'third_range_holder')
+            self.assertEqual(call_stack[0][1], 400, call_stack)
+            self.assertEqual(call_stack[0][2], 499, call_stack)
 
-        self.assertEqual(call_stack[1][0], 'first_range_holder')
-        self.assertEqual(call_stack[1][1], 50)
-        self.assertEqual(call_stack[1][2], 99)
+            self.assertEqual(call_stack[1][0], 'first_range_holder')
+            self.assertEqual(call_stack[1][1], 50)
+            self.assertEqual(call_stack[1][2], 99)
 
-        self.assertEqual(call_stack[2][0], 'second_range_holder')
-        self.assertEqual(call_stack[2][1], 125)
-        self.assertEqual(call_stack[2][2], 149)
+            self.assertEqual(call_stack[2][0], 'second_range_holder')
+            self.assertEqual(call_stack[2][1], 125)
+            self.assertEqual(call_stack[2][2], 149)
 
-        operator.start_as_dht_member() #wait timeout
-        self.assertEqual(call_stack[3][0], 'second_range_holder')
-        self.assertEqual(call_stack[3][1], 125)
-        self.assertEqual(call_stack[3][2], 149)
-        operator.stop()
+            operator.start_as_dht_member() #wait timeout
+            self.assertEqual(call_stack[3][0], 'second_range_holder')
+            self.assertEqual(call_stack[3][1], 125, call_stack)
+            self.assertEqual(call_stack[3][2], 149, call_stack)
+        finally:
+            operator.stop()
 
     def test03_discovery_range(self):
         shutil.rmtree(TEST_FS_RANGE_DIR)
         os.mkdir(TEST_FS_RANGE_DIR)
-        os.makedirs(os.path.join(TEST_FS_RANGE_DIR, 'dht_range', '%040x_%040x'%(0, 99)))
+        os.makedirs(os.path.join(TEST_FS_RANGE_DIR, 'dht_range', '%040x_%040x'%(10, 30)))
 
         call_stack = []
         def call_node_simulator(nodeaddr, request):
@@ -108,16 +111,16 @@ class TestFSMappedRanges(unittest.TestCase):
 
             self.assertEqual(len(call_stack), 3)
             self.assertEqual(call_stack[0][0], 'first_range_holder')
-            self.assertEqual(call_stack[0][1], 50)
-            self.assertEqual(call_stack[0][2], 99)
+            self.assertEqual(call_stack[0][1], 0, call_stack)
+            self.assertEqual(call_stack[0][2], 30, call_stack)
 
             self.assertEqual(call_stack[1][0], 'third_range_holder')
-            self.assertEqual(call_stack[1][1], 400)
-            self.assertEqual(call_stack[1][2], 499)
+            self.assertEqual(call_stack[1][1], 400, call_stack)
+            self.assertEqual(call_stack[1][2], 499, call_stack)
 
             self.assertEqual(call_stack[2][0], 'second_range_holder')
-            self.assertEqual(call_stack[2][1], 125)
-            self.assertEqual(call_stack[2][2], 149)
+            self.assertEqual(call_stack[2][1], 125, call_stack)
+            self.assertEqual(call_stack[2][2], 149, call_stack)
 
         finally:
             operator.stop()

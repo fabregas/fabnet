@@ -63,6 +63,7 @@ class SplitRangeRequestOperation(OperationBase):
                 or None for disabling packet resending
         """
         if packet.ret_code != RC_OK:
+            logger.error('Cant split range from %s. Details: %s'%(sender, packet.ret_message))
             logger.info('Trying select other hash range...')
             self.operator.start_as_dht_member()
         else:

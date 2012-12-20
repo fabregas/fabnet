@@ -12,7 +12,6 @@ from fabnet.utils.logger import logger
 import subprocess
 
 logger.setLevel(logging.DEBUG)
-DEBUG=True
 
 ORIG_REPO = os.path.abspath('./.git')
 
@@ -28,8 +27,7 @@ class TestUpgradeNode(unittest.TestCase):
 
             address = '127.0.0.1:1987'
             args = ['/usr/bin/python', '/tmp/fabnet_node_code/fabnet/bin/fabnet-node', address, 'init-fabnet', 'test_upgr_node', '/tmp', 'DHT']
-            if DEBUG:
-                args.append('--debug')
+            args.append('--nodaemon')
             server_proc = subprocess.Popen(args)
             time.sleep(1)
 

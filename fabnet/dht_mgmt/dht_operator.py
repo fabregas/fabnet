@@ -17,7 +17,7 @@ import random
 from datetime import datetime
 
 from fabnet.core.operator import Operator
-from hash_ranges_table import HashRangesTable
+from hash_ranges_table import HashRange, HashRangesTable
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
@@ -140,19 +140,44 @@ class DHTOperator(Operator):
             if max_range.length() < range_obj.length():
                 max_range = range_obj
 
-        return max_range
+        if not max_range:
+            return None
+
+        return HashRange(long(max_range.start+max_range.length()/2+1), long(max_range.end), max_range.node_address)
+
+    def __normalize_range_request(self, c_start, c_end, f_range):
+        r1 = r2 = None
+        if f_range.contain(c_start):
+            r1 = HashRange(c_start, f_range.end, f_range.node_address)
+        if f_range.contain(c_end):
+            r2 = HashRange(f_range.start, c_end, f_range.node_address)
+
+        if r1 and r2:
+            if r1.length() < r2.length():
+                return r1
+            return r2
+
+        if r1:
+            return r1
+        return r2
 
 
     def __get_next_range_near(self, start, end):
+        ret_range = None
         found_range = self.ranges_table.find(start)
         if found_range and found_range.node_address not in self.__split_requests_cache:
-            return found_range
+            ret_range = self.__normalize_range_request(start, end, found_range)
 
+        if found_range and found_range.contain(end):
+            return ret_range
+
+        #case when current node range is splited between two other nodes
         found_range = self.ranges_table.find(end)
         if found_range and found_range.node_address not in self.__split_requests_cache:
-            return found_range
-
-        return None
+            ret_range_e = self.__normalize_range_request(start, end, found_range)
+            if ret_range_e and ret_range_e.length() > ret_range.length():
+                ret_range = ret_range_e
+        return ret_range
 
     def set_status_to_normalwork(self):
         logger.info('Changing node status to NORMALWORK')
@@ -168,7 +193,6 @@ class DHTOperator(Operator):
         self.status = DS_INITIALIZE
         dht_range = self.get_dht_range()
 
-        nochange = False
         curr_start = dht_range.get_start()
         curr_end = dht_range.get_end()
 
@@ -176,14 +200,6 @@ class DHTOperator(Operator):
             new_range = self.__get_next_max_range()
         else:
             new_range = self.__get_next_range_near(curr_start, curr_end)
-            if new_range:
-                if (new_range.start != curr_start or new_range.end != curr_end):
-                    nochange = True
-                if new_range.node_address == self.self_address:
-                    #FIXME: range can be not valid in this case...
-                    self.set_status_to_normalwork()
-                    return
-
 
         if new_range is None:
             #wait and try again
@@ -198,16 +214,21 @@ class DHTOperator(Operator):
             time.sleep(Config.WAIT_RANGE_TIMEOUT)
             return self.start_as_dht_member()
 
-        if nochange:
+        if (new_range.start == curr_start and new_range.end == curr_end):
             new_dht_range = dht_range
         else:
-            new_dht_range = FSHashRanges(long(new_range.start + new_range.length()/2+1), long(new_range.end), self.save_path)
+            new_dht_range = FSHashRanges(long(new_range.start), long(new_range.end), self.save_path)
             self.update_dht_range(new_dht_range)
             new_dht_range.restore_from_reservation() #try getting new range data from reservation
 
+        if new_range.node_address == self.self_address:
+            self.set_status_to_normalwork()
+            return
+
         self.__split_requests_cache.append(new_range.node_address)
 
-        logger.info('Call SplitRangeRequest to %s'%(new_range.node_address,))
+        logger.info('Call SplitRangeRequest [%040x-%040x] to %s'% \
+                (new_dht_range.get_start(), new_dht_range.get_end(), new_range.node_address,))
         parameters = { 'start_key': new_dht_range.get_start(), 'end_key': new_dht_range.get_end() }
         req = FabnetPacketRequest(method='SplitRangeRequest', sender=self.self_address, parameters=parameters)
         self.call_node(new_range.node_address, req)
@@ -307,13 +328,12 @@ class CheckLocalHashTableThread(threading.Thread):
     def __init__(self, operator):
         threading.Thread.__init__(self)
         self.operator = operator
-        self.stopped = True
+        self.stopped = threading.Event()
 
     def run(self):
-        self.stopped = False
         logger.info('Thread started!')
 
-        while not self.stopped:
+        while True:
             try:
                 ranges_count = self.operator.ranges_table.count()
                 mod_index = self.operator.ranges_table.get_mod_index()
@@ -342,23 +362,25 @@ class CheckLocalHashTableThread(threading.Thread):
                 self.operator.call_node(neighbour, packet_obj)
             except Exception, err:
                 logger.error(str(err))
+            finally:
+                for i in xrange(Config.CHECK_HASH_TABLE_TIMEOUT):
+                    if self.stopped.is_set():
+                        break
+                    time.sleep(1)
 
-            for i in xrange(Config.CHECK_HASH_TABLE_TIMEOUT):
-                if self.stopped:
+                if self.stopped.is_set():
                     break
-                time.sleep(1)
-
 
         logger.info('Thread stopped!')
 
     def stop(self):
-        self.stopped = True
+        self.stopped.set()
 
 class MonitorDHTRanges(threading.Thread):
     def __init__(self, operator):
         threading.Thread.__init__(self)
         self.operator = operator
-        self.stopped = True
+        self.stopped = threading.Event()
 
         self.__last_is_start_part = True
         self.__notification_flag = False
@@ -389,7 +411,7 @@ class MonitorDHTRanges(threading.Thread):
         else:
             self.__notification_flag = False
 
-    def _pull_subrange(self, dht_range, start_part=True):
+    def _pull_subrange(self, dht_range):
         split_part = int((dht_range.length() * Config.PULL_SUBRANGE_SIZE_PERC) / 100)
         if self.__last_is_start_part:
             dest_key = dht_range.get_start() - 1
@@ -402,7 +424,12 @@ class MonitorDHTRanges(threading.Thread):
 
         self.__last_is_start_part = not self.__last_is_start_part
 
-        if MIN_HASH > dest_key > MAX_HASH:
+        if dest_key < MIN_HASH:
+            logger.info('[_pull_subrange] no range at left...')
+            return False
+
+        if dest_key > MAX_HASH:
+            logger.info('[_pull_subrange] no range at right...')
             return False
 
         k_range = self.operator.ranges_table.find(dest_key)
@@ -412,10 +439,9 @@ class MonitorDHTRanges(threading.Thread):
 
         pull_subrange, new_dht_range = dht_range.split_range(start_subrange, end_subrange)
         subrange_size = pull_subrange.get_all_related_data_size()
-        logger.info('NEW DHT RANGE: [%s-%s]'%(new_dht_range.get_start(), new_dht_range.get_end()))
 
         try:
-            logger.info('Call PullSubrangeRequest to %s'%(k_range.node_address,))
+            logger.info('Call PullSubrangeRequest [%040x-%040x] to %s'%(pull_subrange.get_start(), pull_subrange.get_end(), k_range.node_address))
             parameters = { 'start_key': pull_subrange.get_start(), 'end_key': pull_subrange.get_end(), 'subrange_size': subrange_size }
             req = FabnetPacketRequest(method='PullSubrangeRequest', sender=self.operator.self_address, parameters=parameters, sync=True)
             resp = self.operator.call_node(k_range.node_address, req)
@@ -470,12 +496,14 @@ class MonitorDHTRanges(threading.Thread):
 
     def run(self):
         logger.info('started')
-        self.stopped = False
-        while not self.stopped:
+        while True:
             for i in xrange(Config.MONITOR_DHT_RANGES_TIMEOUT):
-                if self.stopped:
+                if self.stopped.is_set():
                     break
                 time.sleep(1)
+
+            if self.stopped.is_set():
+                break
 
             try:
                 logger.debug('MonitorDHTRanges iteration...')
@@ -491,7 +519,7 @@ class MonitorDHTRanges(threading.Thread):
         logger.info('stopped')
 
     def stop(self):
-        self.stopped = True
+        self.stopped.set()
 
 
 DHTOperator.update_operations_map(OPERMAP)

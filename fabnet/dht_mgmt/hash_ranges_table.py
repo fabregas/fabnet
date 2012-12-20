@@ -37,6 +37,11 @@ class HashRange:
     def length(self):
         return self.__length
 
+    def contain(self, hash_n):
+        if self.start <= hash_n <= self.end:
+            return True
+        return False
+
 
 class HashRangesTable:
     def __init__(self):
