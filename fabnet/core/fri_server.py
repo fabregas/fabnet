@@ -122,7 +122,7 @@ class FriConnectionHandler(threading.Thread):
         self.queue = queue
         self.hostname = host
         self.port = port
-        self.stopped = True
+        self.stopped = threading.Event()
         self.status = S_PENDING
         self.sock = None
         self.keystorage = keystorage
@@ -145,7 +145,6 @@ class FriConnectionHandler(threading.Thread):
             logger.error('[__bind_socket] %s'%err)
         else:
             self.status = S_INWORK
-            self.stopped = False
 
 
     def run(self):
@@ -153,11 +152,11 @@ class FriConnectionHandler(threading.Thread):
         self.__bind_socket()
         logger.info('Connection handler thread started!')
 
-        while not self.stopped:
+        while True:
             try:
                 (sock, addr) = self.sock.accept()
 
-                if self.stopped:
+                if self.stopped.is_set():
                     sock.close()
                     break
 
@@ -171,7 +170,7 @@ class FriConnectionHandler(threading.Thread):
         logger.info('Connection handler thread stopped!')
 
     def stop(self):
-        self.stopped = True
+        self.stopped.set()
 
 
 

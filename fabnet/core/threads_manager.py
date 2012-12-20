@@ -28,7 +28,7 @@ class ThreadsManager(threading.Thread):
         self.__threads = []
         self.__threads_idx = 0
         self.__lock = threading.Lock()
-        self.stopped = True
+        self.stopped = threading.Event()
 
     def get_workers_stat(self):
         act_count = busy_count = 0
@@ -47,7 +47,6 @@ class ThreadsManager(threading.Thread):
         return act_count, busy_count
 
     def run(self):
-        self.stopped = False
         for i in range(self.min_count):
             self.__spawn_work_threads()
 
@@ -55,7 +54,7 @@ class ThreadsManager(threading.Thread):
         not_empty_queue_count = 0
         empty_queue_count = 0
 
-        while not self.stopped:
+        while not self.stopped.is_set():
             try:
                 time.sleep(.4)
                 if self.queue.qsize() > 0:
@@ -80,10 +79,10 @@ class ThreadsManager(threading.Thread):
 
     def __spawn_work_threads(self):
         logger.debug('starting new work thread')
-        self.__lock.acquire()
-        if self.stopped:
+        if self.stopped.is_set():
             return
 
+        self.__lock.acquire()
         try:
             if len(self.__threads) == self.max_count:
                 return
@@ -98,10 +97,10 @@ class ThreadsManager(threading.Thread):
             self.__lock.release()
 
     def __stop_work_thread(self):
-        self.__lock.acquire()
-        if self.stopped:
+        if self.stopped.is_set():
             return
 
+        self.__lock.acquire()
         try:
             for_delete = []
             for i, thread in enumerate(self.__threads):
@@ -124,8 +123,8 @@ class ThreadsManager(threading.Thread):
 
 
     def stop(self):
+        self.stopped.set()
         self.__lock.acquire()
-        self.stopped = True
         try:
             act_count = 0
             for thread in self.__threads:
@@ -134,8 +133,6 @@ class ThreadsManager(threading.Thread):
 
             for i in xrange(act_count):
                 self.queue.put(STOP_THREAD_EVENT)
-
-            #self.queue.join()
 
             for thread in self.__threads:
                 if thread.is_alive():

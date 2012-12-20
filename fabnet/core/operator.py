@@ -621,13 +621,12 @@ class CheckNeighboursThread(threading.Thread):
     def __init__(self, operator):
         threading.Thread.__init__(self)
         self.operator = operator
-        self.stopped = True
+        self.stopped = threading.Event()
 
     def run(self):
-        self.stopped = False
         logger.info('Check neighbours thread is started!')
 
-        while not self.stopped:
+        while not self.stopped.is_set():
             try:
                 t0 = datetime.now()
 
@@ -641,14 +640,14 @@ class CheckNeighboursThread(threading.Thread):
             finally:
                 wait_seconds = CHECK_NEIGHBOURS_TIMEOUT - proc_dt.seconds
                 for i in range(wait_seconds):
-                    if self.stopped:
+                    if self.stopped.is_set():
                         break
                     time.sleep(1)
 
         logger.info('Check neighbours thread is stopped!')
 
     def stop(self):
-        self.stopped = True
+        self.stopped.set()
 
 
 

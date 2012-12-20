@@ -545,6 +545,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         return ret_packet.ret_parameters['key']
 
     def _make_fake_hdd(self, name, size, dev='/dev/loop0'):
+        os.system('rm -rf /tmp/mnt_%s/*'%name)
         os.system('dd if=/dev/zero of=/tmp/%s bs=1024 count=%s'%(name, size))
         os.system('sudo umount /tmp/mnt_%s'%name)
         os.system('sudo losetup -d %s'%dev)

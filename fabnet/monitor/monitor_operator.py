@@ -153,14 +153,13 @@ class CollectNodeStatisticsThread(threading.Thread):
     def __init__(self, operator):
         threading.Thread.__init__(self)
         self.operator = operator
-        self.stopped = True
+        self.stopped = threading.Event()
 
     def run(self):
-        self.stopped = False
         logger.info('Thread started!')
 
         client = FriClient()
-        while not self.stopped:
+        while not self.stopped.is_set():
             dt = 0
             try:
                 t0 = datetime.now()
@@ -187,7 +186,7 @@ class CollectNodeStatisticsThread(threading.Thread):
                 wait_time = Config.COLLECT_NODES_STAT_TIMEOUT - dt
                 if wait_time > 0:
                     for i in xrange(int(wait_time)):
-                        if self.stopped:
+                        if self.stopped.is_set():
                             break
                         time.sleep(1)
                     time.sleep(wait_time - int(wait_time))
@@ -195,29 +194,28 @@ class CollectNodeStatisticsThread(threading.Thread):
         logger.info('Thread stopped!')
 
     def stop(self):
-        self.stopped = True
+        self.stopped.set()
 
 
 class DiscoverTopologyThread(threading.Thread):
     def __init__(self, operator):
         threading.Thread.__init__(self)
         self.operator = operator
-        self.stopped = True
+        self.stopped = threading.Event()
         self._self_discovery = True
         self._nodes_queue = Queue()
 
     def run(self):
-        self.stopped = False
         logger.info('Thread started!')
 
         while True:
             try:
                 for i in xrange(Config.DISCOVERY_TOPOLOGY_TIMEOUT):
-                    if self.stopped:
+                    if self.stopped.is_set():
                         break
                     time.sleep(1)
 
-                if self.stopped:
+                if self.stopped.is_set():
                     break
 
                 try:
@@ -259,7 +257,7 @@ class DiscoverTopologyThread(threading.Thread):
 
 
     def stop(self):
-        self.stopped = True
+        self.stopped.set()
 
 
 MonitorOperator.update_operations_map(OPERMAP)
