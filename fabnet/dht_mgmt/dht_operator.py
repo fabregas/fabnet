@@ -333,7 +333,7 @@ class CheckLocalHashTableThread(threading.Thread):
     def run(self):
         logger.info('Thread started!')
 
-        while True:
+        while not self.stopped.is_set():
             try:
                 ranges_count = self.operator.ranges_table.count()
                 mod_index = self.operator.ranges_table.get_mod_index()
@@ -343,7 +343,7 @@ class CheckLocalHashTableThread(threading.Thread):
                 if ranges_count < 2:
                     neighbours = self.operator.get_neighbours(NT_SUPERIOR, self.operator.OPTYPE)
                     if not neighbours:
-                        logger.debug('Waiting neighbours...')
+                        logger.info('Waiting neighbours...')
                         time.sleep(Config.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
                         continue
                     neighbour = random.choice(neighbours)
@@ -362,14 +362,11 @@ class CheckLocalHashTableThread(threading.Thread):
                 self.operator.call_node(neighbour, packet_obj)
             except Exception, err:
                 logger.error(str(err))
-            finally:
-                for i in xrange(Config.CHECK_HASH_TABLE_TIMEOUT):
-                    if self.stopped.is_set():
-                        break
-                    time.sleep(1)
 
+            for i in xrange(Config.CHECK_HASH_TABLE_TIMEOUT):
                 if self.stopped.is_set():
                     break
+                time.sleep(1)
 
         logger.info('Thread stopped!')
 

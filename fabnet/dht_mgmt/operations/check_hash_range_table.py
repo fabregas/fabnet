@@ -42,6 +42,9 @@ class CheckHashRangeTableOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
+        if self.operator.status == DS_INITIALIZE:
+            return FabnetPacketResponse(ret_code=RC_DONT_STARTED, ret_message='Node is not initialized yet!')
+
         f_mod_index = packet.parameters.get('mod_index', None)
         if f_mod_index is None:
             raise Exception('Mod index parameter is expected for CheckHashRangeTable operation')

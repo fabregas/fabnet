@@ -13,6 +13,7 @@ from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketR
 from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTableOperation
 from fabnet.dht_mgmt.constants import RC_NEED_UPDATE
 from fabnet.core.config import Config
+from fabnet.dht_mgmt.constants import DS_NORMALWORK
 
 
 logger.setLevel(logging.DEBUG)
@@ -159,6 +160,8 @@ class TestFSMappedRanges(unittest.TestCase):
 
             operator1.call_node = call_node_simulator
             operator1.register_operation('CheckHashRangeTable', CheckHashRangeTableOperation)
+            operator.status = DS_NORMALWORK
+            operator1.status = DS_NORMALWORK
 
             mod_index = operator.ranges_table.get_mod_index()
             params = {'mod_index': mod_index, 'ranges_count': operator.ranges_table.count(), \
