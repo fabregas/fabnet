@@ -28,6 +28,10 @@ def get_current_upgrade_ver():
     except ValueError, err:
         raise Exception('UPGRADE_VERSION content "%s" is invalid!'%val)
 
+    if type(vers) != dict:
+        #invalid file data
+        vers = {}
+
     return vers
 
 def update_current_upgrade_ver(node_type, ver):
@@ -48,15 +52,14 @@ def get_next_upgrade_script(cur_ver):
         except ValueError, err:
             print('WARNING: File %s has invalid name. Valid format: '\
                   'XXX_<file name>.py, where XXX - integer upgrade version. Skip it...'%file_name)
-            continue
 
-        if num <= cur_ver:
-            print('INFO: %s is already processed on this node'%file_name)
             continue
-
         scripts[num] = file_name
 
     for num in sorted(scripts.keys()):
+        if num <= cur_ver:
+            print('INFO: %s is already processed on this node'%scripts[num])
+            continue
         yield num, scripts[num]
 
 

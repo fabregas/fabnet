@@ -26,6 +26,10 @@ from Crypto import Random
 monitoring_home = '/tmp/monitor_node_home'
 
 def make_fake_hdd(name, size, dev='/dev/loop0'):
+    if os.path.exists('/tmp/%s'%name):
+        print 'warning: virtual HDD is already exists at /tmp/%s'%name
+        return '/tmp/mnt_%s'%name
+
     os.system('dd if=/dev/zero of=/tmp/%s bs=1024 count=%s'%(name, size))
     os.system('sudo umount /tmp/mnt_%s'%name)
     os.system('sudo losetup -d %s'%dev)
@@ -38,10 +42,11 @@ def make_fake_hdd(name, size, dev='/dev/loop0'):
     return '/tmp/mnt_%s'%name
 
 def destroy_fake_hdd(name, dev='/dev/loop0'):
-    if not os.path.exists('/tmp/%s'%name):
+    if os.path.exists('/tmp/mnt_%s'%name):
         return
     os.system('sudo umount /tmp/mnt_%s'%name)
     os.system('sudo losetup -d %s'%dev)
+    os.system('sudo rm -rf /tmp/mnt_%s'%name)
     os.system('sudo rm /tmp/%s'%name)
 
 
@@ -65,22 +70,24 @@ def create_network(ip_addr, hdds_size):
         start_port += 1
 
         logger.warning('{SNP} STARTING NODE %s'%address)
-        p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, node_name, homedir, 'DHT'])
+        p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, node_name, homedir, 'DHT', '--nodaemon'])
         processes.append(p)
         logger.warning('{SNP} PROCESS STARTED')
 
 
+    time.sleep(3)
+    print 'Network is started!'
+    return addresses, processes
+
+def create_monitor():
     os.system('rm -rf %s'%monitoring_home)
     os.system('mkdir %s'%monitoring_home)
     address = '%s:%s'%(ip_addr, 1989)
     logger.warning('{SNP} STARTING MONITORING NODE %s'%address)
-    p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, 'monitor', monitoring_home, 'Monitor'])
-    processes.append(p)
+    mon_p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, 'monitor', monitoring_home, 'Monitor', '--nodaemon'])
     logger.warning('{SNP} PROCESS STARTED')
-
-    time.sleep(3)
-    print 'Network is started!'
-    return addresses, processes
+    time.sleep(1)
+    return mon_p
 
 def destroy_network(processes, destroy_hdds=True):
     for proc in processes:
@@ -278,7 +285,7 @@ def create_virt_net(nodes_count, port_move=0):
             shutil.rmtree(home)
         os.mkdir(home)
 
-        args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, 'DHT']
+        args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, 'DHT', '--nodaemon']
         #if DEBUG:
         #args.append('--debug')
         p = subprocess.Popen(args)

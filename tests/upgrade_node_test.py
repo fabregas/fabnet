@@ -20,6 +20,7 @@ class TestUpgradeNode(unittest.TestCase):
         server_proc = None
         try:
             os.system('rm -rf /tmp/fabnet_node_code')
+            os.system('rm -rf /tmp/upgrade_node.log')
             os.system('git clone %s /tmp/fabnet_node_code/'%ORIG_REPO)
             os.chdir('/tmp/fabnet_node_code/')
             #os.system('git reset --hard f797284a29fcbaa08d8ff68d07e5e6e352a95fe3')
@@ -31,7 +32,7 @@ class TestUpgradeNode(unittest.TestCase):
             server_proc = subprocess.Popen(args)
             time.sleep(1)
 
-            os.system('echo "1" > UPGRADE_VERSION')
+            os.system("echo '{\"DHT\": 100500}' > UPGRADE_VERSION")
             packet_obj = FabnetPacketRequest(method='UpgradeNode', parameters={'origin_repo_url': 'bad_url'}, sync=True)
             client = FriClient()
             ret = client.call_sync('127.0.0.1:1987', packet_obj)
@@ -42,6 +43,8 @@ class TestUpgradeNode(unittest.TestCase):
             client = FriClient()
             ret = client.call_sync('127.0.0.1:1987', packet_obj)
             self.assertEqual(ret.ret_code, 0)
+            self.assertTrue(os.path.exists('/tmp/upgrade_node.log'))
+            self.assertTrue('successfully' in open('/tmp/upgrade_node.log').read())
         finally:
             os.system('rm -rf /tmp/fabnet_node_code')
             if server_proc:

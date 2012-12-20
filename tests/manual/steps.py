@@ -6,6 +6,7 @@ import os
 import re
 import time
 import random
+import signal
 
 import primitives
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
@@ -35,6 +36,10 @@ def given_i_have_nodes_with_hdds(step, hdds_str):
 @step(u'When start network')
 def when_start_network(step):
     world.addresses, world.processes = primitives.create_network('127.0.0.1', world.hdds)
+
+@step(u'And start monitor')
+def when_start_monitor(step):
+    world.mon_proc = primitives.create_monitor()
 
 @step(u'And put data until HDDs are full')
 def and_put_data_until_hdds_are_full(step):
@@ -159,12 +164,17 @@ def try_start_network(scenario):
     world.hdds = []
     world.addresses = []
     world.processes = []
+    world.mon_proc = None
     world.stat_f_obj = get_log_file(scenario.feature.name, scenario.name)
 
 @after.each_scenario
 def try_stop_network(scenario):
     if world.processes:
         primitives.destroy_network(world.processes)
+
+    if world.mon_proc:
+        world.mon_proc.send_signal(signal.SIGINT)
+        world.mon_proc.wait()
 
     if world.stat_f_obj:
         world.stat_f_obj.close()
