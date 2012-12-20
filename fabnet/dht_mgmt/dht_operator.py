@@ -23,7 +23,7 @@ from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
 from fabnet.core.config import Config
 from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_DESTROYING, DS_NORMALWORK, \
-            DEFAULT_DHT_CONFIG, MIN_HASH, MAX_HASH, RC_OLD_DATA
+            DEFAULT_DHT_CONFIG, MIN_HASH, MAX_HASH, RC_OLD_DATA, RC_NO_FREE_SPACE
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_ALERT
 
 from fabnet.dht_mgmt.operations.get_range_data_request import GetRangeDataRequestOperation
@@ -381,6 +381,7 @@ class MonitorDHTRanges(threading.Thread):
 
         self.__last_is_start_part = True
         self.__notification_flag = False
+        self.__full_nodes = []
 
     def _check_range_free_size(self):
         dht_range = self.operator.get_dht_range()
@@ -454,17 +455,23 @@ class MonitorDHTRanges(threading.Thread):
         return True
 
     def _process_reservation_range(self):
+        self.__full_nodes = []
         dht_range = self.operator.get_dht_range()
 
         for digest, data, file_path in dht_range.iter_reservation():
+            if self.stopped.is_set():
+                break
             logger.info('Processing %s from reservation range'%digest)
             if self._put_data(digest, data):
                 logger.debug('data block with key=%s is send from reservation range'%digest)
                 os.unlink(file_path)
 
     def _process_replicas(self):
+        self.__full_nodes = []
         dht_range = self.operator.get_dht_range()
         for digest, data, file_path in dht_range.iter_replicas():
+            if self.stopped.is_set():
+                break
             logger.info('Processing replica %s'%digest)
             if self._put_data(digest, data, is_replica=True):
                 logger.debug('data block with key=%s is send from replicas range'%digest)
@@ -477,12 +484,19 @@ class MonitorDHTRanges(threading.Thread):
             logger.debug('No range found for reservation key %s'%key)
             return False
 
+        if k_range.node_address in self.__full_nodes:
+            logger.info('Node %s does not have free space. Skipping put data block...'%k_range.node_address)
+            return False
+
         checksum = hashlib.sha1(data).hexdigest()
         params = {'key': key, 'checksum': checksum, 'is_replica': is_replica, 'carefully_save': True}
         req = FabnetPacketRequest(method='PutDataBlock', sender=self.operator.self_address,\
                 parameters=params, binary_data=data, sync=True)
 
         resp = self.operator.call_node(k_range.node_address, req)
+
+        if resp.ret_code == RC_NO_FREE_SPACE:
+            self.__full_nodes.append(k_range.node_address)
 
         if resp.ret_code not in (RC_OK, RC_OLD_DATA):
             logger.error('PutDataBlock error on %s: %s'%(k_range.node_address, resp.ret_message))
@@ -506,10 +520,16 @@ class MonitorDHTRanges(threading.Thread):
                 logger.debug('MonitorDHTRanges iteration...')
 
                 self._check_range_free_size()
+                if self.stopped.is_set():
+                    break
 
                 self._process_reservation_range()
+                if self.stopped.is_set():
+                    break
 
                 self._process_replicas()
+                if self.stopped.is_set():
+                    break
             except Exception, err:
                 logger.error('[MonitorDHTRanges] %s'% err)
 

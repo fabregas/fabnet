@@ -39,7 +39,7 @@ def when_start_network(step):
 
 @step(u'And start monitor')
 def when_start_monitor(step):
-    world.mon_proc = primitives.create_monitor()
+    world.mon_proc = primitives.create_monitor(world.addresses[0])
 
 @step(u'And put data until HDDs are full')
 def and_put_data_until_hdds_are_full(step):
@@ -104,8 +104,9 @@ def then_see_collected_stats_for_all_nodes(step):
     qeury_nodes = 'SELECT node_address, node_name, status, superiors, uppers, statistic, last_check FROM nodes_info'
     nodes = conn.select(qeury_nodes)
     conn.close()
-    if len(nodes) != len(world.processes):
-        raise Exception('Expected %i nodes in nodes_info table. But %i occured!'%(len(world.addresses), len(nodes)))
+    nodes_count = len(world.processes)+1
+    if len(nodes) != nodes_count:
+        raise Exception('Expected %i nodes in nodes_info table. But %i occured!'%(nodes_count, len(nodes)))
     for node in nodes:
         for field in node:
             if not field:

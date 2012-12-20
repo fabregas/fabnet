@@ -15,9 +15,9 @@ from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR, \
                                     NODE_ROLE, CLIENT_ROLE
-from fabnet.dht_mgmt.constants import RC_OLD_DATA
+from fabnet.dht_mgmt.constants import RC_OLD_DATA, RC_NO_FREE_SPACE
 from fabnet.dht_mgmt.data_block import DataBlock
-from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesOldDataDetected
+from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesOldDataDetected, FSHashRangesNoFreeSpace
 
 class PutDataBlockOperation(OperationBase):
     ROLES = [NODE_ROLE, CLIENT_ROLE]
@@ -61,6 +61,8 @@ class PutDataBlockOperation(OperationBase):
                 dht_range.put_replica(key, data, carefully_save)
         except FSHashRangesOldDataDetected, err:
             return FabnetPacketResponse(ret_code=RC_OLD_DATA, ret_message=str(err))
+        except FSHashRangesNoFreeSpace, err:
+            return FabnetPacketResponse(ret_code=RC_NO_FREE_SPACE, ret_message=str(err))
 
         return FabnetPacketResponse()
 

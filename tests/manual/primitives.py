@@ -42,7 +42,7 @@ def make_fake_hdd(name, size, dev='/dev/loop0'):
     return '/tmp/mnt_%s'%name
 
 def destroy_fake_hdd(name, dev='/dev/loop0'):
-    if os.path.exists('/tmp/mnt_%s'%name):
+    if not os.path.exists('/tmp/mnt_%s'%name):
         return
     os.system('sudo umount /tmp/mnt_%s'%name)
     os.system('sudo losetup -d %s'%dev)
@@ -79,12 +79,12 @@ def create_network(ip_addr, hdds_size):
     print 'Network is started!'
     return addresses, processes
 
-def create_monitor():
+def create_monitor(neigbour):
     os.system('rm -rf %s'%monitoring_home)
     os.system('mkdir %s'%monitoring_home)
-    address = '%s:%s'%(ip_addr, 1989)
+    address = '%s:%s'%('127.0.0.1', 1989)
     logger.warning('{SNP} STARTING MONITORING NODE %s'%address)
-    mon_p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, 'monitor', monitoring_home, 'Monitor', '--nodaemon'])
+    mon_p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, neigbour, 'monitor', monitoring_home, 'Monitor', '--nodaemon'])
     logger.warning('{SNP} PROCESS STARTED')
     time.sleep(1)
     return mon_p
@@ -405,7 +405,7 @@ def get_data_blocks(addresses, keys):
 
 def collect_topology_from_nodes(addresses):
     for address in addresses:
-        p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address, '{"need_rebalance": 1}'])
+        p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fri-caller', 'TopologyCognition', address, '{"need_rebalance": 1}', 'async'])
         node_i = address.split(':')[-1]
         wait_topology(node_i, len(addresses))
         #os.system('python ./tests/topology_to_tgf /tmp/node_%s/fabnet_topology.db /tmp/fabnet_topology.%s-orig.tgf'%(node_i, len(ADDRESSES)))
