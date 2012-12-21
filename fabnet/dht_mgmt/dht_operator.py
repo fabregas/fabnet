@@ -113,6 +113,15 @@ class DHTOperator(Operator):
         req = FabnetPacketRequest(method='UpdateHashRangeTable', sender=self.self_address, parameters=parameters)
         self.call_network(req)
 
+    def _take_range(self, range_obj):
+        logger.info('Take node old range. Updating hash range table on network...')
+        app_lst = [(range_obj.start, range_obj.end, range_obj.node_address)]
+        parameters = {'append': app_lst, 'remove': []}
+
+        req = FabnetPacketRequest(method='UpdateHashRangeTable', sender=self.self_address, parameters=parameters)
+        self.call_network(req)
+
+
     def stop_inherited(self):
         self.status = DS_DESTROYING
         for range_obj in self.ranges_table.iter_table():
@@ -177,6 +186,10 @@ class DHTOperator(Operator):
             ret_range_e = self.__normalize_range_request(start, end, found_range)
             if ret_range_e and ret_range_e.length() > ret_range.length():
                 ret_range = ret_range_e
+
+        if not ret_range:
+            ret_range = HashRange(start, end, self.self_address)
+
         return ret_range
 
     def set_status_to_normalwork(self):
@@ -222,6 +235,7 @@ class DHTOperator(Operator):
             new_dht_range.restore_from_reservation() #try getting new range data from reservation
 
         if new_range.node_address == self.self_address:
+            self._take_range(new_range)
             self.set_status_to_normalwork()
             return
 
@@ -264,6 +278,9 @@ class DHTOperator(Operator):
 
         range_obj = self.ranges_table.find(start)
         if not range_obj or range_obj.start != start or range_obj.end != end or range_obj.node_address != self.self_address:
+            logger.info('Invalid self range! hash table range - [%040x-%040x]%s... my range - [%040x-%040x]%s'%\
+                            (range_obj.start, range_obj.end, range_obj.node_address, start, end, self.self_address))
+
             if reinit:
                 logger.warning('DHT range on this node is not found in ranges_table')
                 if range_obj:

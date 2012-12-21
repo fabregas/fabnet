@@ -117,6 +117,7 @@ class CheckHashRangeTableOperation(OperationBase):
                 that should be resended to current node requestor
                 or None for disabling packet resending
         """
+        logger.debug('CheckHashRangeTable response from %s: %s %s'%(packet.from_node, packet.ret_code, packet.ret_message))
         if packet.ret_code == RC_DONT_STARTED:
             self._remove_node_range(packet.from_node)
             time.sleep(Config.WAIT_DHT_TABLE_UPDATE)

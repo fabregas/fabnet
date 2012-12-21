@@ -72,12 +72,46 @@ def create_network(ip_addr, hdds_size):
         logger.warning('{SNP} STARTING NODE %s'%address)
         p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, node_name, homedir, 'DHT', '--nodaemon'])
         processes.append(p)
-        logger.warning('{SNP} PROCESS STARTED')
+        wait_node(address)
+        logger.warning('{SNP} NODE %s IS STARTED'%address)
 
-
-    time.sleep(3)
     print 'Network is started!'
     return addresses, processes
+
+def reboot_nodes(processes, addresses, timeout=None):
+    ret_processes = []
+    try:
+        for i, address in enumerate(addresses):
+            node_name = 'node%02i'%i
+            homedir = '/tmp/mnt_%s'%node_name
+            proc = processes[i]
+
+            #stop node
+            logger.warning('{SNP} STOPPING NODE %s'%address)
+            proc.send_signal(signal.SIGINT)
+            proc.wait()
+            logger.warning('{SNP} NODE %s IS STOPPED'%address)
+
+            if timeout:
+                time.sleep(timeout)
+
+            #start node
+            while True:
+                n_node = random.choice(addresses)
+                if n_node != address:
+                    break
+            logger.warning('{SNP} STARTING NODE %s'%address)
+            p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, node_name, homedir, 'DHT', '--nodaemon'])
+            ret_processes.append(p)
+            wait_node(address)
+            logger.warning('{SNP} NODE %s IS STARTED'%address)
+    except Exception, err:
+        destroy_network(ret_processes)
+        raise err
+
+    time.sleep(1)
+    return ret_processes
+
 
 def create_monitor(neigbour):
     os.system('rm -rf %s'%monitoring_home)
@@ -303,7 +337,11 @@ def wait_node(node):
         packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
         ret_packet = client.call_sync(node, packet_obj)
         if ret_packet.ret_code:
-            print 'Node does not init FRI server yet. Waiting it...'
+            print 'Node %s does not init FRI server yet. Waiting it...'%node
+            time.sleep(.5)
+            continue
+        if ret_packet.ret_parameters['dht_info']['status'] != 'normwork':
+            print 'Node %s does not init as DHT member yet. Waiting...'%node
             time.sleep(.5)
             continue
         break
@@ -367,6 +405,8 @@ def print_ranges(addresses, out_streem):
         if end+1 != h_range.start:
             raise Exception('Distributed range table is not full!')
         end = h_range.end
+    return ranges
+
 
 def put_data_blocks(addresses, block_size=1024, blocks_count=1000):
     client = FriClient()

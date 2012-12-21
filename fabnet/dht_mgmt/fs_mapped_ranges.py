@@ -480,18 +480,22 @@ class FSHashRanges:
             if start_key == self.__start:
                 split_key = end_key
                 self.__ret_range_i = 0
+                first_subrange_end = split_key
+                second_subrange_start = split_key + 1
             elif end_key == self.__end:
                 split_key = start_key
                 self.__ret_range_i = 1
+                first_subrange_end = split_key - 1
+                second_subrange_start = split_key
             else:
-                raise FSHashRangesException('Bad subrange [%040x-%040x]'%(start_key, end_key))
+                raise FSHashRangesException('Bad subrange [%040x-%040x] for range [%040x-%040x]'%\
+                                                (start_key, end_key, self.__start, self.__end))
 
             if not self._in_range(split_key):
                 FSHashRangesNotFound('No key %040x found in range'%split_key)
 
-            key_long = split_key
-            first_rg = FSHashRanges(self.__start, key_long-1, self.__save_path)
-            second_rg = FSHashRanges(key_long, self.__end, self.__save_path)
+            first_rg = FSHashRanges(self.__start, first_subrange_end, self.__save_path)
+            second_rg = FSHashRanges(second_subrange_start, self.__end, self.__save_path)
 
             self.__child_ranges.concat([first_rg, second_rg])
 

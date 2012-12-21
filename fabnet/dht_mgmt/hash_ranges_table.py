@@ -100,6 +100,10 @@ class HashRangesTable:
 
             r_obj = self.find(start)
             if r_obj:
+                if r_obj.start == start and r_obj.end == end and r_obj.node_address == node_addr:
+                    #range is already exists in table
+                    return
+
                 err_msg = 'Cant append range [%040x-%040x], it is crossed by existing [%040x-%040x] range' \
                             % (start, end, r_obj.start, r_obj.end)
                 raise RangeException(err_msg)
@@ -206,6 +210,8 @@ class HashRangesTable:
 
             self.__ranges, self.__last_dm, self.__mod_index = pickle.loads(ranges_dump)
 
+            logger.debug('HASH RANGES: %s'%'\n'.join([r.to_str() for r in self.__ranges]))
+
             if is_old_ex:
                 s = 'OLD(-)/NEW(+) HASHES IN TABLES:\n'
                 for range_o in self.iter_table():
@@ -257,10 +263,11 @@ class HashRangesTable:
                     raise Exception('Ranges are not one near one. END=%040x, next START=%040x'%(end_i, item.start))
                 end_i = item.end
 
-            for app_obj in ap_obj_list:
-                if (tmp_table.get_first().start > app_obj.start and self.find(app_obj.start)) \
-                        or (tmp_table.get_end().end < app_obj.end and self.find(app_obj.end)):
-                    raise Exception('Appending range {%040x-%040x} is intersected by exists range!'%(app_obj.start, app_obj.end))
+            if not tmp_table.empty():
+                for app_obj in ap_obj_list:
+                    if (tmp_table.get_first().start > app_obj.start and self.find(app_obj.start)) \
+                            or (tmp_table.get_end().end < app_obj.end and self.find(app_obj.end)):
+                        raise Exception('Appending range {%040x-%040x} is intersected by exists range!'%(app_obj.start, app_obj.end))
 
             for rm_obj in rm_obj_list:
                 found = self.find(rm_obj.start)

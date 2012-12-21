@@ -145,6 +145,24 @@ def when_stop_n_nodes(step, nodes_count):
 def then_i_collect_dht_statistic(step):
     primitives.print_ranges(world.addresses, world.stat_f_obj)
 
+@step(u'Then I collect and remember DHT statistic')
+def then_i_collect_and_remember_dht_statistic(step):
+    world.stat = primitives.print_ranges(world.addresses, world.stat_f_obj)
+
+@step(u'Then I collect DHT statistic and check with previous')
+def then_i_collect_dht_statistic_and_check(step):
+    stat = primitives.print_ranges(world.addresses, world.stat_f_obj)
+    if stat != world.stat:
+        raise Exception('DHT ranges are invalid...')
+
+@step(u'When reboot all nodes one by one')
+def then_reboot_all_nodes(step):
+    world.processes = primitives.reboot_nodes(world.processes, world.addresses)
+
+@step(u'When reboot all nodes one by one with timeout in (\d+) secs')
+def then_reboot_all_nodes(step, timeout):
+    world.processes = primitives.reboot_nodes(world.processes, world.addresses, int(timeout))
+
 @step(u'Then I put (\d+) blocks \(one block size - (\d+) bytes\)')
 def then_i_put_n_blocks_one_block_size_m_bytes(step, blocks, block_size):
     world.keys = primitives.put_data_blocks(world.addresses, int(block_size), int(blocks))
