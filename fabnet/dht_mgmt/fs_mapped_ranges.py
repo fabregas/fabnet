@@ -446,14 +446,16 @@ class FSHashRanges:
             start_key = self._long_key(start_key)
             end_key = self._long_key(end_key)
             if start_key >= end_key:
-                raise FSHashRangesException('Bad subrange [%040x-%040x]'%(start_key, end_key))
+                raise FSHashRangesException('Bad subrange [%040x-%040x] of [%040x-%040x]'%\
+                                            (start_key, end_key, self.__start, self.__end))
 
             if self.__start == end_key+1:
                 start = start_key
             elif self.__end == start_key-1:
                 end = end_key
             else:
-                raise FSHashRangesException('Bad range for extend [%040x-%040x]'%(start_key, end_key))
+                raise FSHashRangesException('Bad range for extend [%040x-%040x] of [%040x-%040x]'%\
+                                            (start_key, end_key, self.__start, self.__end))
 
             self._block_range()
             self._wait_write_buffers()

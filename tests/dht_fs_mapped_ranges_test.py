@@ -131,7 +131,7 @@ class TestFSMappedRanges(unittest.TestCase):
         else:
             raise Exception('Expected error in this case.')
 
-        extended_range = new_range.extend('%040x'%0, '%040x'%((45000)*100-1))
+        extended_range = new_range.extend('%040x'%0, '%040x'%((45000)*100))
         extended_range.put('%040x'%100500, 'final data test #2')
         data = extended_range.get('%040x'%100500)
         self.assertEqual(data, 'final data test #2')

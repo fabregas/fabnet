@@ -387,8 +387,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             time.sleep(1)
             node86_range = server.operator.get_dht_range()
             node87_range = server1.operator.get_dht_range()
-            self.assertEqual(node86_range.get_free_size_percents() > 15, True)
-            self.assertEqual(node87_range.get_free_size_percents() < 10, True)
+            self.assertEqual(node86_range.get_free_size_percents() > 15, True, node86_range.get_free_size_percents())
+            self.assertEqual(node87_range.get_free_size_percents() < 10, True, node87_range.get_free_size_percents())
         finally:
             if server:
                 server.stop()
