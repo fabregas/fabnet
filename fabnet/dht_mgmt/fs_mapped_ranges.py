@@ -349,8 +349,10 @@ class FSHashRanges:
             logger.info('Joining range %s...'%child_range_dir)
 
             for cnt, digest in enumerate(files):
-                if perc_part and (cnt) % perc_part == 0:
-                    logger.info('Joining range progress: %i'%(cnt/perc_part) + '0%...')
+                if perc_part and (cnt+1) % perc_part == 0:
+                    perc = (cnt+1)/perc_part
+                    if perc <= 10:
+                        logger.info('Joining range progress: %i'%perc + '0%...')
 
                 self._move_from(os.path.join(child_range_dir, digest))
 
@@ -364,8 +366,10 @@ class FSHashRanges:
         logger.info('Splitting hash range...')
 
         for cnt, digest in enumerate(files):
-            if perc_part and (cnt) % perc_part == 0:
-                logger.info('Splitting range progress: %i'%(cnt/perc_part) + '0%...')
+            if perc_part and (cnt+1) % perc_part == 0:
+                perc = (cnt+1)/perc_part
+                if perc <= 10:
+                    logger.info('Splitting range progress: %i'%perc + '0%...')
 
             for child_range in self.__child_ranges.copy():
                 if child_range._in_range(digest):
@@ -605,8 +609,10 @@ class FSHashRanges:
         logger.info('Restoring reservation data...')
 
         for cnt, digest in enumerate(files):
-            if perc_part and (cnt) % perc_part == 0:
-                logger.info('Restore progress: %i'%(cnt/perc_part) + '0%...')
+            if perc_part and (cnt+1) % perc_part == 0:
+                perc = (cnt+1)/perc_part
+                if perc <= 10:
+                    logger.info('Restore progress: %i'%perc + '0%...')
 
             r_file_path = os.path.join(self.__reservation_dir, digest)
             if self._in_range(digest) and self._ensure_not_write(r_file_path):
