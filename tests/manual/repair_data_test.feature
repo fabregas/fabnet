@@ -2,6 +2,7 @@ Feature: Check and Repair data tests
     Scenario: 8 nodes for 1Gb per node
         Given I have nodes with HDDs: 1, 1, 1, 1, 1, 1, 1, 1
         When start network 
+        And start monitor
         And put data until HDDs have free capacity less than 25 
         Then wait check and repair operation finish with label: ALL valid data
         When destroy data from node with nums: 1
@@ -15,6 +16,7 @@ Feature: Check and Repair data tests
     Scenario: 8 nodes for 1.5Gb per node
         Given I have nodes with HDDs: 1.5, 1.5, 1.5, 1.5,1.5, 1.5, 1.5, 1.5
         When start network 
+        And start monitor
         And put data until HDDs have free capacity less than 25 
         Then wait check and repair operation finish with label: ALL valid data
         When destroy data from node with nums: 1
@@ -28,6 +30,7 @@ Feature: Check and Repair data tests
     Scenario: 8 nodes for 2Gb per node
         Given I have nodes with HDDs: 2, 2, 2, 2, 2, 2, 2, 2
         When start network 
+        And start monitor
         And put data until HDDs have free capacity less than 25 
         Then wait check and repair operation finish with label: ALL valid data
         When destroy data from node with nums: 1

@@ -265,7 +265,13 @@ def call_repair_data(address, out_streem, expect_res, invalid_node=None):
         raise Exception('RepairDataBlocks does not started. Details: %s'%rmsg)
 
     cnt = 0
+    try_cnt = 0
     while cnt != expect_res:
+        if try_cnt == 100:
+            print 'Notifications count: %s, but expected: %s'%(cnt, expect_res)
+            try_cnt = 0
+        try_cnt += 1
+	
         try:
             cnt = dbconn.select_one("SELECT count(*) FROM notification WHERE notify_topic='RepairDataBlocks statistic'")
         except Exception, err:
