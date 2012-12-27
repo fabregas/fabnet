@@ -8,25 +8,59 @@ Copyright (C) 2012 Konstantin Andrusenko
 @author Konstantin Andrusenko
 @date August 20, 2012
 
-This module contains the implementation of FabnetPacketRequest, FabnetPacketResponse, FriClient classes.
+This module contains the implementation of FabnetPacketRequest, FabnetPacketResponse classes.
 """
-import ssl
 import uuid
-import socket
 import struct
 import zlib
 import json
 
-import M2Crypto.SSL
-from M2Crypto.SSL import Context, Connection
-
-from constants import RC_OK, RC_ERROR, RC_UNEXPECTED, RC_REQ_CERTIFICATE,\
-                BUF_SIZE, FRI_CLIENT_TIMEOUT, FRI_CLIENT_READ_TIMEOUT,\
-                FRI_PROTOCOL_IDENTIFIER, FRI_PACKET_INFO_LEN
+from constants import RC_OK, FRI_PROTOCOL_IDENTIFIER, FRI_PACKET_INFO_LEN
 
 
 class FriException(Exception):
     pass
+
+
+class FriBinaryData:
+    def chunks_count(self):
+        raise RuntimeError('Not implemented')
+
+    def get_next_chunk(self):
+        """Return next data chunk. None should be returned if EOF"""
+        raise RuntimeError('Not implemented')
+
+    def data(self):
+        """Return all binary data in one chunk"""
+        data = ''
+        while True:
+            chunk = self.get_next_chunk()
+            if not chunk:
+                break
+            data += chunk
+        return data
+
+class RamBasedBinaryData(FriBinaryData):
+    def __init__(self, data, chunks_count=1):
+        self.__chunks_count = chunks_count
+        self.__data = data
+        self.__last_idx = 0
+
+    def chunks_count(self):
+        return self.__chunks_count
+
+    def get_next_chunk(self):
+        if self.__last_idx >= self.__chunks_count:
+            return None
+        i = len(self.__data) / self.__chunks_count
+        start = i * self.__last_idx
+        self.__last_idx += 1
+        if self.__last_idx == self.__chunks_count:
+            end = len(self.__data)
+        else:
+            end = i * self.__last_idx
+
+        return self.__data[start:end]
 
 
 class FriBinaryProcessor:
@@ -87,12 +121,65 @@ class FriBinaryProcessor:
         return p_info + packet_data
 
 class FabnetPacket:
-    pass
-
-class FabnetPacketRequest(FabnetPacket):
     def __init__(self, **packet):
         self.message_id = packet.get('message_id', None)
         self.session_id = packet.get('session_id', None)
+
+        self.binary_data = packet.get('binary_data', None)
+        if type(self.binary_data) == str:
+            self.binary_data = RamBasedBinaryData(self.binary_data)
+        self.is_chunked = packet.get('is_chunked', False)
+        self.binary_chunk_idx = packet.get('binary_chunk_idx', None)
+        self.binary_chunk_cnt = packet.get('binary_chunk_cnt', None)
+
+    def validate(self):
+        """This method may be implemented
+           in inherited class for packet validation
+        """
+        pass
+
+    def dump(self, with_bin=True):
+        header_json = self.to_dict()
+        if self.binary_data and with_bin:
+            binary_data = self.binary_data.data()
+        else:
+            binary_data = ''
+        data = FriBinaryProcessor.to_binary(header_json, binary_data)
+        return data
+
+    def dump_next_chunk(self):
+        header_json = self.to_dict()
+        binary_data = ''
+        if self.binary_data:
+            binary_data = self.binary_data.get_next_chunk()
+        if not binary_data:
+            return None
+        data = FriBinaryProcessor.to_binary(header_json, binary_data)
+        return data
+
+    def to_dict(self):
+        """This method may be extended in inherited class"""
+        ret_dict = {'message_id': self.message_id}
+
+        if self.session_id:
+            ret_dict['session_id'] = self.session_id
+        if self.is_chunked:
+            ret_dict['is_chunked'] = self.is_chunked
+        if self.binary_chunk_idx:
+            ret_dict['binary_chunk_idx'] = self.binary_chunk_idx
+        if self.binary_chunk_cnt:
+            ret_dict['binary_chunk_cnt'] = self.binary_chunk_cnt
+
+        return ret_dict
+
+    def __str__(self):
+        return str(self.__repr__())
+
+
+class FabnetPacketRequest(FabnetPacket):
+    def __init__(self, **packet):
+        FabnetPacket.__init__(self, **packet)
+
         self.is_multicast = packet.get('is_multicast', None)
         self.sync = packet.get('sync', False)
         if not self.message_id:
@@ -100,7 +187,6 @@ class FabnetPacketRequest(FabnetPacket):
         self.method = packet.get('method', None)
         self.sender = packet.get('sender', None)
         self.parameters = packet.get('parameters', {})
-        self.binary_data = packet.get('binary_data', '')
 
         self.validate()
 
@@ -115,28 +201,18 @@ class FabnetPacketRequest(FabnetPacket):
             raise FriException('Invalid packet: method does not exists')
 
 
-    def dump(self):
-        header_json = self.to_dict()
-        data = FriBinaryProcessor.to_binary(header_json, self.binary_data)
-        return data
-
     def to_dict(self):
-        ret_dict = {'message_id': self.message_id, \
-                'method': self.method, \
+        ret_dict = FabnetPacket.to_dict(self)
+        ret_dict.update({'method': self.method, \
                 'sender': self.sender, \
-                'sync': self.sync}
+                'sync': self.sync})
 
         if self.parameters:
             ret_dict['parameters'] = self.parameters
-        if self.session_id:
-            ret_dict['session_id'] = self.session_id
         if self.is_multicast:
             ret_dict['is_multicast'] = self.is_multicast
 
         return ret_dict
-
-    def __str__(self):
-        return str(self.__repr__())
 
     def __repr__(self):
         return '{%s}[%s] %s %s'%(self.message_id, self.sender, self.method, str(self.parameters))
@@ -144,31 +220,22 @@ class FabnetPacketRequest(FabnetPacket):
 
 class FabnetPacketResponse(FabnetPacket):
     def __init__(self, **packet):
-        self.message_id = packet.get('message_id', None)
-        self.session_id = packet.get('session_id', None)
+        FabnetPacket.__init__(self, **packet)
+
         self.ret_code = packet.get('ret_code', RC_OK)
         self.ret_message = str(packet.get('ret_message', ''))
         self.ret_parameters = packet.get('ret_parameters', {})
         self.from_node = packet.get('from_node', None)
-        self.binary_data = packet.get('binary_data', '')
-
-    def dump(self):
-        header_json = self.to_dict()
-        data = FriBinaryProcessor.to_binary(header_json, self.binary_data)
-        return data
 
     def to_dict(self):
-        ret_dict = {'ret_code': self.ret_code,
-                'ret_message': self.ret_message}
+        ret_dict = FabnetPacket.to_dict(self)
+        ret_dict.update({'ret_code': self.ret_code,
+                'ret_message': self.ret_message})
 
-        if self.message_id:
-            ret_dict['message_id'] = self.message_id
         if self.ret_parameters:
             ret_dict['ret_parameters'] = self.ret_parameters
         if self.from_node:
             ret_dict['from_node'] = self.from_node
-        if self.session_id:
-            ret_dict['session_id'] = self.session_id
 
         return ret_dict
 
@@ -181,112 +248,5 @@ class FabnetPacketResponse(FabnetPacket):
                     self.ret_code, self.ret_message, str(self.ret_parameters)[:100])
 
 
-
-
-#------------- FRI client class ----------------------------------------------
-
-class FriClient:
-    """class for calling asynchronous operation over FRI protocol"""
-    def __init__(self, is_ssl=None, cert=None, session_id=None):
-        self.is_ssl = is_ssl
-        self.certificate = cert
-        self.session_id = session_id
-
-    def __int_call(self, node_address, packet, conn_timeout, read_timeout=None):
-        sock = None
-
-        try:
-            address = node_address.split(':')
-            if len(address) != 2:
-                raise FriException('Node address %s is invalid! ' \
-                            'Address should be in format <hostname>:<port>'%node_address)
-            hostname = address[0]
-            try:
-                port = int(address[1])
-                if 0 > port > 65535:
-                    raise ValueError()
-            except ValueError:
-                raise FriException('Node address %s is invalid! ' \
-                            'Port should be integer in range 0...65535'%node_address)
-
-            if not isinstance(packet, FabnetPacket):
-                raise Exception('FRI request packet should be an object of FabnetPacket')
-
-            packet.session_id = self.session_id
-            data = packet.dump()
-
-            if self.is_ssl:
-                context = Context()
-                context.set_verify(0, depth = 0)
-                sock = Connection(context)
-                sock.set_post_connection_check_callback(None)
-                sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=conn_timeout))
-            else:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(conn_timeout)
-
-            sock.connect((hostname, port))
-
-            sock.sendall(data)
-
-            if self.is_ssl:
-                sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=read_timeout))
-            else:
-                sock.settimeout(read_timeout)
-
-            ret_packet = self.__read_packet(sock)
-            if ret_packet.get('ret_code', -1) == RC_REQ_CERTIFICATE:
-                self.__send_cert(sock)
-                ret_packet = self.__read_packet(sock)
-
-            return ret_packet
-        finally:
-            if sock:
-                sock.close()
-
-    def __send_cert(self, sock):
-        req = FabnetPacketRequest(method='crtput', parameters={'certificate': self.certificate})
-        sock.sendall(req.dump())
-
-    def __read_packet(self, sock):
-        data = ''
-        exp_len = None
-        header_len = 0
-        while True:
-            received = sock.recv(BUF_SIZE)
-
-            if not received:
-                break
-
-            data += received
-
-            if exp_len is None:
-                exp_len, header_len = FriBinaryProcessor.get_expected_len(data)
-            if exp_len and len(data) >= exp_len:
-                break
-
-        if not data:
-            raise FriException('empty data block')
-
-        header, bin_data = FriBinaryProcessor.from_binary(data, exp_len, header_len)
-        header['binary_data'] = bin_data
-        return header
-
-    def call(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
-        try:
-            json_object = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
-
-            return json_object.get('ret_code', RC_UNEXPECTED), json_object.get('ret_message', '')
-        except Exception, err:
-            return RC_ERROR, '[FriClient][%s] %s' % (err.__class__.__name__, err)
-
-
-    def call_sync(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
-        try:
-            json_object = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
-
-            return FabnetPacketResponse(**json_object)
-        except Exception, err:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='[FriClient][%s] %s' % (err.__class__.__name__, err))
 
 

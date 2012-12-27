@@ -8,7 +8,9 @@ import json
 import random
 import string
 import hashlib
-from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_client import FriClient
+from fabnet.core.fri_base import RamBasedBinaryData
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT
 from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.dht_mgmt import constants
@@ -33,7 +35,7 @@ from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTabl
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.constants import DS_NORMALWORK, RC_OLD_DATA
 
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 
 MAX_HASH = constants.MAX_HASH
 
@@ -211,7 +213,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             _, _, _, stored_dt = DataBlock.read_header(data)
 
             params = {'key': MAX_HASH/2+100, 'checksum': checksum, 'carefully_save': True}
-            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=data, sync=True)
+            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=RamBasedBinaryData(data), sync=True)
             fri_client = FriClient()
             resp = fri_client.call_sync('127.0.0.1:1987', packet_obj)
             self.assertEqual(resp.ret_code, 0)
@@ -219,7 +221,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertTrue(os.path.exists(f_path))
 
             params = {'key': MAX_HASH/2+100, 'checksum': checksum2, 'carefully_save': True}
-            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=data2, sync=True)
+            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=RamBasedBinaryData(data2), sync=True)
             resp = fri_client.call_sync('127.0.0.1:1987', packet_obj)
             self.assertEqual(resp.ret_code, RC_OLD_DATA, resp.ret_message)
 
@@ -537,7 +539,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         checksum = hashlib.sha1(data).hexdigest()
 
         params = {'checksum': checksum, 'wait_writes_count': 3}
-        packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
+        packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=RamBasedBinaryData(data), sync=True)
 
         ret_packet = client.call_sync(address, packet_obj)
         self.assertEqual(ret_packet.ret_code, 0, ret_packet.ret_message)

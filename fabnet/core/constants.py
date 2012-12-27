@@ -14,6 +14,9 @@ This module contains the fabnet core constants
 #socket buffer size
 BUF_SIZE = 100*1024
 
+#default binary data chunk size
+DEFAULT_CHUNK_SIZE = 1024*1024
+
 #fri binary packet constants 
 FRI_PROTOCOL_IDENTIFIER = 'FRI0'
 FRI_PACKET_INFO_LEN = 20

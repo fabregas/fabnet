@@ -35,7 +35,11 @@ class PutDataBlockOperation(OperationBase):
         checksum = packet.parameters.get('checksum', None)
         is_replica = packet.parameters.get('is_replica', False)
         carefully_save = packet.parameters.get('carefully_save', False)
-        data = packet.binary_data
+
+        if not packet.binary_data:
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Binary data does not found!')
+
+        data = packet.binary_data.data()
 
         if key is None:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='key does not found!')

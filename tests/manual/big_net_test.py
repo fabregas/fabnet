@@ -12,7 +12,8 @@ import sqlite3
 import shutil
 from fabnet.utils.logger import logger
 
-from fabnet.core.fri_server import FriClient, FabnetPacketRequest
+from fabnet.core.fri_server import FabnetPacketRequest
+from fabnet.core.fri_client import FriClient
 logger.setLevel(logging.DEBUG)
 
 NODES_COUNT = range(90, 91)

@@ -7,7 +7,8 @@ import json
 import random
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
-from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_client import FriClient
 from fabnet.dht_mgmt.dht_operator import DHTOperator
 from fabnet.utils.logger import logger
 

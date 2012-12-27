@@ -25,7 +25,8 @@ from fabnet.core.operation_base import OperationBase
 from fabnet.core.message_container import MessageContainer
 from fabnet.core.agents_manager import FriAgentsManager
 from fabnet.core.constants import MC_SIZE, RQ_SIZE
-from fabnet.core.fri_base import FriClient, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_client import FriClient
 from fabnet.core.config import Config
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPERIOR, NT_UPPER, \
                 KEEP_ALIVE_METHOD, KEEP_ALIVE_TRY_COUNT, CHECK_NEIGHBOURS_TIMEOUT,\
@@ -562,6 +563,8 @@ class Operator:
             s_packet = operation_obj.callback(packet, sender)
         except Exception, err:
             logger.error('%s callback failed. Details: %s'%(operation, err))
+            logger.write = logger.debug
+            traceback.print_exc(file=logger)
 
         if s_packet:
             self.send_to_sender(sender, s_packet)

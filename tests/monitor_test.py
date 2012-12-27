@@ -10,7 +10,8 @@ import string
 import hashlib
 import subprocess
 import signal
-from fabnet.core.fri_server import FriServer, FriClient, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_client import FriClient
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT
 from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection

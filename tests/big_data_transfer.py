@@ -6,6 +6,7 @@ import json
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_base import RamBasedBinaryData
 from fabnet.core.operator import Operator
 from fabnet.core.operation_base import OperationBase
 from fabnet.utils.logger import logger
@@ -24,10 +25,18 @@ class EchoOperation(OperationBase):
         pass
 
     def process(self, packet):
-        return FabnetPacketResponse(ret_code=0, ret_message='ok', binary_data=packet.binary_data)
+        return FabnetPacketResponse(ret_code=0, ret_message='ok', binary_data=packet.binary_data, is_chunked=True)
 
     def callback(self, packet, sender):
-        open('/tmp/big_message.out', 'w').write(packet.binary_data)
+        f = open('/tmp/big_message.out', 'w')
+        try:
+            while True:
+                chunk = packet.binary_data.get_next_chunk()
+                if chunk is None:
+                    break
+                f.write(chunk)
+        finally:
+            f.close()
 
 
 class TestAbstractOperator(unittest.TestCase):
@@ -57,14 +66,32 @@ class TestAbstractOperator(unittest.TestCase):
                         'method': 'ECHO',
                         'sync': False,
                         'sender': '127.0.0.1:1987',
-                        'binary_data': data}
+                        'binary_data': RamBasedBinaryData(data)}
             t0 = datetime.now()
             packet_obj = FabnetPacketRequest(**packet)
             operator.call_node('127.0.0.1:1986', packet_obj)
 
-
             operator.wait_response(323232, 20)
             print 'Echo big data time: %s'%(datetime.now()-t0)
+            time.sleep(1)
+            rcv_data = open('/tmp/big_message.out').read()
+            self.assertEqual(len(rcv_data), len(data))
+            os.remove('/tmp/big_message.out')
+
+
+            #chunked data transfer
+            packet = { 'message_id': 323233,
+                        'method': 'ECHO',
+                        'sync': False,
+                        'is_chunked': True,
+                        'sender': '127.0.0.1:1987',
+                        'binary_data': RamBasedBinaryData(data, 10)}
+            t0 = datetime.now()
+            packet_obj = FabnetPacketRequest(**packet)
+            operator.call_node('127.0.0.1:1986', packet_obj)
+
+            operator.wait_response(323233, 20)
+            print 'Echo big data (10 chunks) time: %s'%(datetime.now()-t0)
             time.sleep(1)
             rcv_data = open('/tmp/big_message.out').read()
             self.assertEqual(len(rcv_data), len(data))

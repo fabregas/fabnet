@@ -15,7 +15,9 @@ from datetime import datetime
 from fabnet.utils.logger import logger
 
 from fabnet.core.constants import ET_INFO
-from fabnet.core.fri_server import FriClient, FabnetPacketRequest
+from fabnet.core.fri_server import FabnetPacketRequest
+from fabnet.core.fri_client import FriClient
+from fabnet.core.fri_base import RamBasedBinaryData
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.monitor.monitor_operator import MONITOR_DB
 from fabnet.dht_mgmt.hash_ranges_table import HashRangesTable
@@ -166,7 +168,7 @@ def put_data_to_network(addresses, stat_buffer, perc=10):
             checksum =  hashlib.sha1(data).hexdigest()
 
             params = {'checksum': checksum, 'wait_writes_count': 2}
-            packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
+            packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=RamBasedBinaryData(data), sync=True)
 
             ret_packet = client.call_sync(random.choice(addresses), packet_obj)
             if ret_packet.ret_code != 0:
@@ -422,7 +424,7 @@ def put_data_blocks(addresses, block_size=1024, blocks_count=1000):
         checksum =  hashlib.sha1(data).hexdigest()
 
         params = {'checksum': checksum, 'wait_writes_count': 2}
-        packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
+        packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=RamBasedBinaryData(data), sync=True)
         nodeaddr = random.choice(addresses)
 
         ret_packet = client.call_sync(nodeaddr, packet_obj)
@@ -445,7 +447,7 @@ def get_data_blocks(addresses, keys):
         if ret_packet.ret_code != 0:
             raise Exception('ClientGetData failed on %s: %s'%(nodeaddr, ret_packet.ret_message))
 
-        data = ret_packet.binary_data
+        data = ret_packet.binary_data.data()
         if hashlib.sha1(data).hexdigest() != ret_packet.ret_parameters['checksum']:
             raise Exception('Data block checksum failed!')
 

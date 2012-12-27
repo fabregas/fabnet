@@ -22,8 +22,8 @@ from M2Crypto.SSL import Context, Connection
 
 from fabnet.utils.logger import logger
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse,\
-                                FriBinaryProcessor, FriClient, FriException
-
+                                FriBinaryProcessor, FriException
+from fabnet.core.socket_processor import SocketProcessor
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_REQ_CERTIFICATE, \
                 STOP_THREAD_EVENT, S_ERROR, S_PENDING, S_INWORK, \
                 BUF_SIZE, MIN_WORKERS_COUNT, MAX_WORKERS_COUNT
@@ -196,33 +196,11 @@ class FriWorker(threading.Thread):
     def is_busy(self):
         return self.__busy_flag.is_set()
 
-    def handle_connection(self, sock):
-        data = ''
-        exp_len = None
-        header_len = 0
-        while True:
-            received = sock.recv(BUF_SIZE)
 
-            if not received:
-                break
-
-            data += received
-
-            if exp_len is None:
-                exp_len, header_len = FriBinaryProcessor.get_expected_len(data)
-            if exp_len and len(data) >= exp_len:
-                break
-
-        if not data:
-            raise FriException('empty data block')
-
-        header, bin_data = FriBinaryProcessor.from_binary(data, exp_len, header_len)
-        header['binary_data'] = bin_data
-
-        return header
-
-    def check_session(self, sock, session_id):
+    def check_session(self, sock_proc, session_id, send_allow=False):
         if not self.key_storage:
+            if send_allow:
+                sock_proc.send_packet(FabnetPacketResponse())
             return None
 
         if not session_id:
@@ -231,8 +209,8 @@ class FriWorker(threading.Thread):
         session = self.sessions.get(session_id)
         if session is None:
             cert_req_packet = FabnetPacketResponse(ret_code=RC_REQ_CERTIFICATE, ret_message='Certificate request')
-            sock.sendall(cert_req_packet.dump())
-            cert_packet = self.handle_connection(sock)
+            sock_proc.send_packet(cert_req_packet)
+            cert_packet = sock_proc.get_packet()
 
             certificate = cert_packet['parameters'].get('certificate', None)
 
@@ -243,19 +221,22 @@ class FriWorker(threading.Thread):
 
             self.sessions.append(session_id, role)
             return role
+
+        if send_allow:
+            sock_proc.send_packet(FabnetPacketResponse())
         return session.role
 
 
     def run(self):
         logger.info('%s started!'%self.getName())
         ok_packet = FabnetPacketResponse(ret_code=RC_OK, ret_message='ok')
-        ok_msg = ok_packet.dump()
+        ok_packet.dump()
 
         while True:
             ret_code = RC_OK
             ret_message = ''
             data = ''
-            sock = None
+            proc = None
 
             try:
                 self.__busy_flag.clear()
@@ -267,15 +248,17 @@ class FriWorker(threading.Thread):
 
                 self.__busy_flag.set()
 
-                packet = self.handle_connection(sock)
+                proc = SocketProcessor(sock)
+                packet = proc.get_packet(True)
                 session_id = packet.get('session_id', None)
-                role = self.check_session(sock, session_id)
+                role = self.check_session(proc, session_id, packet.get('is_chunked', False))
 
                 is_sync = packet.get('sync', False)
                 if not is_sync:
-                    sock.sendall(ok_msg)
-                    sock.close()
-                    sock = None
+                    proc.send_packet(ok_packet)
+                    proc.close_socket()
+                    proc = None
+
 
                 if not packet.has_key('ret_code'):
                     pack = FabnetPacketRequest(**packet)
@@ -289,9 +272,9 @@ class FriWorker(threading.Thread):
                         else:
                             if not ret_packet:
                                 ret_packet = FabnetPacketResponse()
-                            sock.sendall(ret_packet.dump())
-                            sock.close()
-                            sock = None
+                            proc.send_packet(ret_packet)
+                            proc.close_socket(force=True)
+                            proc = None
                     finally:
                         self.operator.after_process(pack, ret_packet)
                 else:
@@ -302,20 +285,15 @@ class FriWorker(threading.Thread):
                 traceback.print_exc(file=logger)
                 logger.error(ret_message)
                 try:
-                    if sock:
+                    if proc:
                         err_packet = FabnetPacketResponse(ret_code=RC_ERROR, ret_message=str(err))
-                        sock.sendall(err_packet.dump())
-                        sock.close()
+                        proc.send_packet(err_packet)
                 except Exception, err:
                     logger.error("Can't send error message to socket: %s"%err)
-                    self._close_socket(sock)
+
             finally:
                 self.queue.task_done()
-
-    def _close_socket(self, sock):
-        try:
-            sock.close()
-        except Exception, err:
-            logger.error('Closing client socket error: %s'%err)
+                if proc:
+                    proc.close_socket(force=True)
 
 

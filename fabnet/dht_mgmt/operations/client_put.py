@@ -39,7 +39,9 @@ class ClientPutOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        data = packet.binary_data
+        if not packet.binary_data:
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='No binary data found!')
+        data = packet.binary_data.data()
         key = packet.parameters.get('key', None)
         if key is not None:
             self._validate_key(key)

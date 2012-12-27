@@ -11,7 +11,8 @@ Copyright (C) 2012 Konstantin Andrusenko
 import threading
 import traceback
 from fabnet.utils.logger import logger
-from fabnet.core.fri_base import FriClient, FabnetPacketResponse
+from fabnet.core.fri_base import FabnetPacketResponse
+from fabnet.core.fri_client import FriClient
 from fabnet.core.threads_manager import ThreadsManager
 from fabnet.core.constants import RC_OK, RC_DONT_STARTED, STOP_THREAD_EVENT, \
                                 MIN_WORKERS_COUNT, MAX_WORKERS_COUNT

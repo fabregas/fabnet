@@ -17,7 +17,8 @@ import json
 from datetime import datetime
 from Queue import Queue
 
-from fabnet.core.fri_base import FriClient, FabnetPacketRequest
+from fabnet.core.fri_base import  FabnetPacketRequest
+from fabnet.core.fri_client import FriClient
 from fabnet.core.operator import Operator
 from fabnet.core.config import Config
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection

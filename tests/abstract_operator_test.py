@@ -77,7 +77,7 @@ class TestAbstractOperator(unittest.TestCase):
 
             request = json.loads(open('/tmp/server1.out').read())
             response = json.loads(open('/tmp/server2.out').read())
-            self.assertEqual(request, packet)
+            self.assertEqual(request, packet, "=== %s != %s ==="%(request, packet))
             good_resp = {'from_node': '127.0.0.1:1986','message_id': 323232,
                 'ret_code': 0,
                 'ret_message': 'ok',
