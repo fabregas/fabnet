@@ -62,6 +62,9 @@ class RamBasedBinaryData(FriBinaryData):
 
         return self.__data[start:end]
 
+    def data(self):
+        return self.__data
+
 
 class FriBinaryProcessor:
     NEED_COMPRESSION = False
