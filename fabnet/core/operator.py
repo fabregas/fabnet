@@ -49,6 +49,12 @@ NT_MAP = {NT_SUPERIOR: 'Superior', NT_UPPER: 'Upper'}
 
 class OperationStat:
     def __init__(self):
+        self.call_cnt = None
+        self.proc_time = None
+
+        self.reset()
+
+    def reset(self):
         self.call_cnt = 0
         self.proc_time = timedelta()
 
@@ -239,6 +245,13 @@ class Operator:
         ret_params['methods_stat'] = methods_stat
 
         return ret_params
+    def reset_statistic(self):
+        self._lock()
+        try:
+            for stat in self.__stat.values():
+                stat.reset()
+        finally:
+            self._unlock()
 
     def _lock(self):
         self.__lock.acquire()
@@ -338,6 +351,7 @@ class Operator:
         self.__operations[op_name] = op_class(self)
         if self.__stat is not None:
             self.__stat[op_name] = OperationStat()
+
 
     def call_node(self, node_address, packet):
         if node_address != self.self_address:

@@ -18,7 +18,7 @@ def check_errors(errors_queue):
         raise Exception(err_msg)
 
 def collect_perf_stat(nodes_list):
-    stat = collect_nodes_stat(nodes_list)
+    stat = collect_nodes_stat(nodes_list, reset=True)
     put_data_block_time = put_client_time = get_keys_info_time = get_data_block_time = timedelta()
 
     for node_stat in stat.values():

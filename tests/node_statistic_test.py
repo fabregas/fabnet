@@ -30,7 +30,7 @@ class TestNodeStatistic(unittest.TestCase):
             packet = { 'message_id': 323232,
                         'method': 'NodeStatistic',
                         'sender': '',
-                        'parameters': {},
+                        'parameters': {'reset_op_stat': True},
                         'sync': True}
             packet_obj = FabnetPacketRequest(**packet)
 

@@ -98,12 +98,12 @@ def collect_topology(node_ip):
 
     time.sleep(3)
 
-def collect_nodes_stat(nodes_list):
+def collect_nodes_stat(nodes_list, reset=False):
     collected_stat = {}
     fri_client = FriClient()
     for node_ip in nodes_list:
         #print 'Collecting statistic from %s'%node_ip
-        packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
+        packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True, parameters={'reset_op_stat': reset})
         ret_packet = fri_client.call_sync(node_ip, packet_obj)
         if ret_packet.ret_code != 0:
             raise Exception('[ERROR] no statistic: %s'%ret_packet.ret_message)

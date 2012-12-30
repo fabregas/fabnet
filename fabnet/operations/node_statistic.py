@@ -42,6 +42,10 @@ class NodeStatisticOperation(OperationBase):
         operator_stat = self.operator.get_statistic()
         ret_params.update(operator_stat)
 
+        reset_op_stat = packet.parameters.get('reset_op_stat', False)
+        if reset_op_stat:
+            self.operator.reset_statistic()
+
         loadavgstr = open('/proc/loadavg', 'r').readline().strip()
         data = loadavgstr.split()
 
