@@ -74,17 +74,19 @@ class ClientPutOperation(OperationBase):
                     self._init_operation(range_obj.node_address, 'PutDataBlock', params, binary_data=data)
                 else:
                     resp = self._init_operation(range_obj.node_address, 'PutDataBlock', params, sync=True, binary_data=data)
-                    if resp.ret_code:
+                    if resp.ret_code != RC_OK:
                         logger.error('[ClientPutOperation] PutDataBlock error from %s: %s'%(range_obj.node_address, resp.ret_message))
 
-                        resp = self._init_operation(self.operator.self_address, 'PutDataBlock', params, sync=True, binary_data=data)
-                        if resp.ret_code:
-                            continue
+                        continue
+                        #if self.operator.self_address == range_obj.node_address:
+                        #    continue
+                        #
+                        #FIXME: saving data block to local reservation
                     succ_count += 1
 
             is_replica = True
 
-        if wait_writes_count < succ_count:
+        if wait_writes_count > succ_count:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Writing data error!')
 
         return FabnetPacketResponse(ret_parameters={'key': keys[0]})

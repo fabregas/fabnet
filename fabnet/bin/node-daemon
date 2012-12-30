@@ -20,6 +20,7 @@ def usage():
     print('       %s stop'%sys.argv[0])
     print('           or')
     print('       %s status'%sys.argv[0])
+    print('\n   You can redefine following environment variables: FABNET_NODE_HOST, FABNET_NODE_PORT, FABNET_NODE_HOME')
 
 
 def stop_node():
