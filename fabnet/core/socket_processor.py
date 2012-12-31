@@ -12,9 +12,9 @@ This module contains the implementation of SocketBasedChunks and  SocketProcesso
 """
 import socket
 
-from constants import BUF_SIZE, RC_REQ_CERTIFICATE
+from constants import BUF_SIZE, RC_REQ_CERTIFICATE, FRI_PACKET_INFO_LEN
 from fri_base import FriBinaryProcessor, FabnetPacketRequest, FriException,\
-                        FriBinaryData, RamBasedBinaryData
+                        FriBinaryData, RamBasedBinaryData, FabnetPacket
 
 
 class SocketBasedChunks(FriBinaryData):
@@ -34,10 +34,7 @@ class SocketBasedChunks(FriBinaryData):
             packet, bin_data = self.__sock_proc.read_next_packet()
             self.__last_idx += 1
 
-            idx = int(packet.get('binary_chunk_idx', 1))
-            cnt = int(packet.get('binary_chunk_cnt', 1))
-
-            if idx > cnt:
+            if packet.binary_chunk_idx > packet.binary_chunk_cnt:
                 raise FriException('Chunk index is bigger than chunks count (%s>%s)'%(idx, cnt))
 
             if self.__last_idx == self.__chunks_count:
@@ -58,19 +55,25 @@ class SocketProcessor:
         self.__need_sock_close = False #socket should be closed (after all chunks received)
 
     def read_next_packet(self):
-        data = self.__rest_data
-        self.__rest_data = ''
+        data = ''
         exp_len = None
         header_len = 0
+        has_rest = len(self.__rest_data) > 0
         while True:
-            received = self.__sock.recv(BUF_SIZE)
+            if self.__rest_data:
+                data = self.__rest_data
+                self.__rest_data = ''
+            else:
+                received = self.__sock.recv(BUF_SIZE)
 
-            if not received:
-                break
+                if not received:
+                    break
 
-            data += received
+                data += received
 
             if exp_len is None:
+                if has_rest and len(data) < FRI_PACKET_INFO_LEN:
+                    continue
                 exp_len, header_len = FriBinaryProcessor.get_expected_len(data)
             if exp_len and len(data) >= exp_len:
                 break
@@ -83,6 +86,7 @@ class SocketProcessor:
             data = data[:exp_len]
 
         packet, bin_data = FriBinaryProcessor.from_binary(data, exp_len, header_len)
+        packet = FabnetPacket.create(packet)
         return packet, bin_data
 
     def __send_cert(self):
@@ -91,20 +95,20 @@ class SocketProcessor:
 
     def get_packet(self, allow_socket_close=False):
         packet, bin_data = self.read_next_packet()
-        if packet.get('ret_code', -1) == RC_REQ_CERTIFICATE:
+        if packet.is_response and packet.ret_code == RC_REQ_CERTIFICATE:
             self.__send_cert()
             packet, bin_data = self.read_next_packet()
 
-        cnt = int(packet.get('binary_chunk_cnt', 0))
+        cnt = packet.binary_chunk_cnt
         if cnt > 0 and bin_data:
             raise FriException('Binary data found in init chunk packet (%s chunks expected)'%cnt)
 
         if cnt > 0:
-            packet['binary_data'] = SocketBasedChunks(self, cnt)
+            packet.binary_data = SocketBasedChunks(self, cnt)
             return packet
 
         if bin_data:
-            packet['binary_data'] = RamBasedBinaryData(bin_data)
+            packet.binary_data = RamBasedBinaryData(bin_data)
 
         if allow_socket_close:
             self.__can_close_socket = True
@@ -117,9 +121,10 @@ class SocketProcessor:
 
             self.__sock.sendall(packet.dump(with_bin=False))
 
-            allow_packet, _ = self.read_next_packet()
-            if allow_packet.get('ret_code', -1) == RC_REQ_CERTIFICATE:
-                self.__send_cert()
+            if packet.is_request:
+                allow_packet, _ = self.read_next_packet()
+                if allow_packet.is_response and allow_packet.ret_code == RC_REQ_CERTIFICATE:
+                    self.__send_cert()
 
             for i in xrange(packet.binary_chunk_cnt):
                 packet.binary_chunk_idx = i+1

@@ -42,7 +42,7 @@ class GetDataBlockOperation(OperationBase):
         except FSHashRangesNoData, err:
             return FabnetPacketResponse(ret_code=RC_NO_DATA, ret_message='No data found!')
 
-        header = data.read(cls.HEADER_LEN)
+        header = data.read(DataBlockHeader.HEADER_LEN)
         _, _, checksum, _ = DataBlockHeader.unpack(header)
 
         return FabnetPacketResponse(binary_data=data, ret_parameters={'checksum': checksum})

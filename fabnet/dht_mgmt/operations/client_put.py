@@ -61,6 +61,8 @@ class ClientPutOperation(OperationBase):
         is_replica = False
         keys = KeyUtils.generate_new_keys(self.operator.node_name, replica_count, prime_key=key)
         errors = []
+        dht_range = self.operator.get_dht_range()
+        tempfile = dht_range.mktemp(packet.binary_data)
         for key in keys:
             range_obj = self.operator.ranges_table.find(long(key, 16))
             if not range_obj:
@@ -69,9 +71,9 @@ class ClientPutOperation(OperationBase):
                 params = {'key': key, 'checksum': checksum, 'is_replica': is_replica, \
                             'primary_key': keys[0], 'replica_count': replica_count}
                 if succ_count >= wait_writes_count:
-                    self._init_operation(range_obj.node_address, 'PutDataBlock', params, binary_data=packet.binary_data)
+                    self._init_operation(range_obj.node_address, 'PutDataBlock', params, binary_data=tempfile.chunks())
                 else:
-                    resp = self._init_operation(range_obj.node_address, 'PutDataBlock', params, sync=True, binary_data=packet.binary_data)
+                    resp = self._init_operation(range_obj.node_address, 'PutDataBlock', params, sync=True, binary_data=tempfile.chunks())
                     if resp.ret_code != RC_OK:
                         logger.error('[ClientPutOperation] PutDataBlock error from %s: %s'%(range_obj.node_address, resp.ret_message))
                         errors.append('From %s: %s'%(range_obj.node_address, resp.ret_message))

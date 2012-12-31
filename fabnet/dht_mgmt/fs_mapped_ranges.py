@@ -12,6 +12,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 import os
 import shutil
 import threading
+import hashlib
 import copy
 import time
 from datetime import datetime
@@ -87,6 +88,38 @@ class FileBasedChunks(FriBinaryData):
             self.__f_obj.close()
 
 
+class TmpFile:
+    def __init__(self, f_path, binary_data):
+        self.__f_path = f_path
+
+        try:
+            fobj = open(self.__f_path, 'wb')
+        except IOError, err:
+            raise FSHashRangesException('Cant create tmp file. Details: %s'%err)
+
+        try:
+            while True:
+                chunk = binary_data.get_next_chunk()
+
+                if chunk is None:
+                    break
+
+                fobj.write(chunk)
+        except IOError, err:
+            os.unlink(self.__f_path)
+            raise FSHashRangesException('Cant save tmp data to file system. Details: %s'%err)
+        except Exception, err:
+            os.unlink(self.__f_path)
+            raise err
+        finally:
+            fobj.close()
+
+    def chunks(self):
+        return FileBasedChunks(self.__f_path)
+
+    def __del__(self):
+        if os.path.exists(self.__f_path):
+            os.unlink(self.__f_path)
 
 
 class SafeCounter:
@@ -233,6 +266,10 @@ class FSHashRanges:
         self.__replica_dir = os.path.join(save_path, 'replica_data')
         if not os.path.exists(self.__replica_dir):
             os.mkdir(self.__replica_dir)
+
+        self.__tmp_dir = os.path.join(save_path, 'tmp')
+        if not os.path.exists(self.__tmp_dir):
+            os.mkdir(self.__tmp_dir)
 
         self.__child_ranges = SafeList()
         self.__parallel_writes = SafeCounter()
@@ -732,4 +769,11 @@ class FSHashRanges:
         stat = os.statvfs(self.__range_dir)
         estimated_data_size_perc = (estimated_data_size * 100.) / (stat.f_blocks * stat.f_bsize)
         return estimated_data_size_perc
+
+    def mktemp(self, binary_data):
+        if not binary_data:
+            return None
+
+        tmp_file = os.path.join(self.__tmp_dir, hashlib.sha1(datetime.utcnow().isoformat()).hexdigest())
+        return TmpFile(tmp_file, binary_data)
 

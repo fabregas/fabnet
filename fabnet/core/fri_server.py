@@ -212,7 +212,7 @@ class FriWorker(threading.Thread):
             sock_proc.send_packet(cert_req_packet)
             cert_packet = sock_proc.get_packet()
 
-            certificate = cert_packet['parameters'].get('certificate', None)
+            certificate = cert_packet.parameters.get('certificate', None)
 
             if not certificate:
                 raise Exception('No client certificate found!')
@@ -250,26 +250,23 @@ class FriWorker(threading.Thread):
 
                 proc = SocketProcessor(sock)
                 packet = proc.get_packet(True)
-                session_id = packet.get('session_id', None)
-                is_chunked = int(packet.get('binary_chunk_cnt', 0)) > 1
-                role = self.check_session(proc, session_id, is_chunked)
 
-                is_sync = packet.get('sync', False)
-                if not is_sync:
+                if packet.is_request:
+                    is_chunked = packet.binary_chunk_cnt > 0
+                    role = self.check_session(proc, packet.session_id, is_chunked)
+
+                if not (packet.is_request and packet.sync):
                     proc.send_packet(ok_packet)
                     proc.close_socket()
                     proc = None
 
-
-                if not packet.has_key('ret_code'):
-                    pack = FabnetPacketRequest(**packet)
-
-                    ret_packet = self.operator.process(pack, role)
+                if packet.is_request:
+                    ret_packet = self.operator.process(packet, role)
 
                     try:
-                        if not is_sync:
+                        if not packet.sync:
                             if ret_packet:
-                                self.operator.send_to_sender(pack.sender, ret_packet)
+                                self.operator.send_to_sender(packet.sender, ret_packet)
                         else:
                             if not ret_packet:
                                 ret_packet = FabnetPacketResponse()
@@ -277,11 +274,11 @@ class FriWorker(threading.Thread):
                             proc.close_socket(force=True)
                             proc = None
                     finally:
-                        self.operator.after_process(pack, ret_packet)
+                        self.operator.after_process(packet, ret_packet)
                 else:
-                    self.operator.callback(FabnetPacketResponse(**packet))
+                    self.operator.callback(packet)
             except Exception, err:
-                ret_message = 'run() error: %s' % err
+                ret_message = 'FriWorker.run() error: %s' % err
                 logger.write = logger.debug
                 traceback.print_exc(file=logger)
                 logger.error(ret_message)

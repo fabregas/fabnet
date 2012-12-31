@@ -41,24 +41,30 @@ class FriBinaryData:
         return data
 
 class RamBasedBinaryData(FriBinaryData):
-    def __init__(self, data, chunks_count=1):
-        self.__chunks_count = chunks_count
+    def __init__(self, data, chunk_size=None):
+        if not chunk_size:
+            chunk_size = len(data)
+        if chunk_size < 1:
+            chunk_size = 1
+        self.__chunk_size = chunk_size
         self.__data = data
         self.__last_idx = 0
+        self.__chunks_count = self.chunks_count()
 
     def chunks_count(self):
-        return self.__chunks_count
+        f_size = len(self.__data)
+        cnt = f_size / self.__chunk_size
+        if f_size % self.__chunk_size != 0:
+            cnt += 1
+        return cnt
 
     def get_next_chunk(self):
         if self.__last_idx >= self.__chunks_count:
             return None
-        i = len(self.__data) / self.__chunks_count
-        start = i * self.__last_idx
+
+        start = self.__chunk_size * self.__last_idx
         self.__last_idx += 1
-        if self.__last_idx == self.__chunks_count:
-            end = len(self.__data)
-        else:
-            end = i * self.__last_idx
+        end = self.__chunk_size * self.__last_idx
 
         return self.__data[start:end]
 
@@ -126,6 +132,18 @@ class FriBinaryProcessor:
 class FabnetPacket:
     is_request = False
     is_response = False
+
+    @classmethod
+    def create(cls, raw_packet):
+        if type(raw_packet) != dict:
+            raise FriException('Cant create FabnetPacket. '
+                        'Expected raw packet with dict type, but "%s" occured'%type(raw_packet))
+
+        if raw_packet.has_key('method'):
+            return FabnetPacketRequest(**raw_packet)
+        else:
+            return FabnetPacketResponse(**raw_packet)
+
     def __init__(self, **packet):
         self.message_id = packet.get('message_id', None)
         self.session_id = packet.get('session_id', None)
@@ -133,8 +151,8 @@ class FabnetPacket:
         self.binary_data = packet.get('binary_data', None)
         if type(self.binary_data) == str:
             self.binary_data = RamBasedBinaryData(self.binary_data)
-        self.binary_chunk_idx = packet.get('binary_chunk_idx', None)
-        self.binary_chunk_cnt = packet.get('binary_chunk_cnt', None)
+        self.binary_chunk_idx = packet.get('binary_chunk_idx', 0)
+        self.binary_chunk_cnt = packet.get('binary_chunk_cnt', 0)
 
     def validate(self):
         """This method may be implemented

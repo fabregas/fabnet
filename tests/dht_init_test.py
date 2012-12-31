@@ -217,10 +217,16 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertTrue(os.path.exists(f_path))
 
             params = {'key': MAX_HASH/2+100, 'carefully_save': True}
-            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=RamBasedBinaryData(header1+data), sync=True)
+            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=RamBasedBinaryData(header1+data+'new'), sync=True)
             resp = fri_client.call_sync('127.0.0.1:1987', packet_obj)
             self.assertEqual(resp.ret_code, RC_OLD_DATA, resp.ret_message)
 
+            params = {'key': MAX_HASH/2+100}
+            packet_obj = FabnetPacketRequest(method='GetDataBlock', parameters=params, sync=True)
+            fri_client = FriClient()
+            resp = fri_client.call_sync('127.0.0.1:1987', packet_obj)
+            self.assertEqual(resp.ret_code, 0, resp.ret_message)
+            self.assertEqual(resp.binary_data.data(), data)
 
             dht_range.split_range(0, 100500)
             server1.operator.set_neighbour(NT_SUPERIOR, '127.0.0.1:1986')
@@ -439,10 +445,10 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(node87_range.get_start(), MAX_HASH/2+1)
             self.assertEqual(node87_range.get_end(), MAX_HASH)
 
-            data = 'Hello, fabregas!'
+            data = 'Hello, fabregas!'*10
             data_key = self._send_data_block('127.0.0.1:1986', data)
 
-            data = 'This is replica data!'
+            data = 'This is replica data!'*10
             data_key2 = self._send_data_block('127.0.0.1:1987', data)
 
             conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
@@ -530,9 +536,12 @@ class TestDHTInitProcedure(unittest.TestCase):
         checksum = hashlib.sha1(data).hexdigest()
 
         params = {'checksum': checksum, 'wait_writes_count': 3}
-        packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=RamBasedBinaryData(data), sync=True)
+        data = RamBasedBinaryData(data, 20)
+        packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
+        print '========SENDING DATA BLOCK %s (%s chunks)'%(packet_obj, data.chunks_count())
 
         ret_packet = client.call_sync(address, packet_obj)
+        print '========SENDED DATA BLOCK'
         self.assertEqual(ret_packet.ret_code, 0, ret_packet.ret_message)
         self.assertEqual(len(ret_packet.ret_parameters.get('key', '')), 40)
         return ret_packet.ret_parameters['key']

@@ -14,7 +14,7 @@ from datetime import datetime
 from fabnet.core.key_storage import FileBasedKeyStorage
 from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 
 VALID_STORAGE = './tests/cert/test_keystorage.zip'
 PASSWD = 'qwerty123'
@@ -85,7 +85,7 @@ class TestAbstractOperator(unittest.TestCase):
                         'method': 'ECHO',
                         'sync': False,
                         'sender': '127.0.0.1:1987',
-                        'binary_data': RamBasedBinaryData(data, 10)}
+                        'binary_data': RamBasedBinaryData(data, 900000)}
             t0 = datetime.now()
             packet_obj = FabnetPacketRequest(**packet)
             operator.call_node('127.0.0.1:1986', packet_obj)

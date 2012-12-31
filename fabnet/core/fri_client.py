@@ -79,18 +79,18 @@ class FriClient:
 
     def call(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
-            json_object = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
+            packet = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
 
-            return json_object.get('ret_code', RC_UNEXPECTED), json_object.get('ret_message', '')
+            return packet.ret_code, packet.ret_message
         except Exception, err:
             return RC_ERROR, '[FriClient][%s] %s' % (err.__class__.__name__, err)
 
 
     def call_sync(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
-            json_object = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
+            packet = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
 
-            return FabnetPacketResponse(**json_object)
+            return packet
         except Exception, err:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='[FriClient][%s] %s' % (err.__class__.__name__, err))
 
