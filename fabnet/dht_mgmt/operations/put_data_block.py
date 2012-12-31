@@ -16,7 +16,7 @@ from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR, \
                                     NODE_ROLE, CLIENT_ROLE
 from fabnet.dht_mgmt.constants import RC_OLD_DATA, RC_NO_FREE_SPACE
-from fabnet.dht_mgmt.data_block import DataBlock
+from fabnet.dht_mgmt.data_block import DataBlockHeader
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesOldDataDetected, FSHashRangesNoFreeSpace
 
 class PutDataBlockOperation(OperationBase):
@@ -39,30 +39,27 @@ class PutDataBlockOperation(OperationBase):
         if not packet.binary_data:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Binary data does not found!')
 
-        data = packet.binary_data.data()
-
         if key is None:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='key does not found!')
-        if checksum is None:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='data checksum does not found!')
 
+        data_list = []
         if primary_key:
             if replica_count is None:
-                return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='replica_count does not found!')
+                return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='replica count for data block does not found!')
 
-            data_block = DataBlock(data, checksum)
-            data_block.validate()
-            data, checksum = data_block.pack(primary_key, replica_count)
-        else:
-            #DataBlock.read_header(data) #FIXME
-            pass
+            if checksum is None:
+                return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='data checksum does not found!')
 
+            header = DataBlockHeader.pack(primary_key, replica_count, checksum)
+            data_list.append(header)
+
+        data_list.append(packet.binary_data)
         dht_range = self.operator.get_dht_range()
         try:
             if not is_replica:
-                dht_range.put(key, data, carefully_save)
+                dht_range.put(key, data_list, carefully_save)
             else:
-                dht_range.put_replica(key, data, carefully_save)
+                dht_range.put_replica(key, data_list, carefully_save)
         except FSHashRangesOldDataDetected, err:
             return FabnetPacketResponse(ret_code=RC_OLD_DATA, ret_message=str(err))
         except FSHashRangesNoFreeSpace, err:

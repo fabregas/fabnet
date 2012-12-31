@@ -360,7 +360,7 @@ class CheckLocalHashTableThread(threading.Thread):
                 if ranges_count < 2:
                     neighbours = self.operator.get_neighbours(NT_SUPERIOR, self.operator.OPTYPE)
                     if not neighbours:
-                        logger.info('Waiting neighbours...')
+                        logger.debug('Waiting neighbours...')
                         time.sleep(Config.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
                         continue
                     neighbour = random.choice(neighbours)
@@ -505,8 +505,7 @@ class MonitorDHTRanges(threading.Thread):
             logger.info('Node %s does not have free space. Skipping put data block...'%k_range.node_address)
             return False
 
-        checksum = hashlib.sha1(data).hexdigest()
-        params = {'key': key, 'checksum': checksum, 'is_replica': is_replica, 'carefully_save': True}
+        params = {'key': key, 'is_replica': is_replica, 'carefully_save': True}
         req = FabnetPacketRequest(method='PutDataBlock', sender=self.operator.self_address,\
                 parameters=params, binary_data=data, sync=True)
 

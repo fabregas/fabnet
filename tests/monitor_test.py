@@ -13,7 +13,6 @@ import signal
 from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.fri_client import FriClient
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT
-from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.monitor.monitor_operator import MonitorOperator, MONITOR_DB
 from fabnet.dht_mgmt.dht_operator import DHTOperator

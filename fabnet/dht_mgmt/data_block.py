@@ -17,48 +17,26 @@ import hashlib
 DATA_BLOCK_LABEL = 'FDB'
 STRUCT_FMT = '<3sd40sb40s'
 
-class DataBlock:
-    header_len = struct.calcsize(STRUCT_FMT)
 
-    def __init__(self, raw_data='', raw_checksum=None):
-        self.raw_data = raw_data
-        self.raw_checksum = raw_checksum
-        self.__packed = False
+class DataBlockHeader:
+    HEADER_LEN = struct.calcsize(STRUCT_FMT)
 
-    def validate(self):
-        checksum = hashlib.sha1(self.raw_data).hexdigest()
-        if checksum != self.raw_checksum:
-            raise Exception('Data block is corrupted!')
-
-    def pack(self, key, replica_count):
-        if self.__packed:
-            return self.raw_data, self.raw_checksum
-
+    @classmethod
+    def pack(self, key, replica_count, checksum):
         t0 = datetime.utcnow()
         unixtime = time.mktime(t0.timetuple())
 
         try:
             header = struct.pack(STRUCT_FMT, DATA_BLOCK_LABEL, unixtime, str(key), \
-                            replica_count, str(self.raw_checksum))
+                            replica_count, str(checksum))
         except Exception, err:
             raise Exception('Data block header packing failed! Details: %s'%err)
 
-        self.raw_data = header + self.raw_data
-        self.raw_checksum = hashlib.sha1(self.raw_data).hexdigest()
-        self.__packed = True
-
-        return self.raw_data, self.raw_checksum
+        return header
 
     @classmethod
-    def check_raw_data(cls, packet_data, checksum):
-        raw_data = packet_data[cls.header_len:]
-        if checksum != hashlib.sha1(raw_data).hexdigest():
-            raise Exception('Data has bad checksum')
-
-
-    @classmethod
-    def read_header(cls, data):
-        header = data[:cls.header_len]
+    def unpack(cls, data):
+        header = data[:cls.HEADER_LEN]
         try:
             db_label, put_unixtime, primary_key, replica_count, checksum = struct.unpack(STRUCT_FMT, header)
         except Exception, err:
@@ -67,16 +45,25 @@ class DataBlock:
         if db_label != DATA_BLOCK_LABEL:
             raise Exception('Corrupted data block! No block label found')
 
-        #datetime.fromtimestamp(put_unixtime)
         return primary_key, replica_count, checksum, put_unixtime
 
-    def unpack(self):
-        primary_key, replica_count, checksum, put_dt = self.read_header(self.raw_data)
+    @classmethod
+    def check_raw_data(cls, binary_data, exp_checksum=None):
+        header = binary_data.read(cls.HEADER_LEN)
 
-        self.raw_data = self.raw_data[self.header_len:]
-        self.raw_checksum = checksum
-        self.__packed = False
-        self.validate()
+        _, _, checksum, _ = cls.unpack(header)
 
-        return self.raw_data, self.raw_checksum
+        if exp_checksum and exp_checksum != checksum:
+            raise Exception('Data checksum is not equal to expected')
+
+        h_func = hashlib.sha1('')
+        while True:
+            chunk = binary_data.get_next_chunk()
+            if chunk is None:
+                break
+            h_func.update(chunk)
+
+        if checksum != h_func.hexdigest():
+            raise Exception('Data block has bad checksum')
+
 

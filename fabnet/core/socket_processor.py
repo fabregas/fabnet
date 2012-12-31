@@ -97,7 +97,7 @@ class SocketProcessor:
 
         cnt = int(packet.get('binary_chunk_cnt', 0))
         if cnt > 0 and bin_data:
-            raise FriException('Binary data found in init chunk packet')
+            raise FriException('Binary data found in init chunk packet (%s chunks expected)'%cnt)
 
         if cnt > 0:
             packet['binary_data'] = SocketBasedChunks(self, cnt)
@@ -112,25 +112,24 @@ class SocketProcessor:
         return packet
 
     def send_packet(self, packet):
-        if not packet.is_chunked:
-            self.__sock.sendall(packet.dump())
-        else:
-            if packet.binary_data:
-                packet.binary_chunk_cnt = packet.binary_data.chunks_count()
+        if packet.binary_data and packet.binary_data.chunks_count() > 1:
+            packet.binary_chunk_cnt = packet.binary_data.chunks_count()
 
             self.__sock.sendall(packet.dump(with_bin=False))
+
             allow_packet, _ = self.read_next_packet()
             if allow_packet.get('ret_code', -1) == RC_REQ_CERTIFICATE:
                 self.__send_cert()
 
-            if not packet.binary_data:
-                return
             for i in xrange(packet.binary_chunk_cnt):
                 packet.binary_chunk_idx = i+1
-                self.__sock.sendall(packet.dump_next_chunk())
+                dumped_chunk = packet.dump_next_chunk()
+                self.__sock.sendall(dumped_chunk)
 
             packet.binary_chunk_cnt = None
             packet.binary_chunk_idx = None
+        else:
+            self.__sock.sendall(packet.dump())
 
 
     def allow_close_socket(self):

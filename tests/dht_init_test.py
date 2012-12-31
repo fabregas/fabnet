@@ -12,7 +12,7 @@ from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketR
 from fabnet.core.fri_client import FriClient
 from fabnet.core.fri_base import RamBasedBinaryData
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT
-from fabnet.dht_mgmt.data_block import DataBlock
+from fabnet.dht_mgmt.data_block import DataBlockHeader
 from fabnet.dht_mgmt import constants
 from fabnet.core.config import Config
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
@@ -137,23 +137,21 @@ class TestDHTInitProcedure(unittest.TestCase):
 
             data = 'Hello, fabregas!'
             checksum = hashlib.sha1(data).hexdigest()
-            data_block = DataBlock(data, checksum)
-            data_block.validate()
-            resr_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
-            node86_range.put(MAX_HASH-100500, resr_data) #should be appended into reservation range
+            header = DataBlockHeader.pack('0000000000000000000000000000000000000000', 2, checksum)
+            resr_data = header + data
+            node86_range.put(MAX_HASH-100500, [header, data]) #should be appended into reservation range
 
             data = 'This is replica data!'
             checksum = hashlib.sha1(data).hexdigest()
-            data_block = DataBlock(data, checksum)
-            data_block.validate()
-            repl_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
+            header = DataBlockHeader.pack('0000000000000000000000000000000000000000', 2, checksum)
+            repl_data = header + data
             node87_range.put_replica(100, repl_data)
 
-            time.sleep(1.5)
+            time.sleep(2)
             data = node87_range.get(MAX_HASH-100500)
-            self.assertEqual(data, resr_data)
+            self.assertEqual(data.data(), resr_data)
             data = node86_range.get_replica(100)
-            self.assertEqual(data, repl_data)
+            self.assertEqual(data.data(), repl_data)
             try:
                 node87_range.get_replica(100)
             except Exception, err:
@@ -201,27 +199,25 @@ class TestDHTInitProcedure(unittest.TestCase):
 
             data = 'Hello, fabregas! '*100
             checksum = hashlib.sha1(data).hexdigest()
-            data_block = DataBlock(data, checksum)
-            data_block.validate()
-            data2, checksum2 = data_block.pack('0000000000000000000000000000000000000000', 2)
-            _, _, _, stored_dt = DataBlock.read_header(data2)
+            header1 = DataBlockHeader.pack('0000000000000000000000000000000000000000', 2, checksum)
+            self.assertEqual(len(header1), DataBlockHeader.HEADER_LEN)
+            _, _, _, stored_dt = DataBlockHeader.unpack(header1)
             time.sleep(1)
-            checksum = hashlib.sha1(data).hexdigest()
-            data_block = DataBlock(data, checksum)
-            data_block.validate()
-            data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
-            _, _, _, stored_dt = DataBlock.read_header(data)
 
-            params = {'key': MAX_HASH/2+100, 'checksum': checksum, 'carefully_save': True}
-            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=RamBasedBinaryData(data), sync=True)
+            header2 = DataBlockHeader.pack('0000000000000000000000000000000000000000', 2, checksum)
+            self.assertEqual(len(header2), DataBlockHeader.HEADER_LEN)
+            _, _, _, stored_dt = DataBlockHeader.unpack(header2)
+
+            params = {'key': MAX_HASH/2+100, 'carefully_save': True}
+            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=RamBasedBinaryData(header2+data), sync=True)
             fri_client = FriClient()
             resp = fri_client.call_sync('127.0.0.1:1987', packet_obj)
             self.assertEqual(resp.ret_code, 0)
             f_path = os.path.join(home2, 'dht_range/0000000000000000000000000000000000000000_ffffffffffffffffffffffffffffffffffffffff/8000000000000000000000000000000000000063')
             self.assertTrue(os.path.exists(f_path))
 
-            params = {'key': MAX_HASH/2+100, 'checksum': checksum2, 'carefully_save': True}
-            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=RamBasedBinaryData(data2), sync=True)
+            params = {'key': MAX_HASH/2+100, 'carefully_save': True}
+            packet_obj = FabnetPacketRequest(method='PutDataBlock', parameters=params, binary_data=RamBasedBinaryData(header1+data), sync=True)
             resp = fri_client.call_sync('127.0.0.1:1987', packet_obj)
             self.assertEqual(resp.ret_code, RC_OLD_DATA, resp.ret_message)
 
@@ -354,10 +350,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             for i in range(100):
                 data = ''.join(random.choice(string.letters) for i in xrange(7*1024))
                 checksum = hashlib.sha1(data).hexdigest()
-                data_block = DataBlock(data, checksum)
-                data_block.validate()
-                resr_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
-                node86_range.put(step*i, resr_data)
+                header = DataBlockHeader.pack('0000000000000000000000000000000000000000', 2, checksum)
+                node86_range.put(step*i, [header, data])
 
             self.assertEqual(node86_range.get_free_size_percents() < 20, True)
             time.sleep(1)
@@ -366,10 +360,9 @@ class TestDHTInitProcedure(unittest.TestCase):
             for i in range(10):
                 data = ''.join(random.choice(string.letters) for i in xrange(7*1024))
                 checksum = hashlib.sha1(data).hexdigest()
-                data_block = DataBlock(data, checksum)
-                data_block.validate()
-                resr_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
-                node86_range.put_replica(step*i, resr_data)
+                header = DataBlockHeader.pack('0000000000000000000000000000000000000000', 2, checksum)
+                node86_range.put_replica(step*i, [header, data])
+
             self.assertEqual(node86_range.get_free_size_percents() < 10, True)
             self.assertEqual(node87_range.get_free_size_percents() > 90, True)
             time.sleep(1.5)
@@ -382,10 +375,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             for i in range(95):
                 data = ''.join(random.choice(string.letters) for i in xrange(7*1024))
                 checksum = hashlib.sha1(data).hexdigest()
-                data_block = DataBlock(data, checksum)
-                data_block.validate()
-                resr_data, checksum = data_block.pack('0000000000000000000000000000000000000000', 2)
-                node87_range.put(MAX_HASH/2+step*i, resr_data)
+                header = DataBlockHeader.pack('0000000000000000000000000000000000000000', 2, checksum)
+                node87_range.put(MAX_HASH/2+step*i, [header, data])
             time.sleep(1)
             node86_range = server.operator.get_dht_range()
             node87_range = server1.operator.get_dht_range()

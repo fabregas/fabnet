@@ -16,7 +16,6 @@ from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.dht_mgmt.constants import MIN_REPLICA_COUNT, RC_NO_DATA
 from fabnet.utils.logger import logger
-from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.dht_mgmt.key_utils import KeyUtils
 from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 

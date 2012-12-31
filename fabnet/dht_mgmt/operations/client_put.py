@@ -16,7 +16,6 @@ from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.dht_mgmt.constants import MIN_REPLICA_COUNT
 from fabnet.utils.logger import logger
-from fabnet.dht_mgmt.data_block import DataBlock
 from fabnet.dht_mgmt.key_utils import KeyUtils
 from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 
@@ -41,7 +40,7 @@ class ClientPutOperation(OperationBase):
         """
         if not packet.binary_data:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='No binary data found!')
-        data = packet.binary_data.data()
+
         key = packet.parameters.get('key', None)
         if key is not None:
             self._validate_key(key)
@@ -58,24 +57,24 @@ class ClientPutOperation(OperationBase):
         if replica_count < MIN_REPLICA_COUNT:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Minimum replica count is equal to %s!'%MIN_REPLICA_COUNT)
 
-        data_block = DataBlock(data, checksum)
-        data_block.validate()
         succ_count = 0
         is_replica = False
         keys = KeyUtils.generate_new_keys(self.operator.node_name, replica_count, prime_key=key)
-        data, checksum = data_block.pack(keys[0], replica_count)
+        errors = []
         for key in keys:
             range_obj = self.operator.ranges_table.find(long(key, 16))
             if not range_obj:
                 logger.debug('[ClientPutOperation] Internal error: No hash range found for key=%s!'%key)
             else:
-                params = {'key': key, 'checksum': checksum, 'is_replica': is_replica}
+                params = {'key': key, 'checksum': checksum, 'is_replica': is_replica, \
+                            'primary_key': keys[0], 'replica_count': replica_count}
                 if succ_count >= wait_writes_count:
-                    self._init_operation(range_obj.node_address, 'PutDataBlock', params, binary_data=data)
+                    self._init_operation(range_obj.node_address, 'PutDataBlock', params, binary_data=packet.binary_data)
                 else:
-                    resp = self._init_operation(range_obj.node_address, 'PutDataBlock', params, sync=True, binary_data=data)
+                    resp = self._init_operation(range_obj.node_address, 'PutDataBlock', params, sync=True, binary_data=packet.binary_data)
                     if resp.ret_code != RC_OK:
                         logger.error('[ClientPutOperation] PutDataBlock error from %s: %s'%(range_obj.node_address, resp.ret_message))
+                        errors.append('From %s: %s'%(range_obj.node_address, resp.ret_message))
 
                         continue
                         #if self.operator.self_address == range_obj.node_address:
@@ -87,7 +86,7 @@ class ClientPutOperation(OperationBase):
             is_replica = True
 
         if wait_writes_count > succ_count:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Writing data error!')
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Writing data error! Details: \n' + '\n'.join(errors))
 
         return FabnetPacketResponse(ret_parameters={'key': keys[0]})
 

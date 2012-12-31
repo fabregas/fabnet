@@ -40,6 +40,7 @@ class ReadThread(threading.Thread):
         for i in xrange(100000):
             try:
                 data = self.fs_ranges.get('%040x'%((i+1000)*100))
+                data = data.data()
                 if data != 'T'*1000:
                     print 'FAILED DATA [%s]: %s'%('%040x'%((i+1000)*100), len(data))
             except Exception, err:
@@ -89,6 +90,7 @@ class TestFSMappedRanges(unittest.TestCase):
         time.sleep(2)
         ret_range, new_range = fs_ranges.split_range('%040x'%0, '%040x'%((25000)*100))
         for key, data in ret_range.iter_range():
+            data = data.data()
             if data != 'T'*1000:
                 print 'FAILED ITER DATA [%s]: %s'%(key, len(data))
 
@@ -122,7 +124,7 @@ class TestFSMappedRanges(unittest.TestCase):
         rt.join()
         new_range.put('%040x'%100500, 'final data test')
         data = new_range.get('%040x'%100500)
-        self.assertEqual(data, 'final data test')
+        self.assertEqual(data.data(), 'final data test')
 
         try:
             new_range.extend('%040x'%0, '%040x'%100)
@@ -134,7 +136,7 @@ class TestFSMappedRanges(unittest.TestCase):
         extended_range = new_range.extend('%040x'%0, '%040x'%((45000)*100))
         extended_range.put('%040x'%100500, 'final data test #2')
         data = extended_range.get('%040x'%100500)
-        self.assertEqual(data, 'final data test #2')
+        self.assertEqual(data.data(), 'final data test #2')
 
 
 if __name__ == '__main__':

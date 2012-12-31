@@ -14,7 +14,7 @@ from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesNoData
 from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.dht_mgmt.constants import RC_NO_DATA, RC_INVALID_DATA
-from fabnet.dht_mgmt.data_block import DataBlock
+from fabnet.dht_mgmt.data_block import DataBlockHeader
 from fabnet.core.constants import NODE_ROLE
 from fabnet.utils.logger import logger
 
@@ -45,11 +45,7 @@ class CheckDataBlockOperation(OperationBase):
             return FabnetPacketResponse(ret_code=RC_NO_DATA, ret_message='No data found!')
 
         try:
-            primary_key, replica_count, st_checksum, stored_dt = DataBlock.read_header(data)
-            if checksum != st_checksum:
-                raise Exception('Data checksums are mismatch')
-
-            DataBlock.check_raw_data(data, checksum)
+            DataBlockHeader.check_raw_data(data, checksum)
         except Exception, err:
             return FabnetPacketResponse(ret_code=RC_INVALID_DATA, ret_message=err)
 

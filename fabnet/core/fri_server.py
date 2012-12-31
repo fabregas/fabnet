@@ -251,7 +251,8 @@ class FriWorker(threading.Thread):
                 proc = SocketProcessor(sock)
                 packet = proc.get_packet(True)
                 session_id = packet.get('session_id', None)
-                role = self.check_session(proc, session_id, packet.get('is_chunked', False))
+                is_chunked = int(packet.get('binary_chunk_cnt', 0)) > 1
+                role = self.check_session(proc, session_id, is_chunked)
 
                 is_sync = packet.get('sync', False)
                 if not is_sync:

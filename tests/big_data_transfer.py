@@ -25,7 +25,8 @@ class EchoOperation(OperationBase):
         pass
 
     def process(self, packet):
-        return FabnetPacketResponse(ret_code=0, ret_message='ok', binary_data=packet.binary_data, is_chunked=True)
+        resp = FabnetPacketResponse(ret_code=0, ret_message='ok', binary_data=packet.binary_data)
+        return resp
 
     def callback(self, packet, sender):
         f = open('/tmp/big_message.out', 'w')
@@ -44,17 +45,17 @@ class TestAbstractOperator(unittest.TestCase):
         keystorage = FileBasedKeyStorage(VALID_STORAGE, PASSWD)
 
         try:
-            operator = Operator('127.0.0.1:1986', key_storage=keystorage)
+            operator = Operator('127.0.0.1:1986', key_storage=keystorage, node_name='node86')
             operator.neighbours = ['127.0.0.1:1987']
             operator.register_operation('ECHO', EchoOperation)
-            server1 = FriServer('0.0.0.0', 1986, operator, 10, 'node_1', keystorage)
+            server1 = FriServer('0.0.0.0', 1986, operator, 10, 'node86', keystorage)
             ret = server1.start()
             self.assertEqual(ret, True)
 
-            operator = Operator('127.0.0.1:1987', key_storage=keystorage)
+            operator = Operator('127.0.0.1:1987', key_storage=keystorage, node_name='node87')
             operator.neighbours = ['127.0.0.1:1986']
             operator.register_operation('ECHO', EchoOperation)
-            server2 = FriServer('0.0.0.0', 1987, operator, 10, 'node_2', keystorage)
+            server2 = FriServer('0.0.0.0', 1987, operator, 10, 'node87', keystorage)
             ret = server2.start()
             self.assertEqual(ret, True)
 
@@ -83,7 +84,6 @@ class TestAbstractOperator(unittest.TestCase):
             packet = { 'message_id': 323233,
                         'method': 'ECHO',
                         'sync': False,
-                        'is_chunked': True,
                         'sender': '127.0.0.1:1987',
                         'binary_data': RamBasedBinaryData(data, 10)}
             t0 = datetime.now()
@@ -92,7 +92,7 @@ class TestAbstractOperator(unittest.TestCase):
 
             operator.wait_response(323233, 20)
             print 'Echo big data (10 chunks) time: %s'%(datetime.now()-t0)
-            time.sleep(1)
+            time.sleep(2)
             rcv_data = open('/tmp/big_message.out').read()
             self.assertEqual(len(rcv_data), len(data))
             os.remove('/tmp/big_message.out')

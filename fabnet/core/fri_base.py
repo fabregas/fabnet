@@ -124,6 +124,8 @@ class FriBinaryProcessor:
         return p_info + packet_data
 
 class FabnetPacket:
+    is_request = False
+    is_response = False
     def __init__(self, **packet):
         self.message_id = packet.get('message_id', None)
         self.session_id = packet.get('session_id', None)
@@ -131,7 +133,6 @@ class FabnetPacket:
         self.binary_data = packet.get('binary_data', None)
         if type(self.binary_data) == str:
             self.binary_data = RamBasedBinaryData(self.binary_data)
-        self.is_chunked = packet.get('is_chunked', False)
         self.binary_chunk_idx = packet.get('binary_chunk_idx', None)
         self.binary_chunk_cnt = packet.get('binary_chunk_cnt', None)
 
@@ -166,8 +167,6 @@ class FabnetPacket:
 
         if self.session_id:
             ret_dict['session_id'] = self.session_id
-        if self.is_chunked:
-            ret_dict['is_chunked'] = self.is_chunked
         if self.binary_chunk_idx:
             ret_dict['binary_chunk_idx'] = self.binary_chunk_idx
         if self.binary_chunk_cnt:
@@ -180,6 +179,8 @@ class FabnetPacket:
 
 
 class FabnetPacketRequest(FabnetPacket):
+    is_request = True
+    is_response = False
     def __init__(self, **packet):
         FabnetPacket.__init__(self, **packet)
 
@@ -222,6 +223,8 @@ class FabnetPacketRequest(FabnetPacket):
 
 
 class FabnetPacketResponse(FabnetPacket):
+    is_request = False
+    is_response = True
     def __init__(self, **packet):
         FabnetPacket.__init__(self, **packet)
 

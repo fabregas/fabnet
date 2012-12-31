@@ -11,12 +11,13 @@ Copyright (C) 2012 Konstantin Andrusenko
 """
 import os
 import hashlib
+import traceback
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.utils.logger import logger
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE, ET_INFO, ET_ALERT
 from fabnet.dht_mgmt.constants import RC_NO_DATA, RC_INVALID_DATA, RC_OLD_DATA
-from fabnet.dht_mgmt.data_block import DataBlock
+from fabnet.dht_mgmt.data_block import DataBlockHeader
 from fabnet.dht_mgmt.key_utils import KeyUtils
 
 
@@ -74,6 +75,8 @@ class RepairDataBlocksOperation(OperationBase):
             self._throw_event(ET_INFO, 'RepairDataBlocks statistic', self.__get_stat())
         except Exception, err:
             self._throw_event(ET_ALERT, 'RepairDataBlocks error', err)
+            logger.write = logger.debug
+            traceback.print_exc(file=logger)
         finally:
             self._unlock()
 
@@ -95,7 +98,7 @@ class RepairDataBlocksOperation(OperationBase):
     def __process_data_block(self, key, raw_header, is_replica=False):
         self.__processed_local_blocks += 1
         try:
-            primary_key, replica_count, checksum, stored_dt = DataBlock.read_header(raw_header)
+            primary_key, replica_count, checksum, stored_dt = DataBlockHeader.unpack(raw_header)
             if not is_replica:
                 if key != primary_key:
                     raise Exception('Primary key is invalid: %s != %s'%(key, primary_key))
@@ -143,8 +146,7 @@ class RepairDataBlocksOperation(OperationBase):
             else:
                 data = self.operator.get_dht_range().get(local_key)
 
-            checksum = hashlib.sha1(data).hexdigest()
-            params = {'key': check_key, 'checksum': checksum, 'is_replica': is_replica, 'carefully_save': True}
+            params = {'key': check_key, 'is_replica': is_replica, 'carefully_save': True}
             resp = self._init_operation(range_obj.node_address, 'PutDataBlock', params, binary_data=data, sync=True)
 
             if resp.ret_code == RC_OLD_DATA:

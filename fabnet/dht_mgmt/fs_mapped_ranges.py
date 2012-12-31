@@ -20,7 +20,9 @@ from fabnet.utils.logger import logger
 from fabnet.utils.internal import total_seconds
 from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH
 from fabnet.core.config import Config
-from fabnet.dht_mgmt.data_block import DataBlock
+from fabnet.dht_mgmt.data_block import DataBlockHeader
+from fabnet.core.fri_base import FriBinaryData
+from fabnet.core.constants import DEFAULT_CHUNK_SIZE
 
 class FSHashRangesException(Exception):
     pass
@@ -36,6 +38,56 @@ class FSHashRangesOldDataDetected(FSHashRangesException):
 
 class FSHashRangesNoFreeSpace(FSHashRangesException):
     pass
+
+
+
+class FileBasedChunks(FriBinaryData):
+    def __init__(self, file_path, chunk_size=DEFAULT_CHUNK_SIZE):
+        self.__file_path = file_path
+        self.__chunk_size = chunk_size
+        self.__f_obj = None
+        self.__no_data_flag = False
+        self.__read_bytes = 0
+
+    def chunks_count(self):
+        f_size = os.path.getsize(self.__file_path) - self.__read_bytes
+        cnt = f_size / self.__chunk_size
+        if f_size % self.__chunk_size != 0:
+            cnt += 1
+        return cnt
+
+    def read(self, block_size):
+        if self.__no_data_flag:
+            return None
+
+        try:
+            if not self.__f_obj:
+                self.__f_obj = open(self.__file_path, 'rb')
+
+            chunk = self.__f_obj.read(block_size)
+            if not chunk:
+                self.__eof()
+                return None
+            self.__read_bytes += len(chunk)
+            return chunk
+        except IOError, err:
+            self.__eof()
+            raise FSHashRangesException('Cant read data from file system. Details: %s'%err)
+        except Exception, err:
+            self.__eof()
+            raise err
+
+    def get_next_chunk(self):
+        return self.read(self.__chunk_size)
+
+
+    def __eof(self):
+        self.__no_data_flag = True
+        if self.__f_obj:
+            self.__f_obj.close()
+
+
+
 
 class SafeCounter:
     def __init__(self):
@@ -256,16 +308,15 @@ class FSHashRanges:
             logger.debug('Checking data block datetime at %s...'%f_name)
             f_obj = open(f_name, 'rb')
             try:
-                stored_header = f_obj.read(DataBlock.header_len)
-                new_header = data[:DataBlock.header_len]
+                stored_header = f_obj.read(DataBlockHeader.HEADER_LEN)
 
                 try:
-                    _, _, _, stored_dt = DataBlock.read_header(stored_header)
+                    _, _, _, stored_dt = DataBlockHeader.unpack(stored_header)
                 except Exception, err:
                     logger.error('Bad local data block header. %s'%err)
                     return #we can store newer data block
 
-                _, _, _, new_dt = DataBlock.read_header(new_header)
+                _, _, _, new_dt = DataBlockHeader.unpack(data)
 
                 if new_dt < stored_dt:
                     raise FSHashRangesOldDataDetected('Data block is already saved with newer datetime')
@@ -273,6 +324,9 @@ class FSHashRanges:
                 f_obj.close()
 
     def __write_data(self, f_name, data, check_dt=False):
+        if type(data) not in (list, tuple):
+            data = [data]
+
         try:
             if self.__no_free_space_flag.is_set():
                 if self.get_free_size_percents() > Config.CRITICAL_FREE_SPACE_PERCENT:
@@ -281,25 +335,43 @@ class FSHashRanges:
                 else:
                     raise FSHashRangesNoFreeSpace('No free space for saving data block')
 
+
+            rest_chunk = ''
             if check_dt:
-                self.__check_ex_data_block(f_name, data)
+                data_block = data[0]
+                if type(data_block) != str:
+                    data_block = data_block.get_next_chunk()
+                    rest_chunk = data_block
+
+                self.__check_ex_data_block(f_name, data_block)
 
             f_obj = open(f_name, 'wb')
             try:
-                f_obj.write(data)
+                for data_block in data:
+                    if type(data_block) == str:
+                        f_obj.write(data_block)
+                    else:
+                        if rest_chunk:
+                            f_obj.write(rest_chunk)
+
+                        while True:
+                            chunk = data_block.get_next_chunk()
+                            if chunk is None:
+                                break
+                            f_obj.write(chunk)
             finally:
                 f_obj.close()
         except IOError, err:
             raise FSHashRangesException('Cant save data to file system. Details: %s'%err)
 
+
     def __read_data(self, file_path, header_only=False):
+        if not header_only:
+            return FileBasedChunks(file_path)
+
         f_obj = open(file_path, 'rb')
         try:
-            if header_only:
-                size = DataBlock.header_len
-            else:
-                size = -1
-            data = f_obj.read(size)
+            data = f_obj.read(DataBlockHeader.HEADER_LEN)
         except IOError, err:
             raise FSHashRangesException('Cant read data from file system. Details: %s'%err)
         finally:
@@ -412,19 +484,19 @@ class FSHashRanges:
         else:
             self.__put_data(key, data, save_to_reservation=True, check_dt=check_dt)
 
-    def get(self, key, header_only=False):
+    def get(self, key):
         '''WARNING: This method can fail when runned across split/join pocess'''
         if self.__child_ranges.size():
             for child_range in self.__child_ranges.copy():
                 if not child_range._in_range(key):
                     continue
                 try:
-                    data = child_range.get(key, header_only)
+                    data = child_range.get(key)
                     return data
                 except FSHashRangesNoData, err:
                     break
 
-        return self.__get_data(key, header_only)
+        return self.__get_data(key)
 
 
     def put_replica(self, key, data, check_dt=False):
@@ -433,13 +505,13 @@ class FSHashRanges:
         self.__write_data(f_name, data, check_dt)
 
 
-    def get_replica(self, key, header_only=False):
+    def get_replica(self, key):
         key = self._str_key(key)
         f_name = os.path.join(self.__replica_dir, key)
         if not os.path.exists(f_name):
             raise FSHashRangesNoData('No replica data found for key %s'% key)
 
-        return self.__read_data(f_name, header_only)
+        return self.__read_data(f_name)
 
 
     def extend(self, start_key, end_key):
