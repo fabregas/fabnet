@@ -20,9 +20,13 @@ class KeyUtils:
         if prime_key:
             primary_key = prime_key
         else:
-            primary_key = hashlib.sha1(node_id + datetime.utcnow().isoformat()).hexdigest()
+            primary_key = cls.generate_key(node_id)
 
         return cls.get_all_keys(primary_key, replica_count)
+
+    @classmethod
+    def generate_key(cls, node_id):
+        return hashlib.sha1(node_id + datetime.utcnow().isoformat()).hexdigest()
 
     @classmethod
     def get_all_keys(cls, key, replica_count):

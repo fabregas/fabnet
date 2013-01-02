@@ -40,23 +40,14 @@ class PutKeysInfoOperation(OperationBase):
         key = packet.parameters.get('key', None)
         if key is not None:
             self._validate_key(key)
+        else:
+            key = KeyUtils.generate_key(self.operator.node_name)
 
-        replica_count = int(packet.parameters.get('replica_count', MIN_REPLICA_COUNT))
-        if replica_count < MIN_REPLICA_COUNT:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Minimum replica count is equal to %s!'%MIN_REPLICA_COUNT)
+        range_obj = self.operator.ranges_table.find(long(key, 16))
+        if not range_obj:
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message=\
+                        '[PutKeysInfoOperation] Internal error: No hash range found for key=%s!'%key)
 
-        is_replica = False
-        keys = KeyUtils.generate_new_keys(self.operator.node_name, replica_count, prime_key=key)
-        ret_keys = []
-        for key in keys:
-            range_obj = self.operator.ranges_table.find(long(key, 16))
-            if not range_obj:
-                logger.debug('[PutKeysInfoOperation] Internal error: No hash range found for key=%s!'%key)
-            else:
-                ret_keys.append((key, is_replica, range_obj.node_address))
-
-            is_replica = True
-
-        return FabnetPacketResponse(ret_parameters={'keys_info': ret_keys})
+        return FabnetPacketResponse(ret_parameters={'key_info': (key, range_obj.node_address)})
 
 
