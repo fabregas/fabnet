@@ -74,3 +74,6 @@ CLIENT_ROLE = 'client'
 # types
 ET_ALERT = 'alert'
 ET_INFO = 'info'
+
+#unix socket for communication with Operator process
+OPERATOR_SOCKET_ADDRESS = '/tmp/fabnet-operator.socket'

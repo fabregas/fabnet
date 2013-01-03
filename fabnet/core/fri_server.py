@@ -12,12 +12,10 @@ This module contains the implementation of FriServer class.
 """
 import socket
 import threading
+import traceback
 import time
 from multiprocessing.queues import Queue
-from multiprocessing.reduction import reduce_socket
-
-import M2Crypto.SSL
-from M2Crypto.SSL import Context, Connection
+from multiprocessing.reduction import reduce_handle
 
 from fabnet.utils.logger import logger
 from fabnet.core.constants import S_ERROR, S_PENDING, S_INWORK
@@ -25,15 +23,14 @@ from fabnet.core.constants import S_ERROR, S_PENDING, S_INWORK
 
 
 class FriServer:
-    def __init__(self, hostname, port, workers_manager, server_name='fri-node', keystorage=None):
+    def __init__(self, hostname, port, workers_manager, server_name='fri-node'):
         self.hostname = hostname
         self.port = port
-        self.keystorage = keystorage
         self.workers_manager = workers_manager
 
         self.stopped = True
 
-        self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.workers_manager.get_queue(), keystorage)
+        self.__conn_handler_thread = FriConnectionHandler(hostname, port, self.workers_manager.get_queue())
         self.__conn_handler_thread.setName('%s-FriConnectionHandler'%(server_name,))
 
     def start(self):
@@ -61,15 +58,8 @@ class FriServer:
         self.__conn_handler_thread.stop()
         sock = None
         try:
-            if self.keystorage:
-                context = Context()
-                context.set_verify(0, depth = 0)
-                sock = Connection(context)
-                sock.set_post_connection_check_callback(None)
-                sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=1))
-            else:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1.0)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1.0)
 
             if self.hostname == '0.0.0.0':
                 hostname = '127.0.0.1'
@@ -78,8 +68,6 @@ class FriServer:
 
             sock.connect((hostname, self.port))
         except socket.error:
-            pass
-        except M2Crypto.SSL.SSLError:
             pass
         finally:
             if sock:
@@ -93,7 +81,7 @@ class FriServer:
 
 
 class FriConnectionHandler(threading.Thread):
-    def __init__(self, host, port, queue, keystorage):
+    def __init__(self, host, port, queue):
         threading.Thread.__init__(self)
         self.queue = queue
         if type(queue) == Queue:
@@ -105,17 +93,10 @@ class FriConnectionHandler(threading.Thread):
         self.stopped = threading.Event()
         self.status = S_PENDING
         self.sock = None
-        self.keystorage = keystorage
 
     def __bind_socket(self):
         try:
-            if self.keystorage:
-                context = self.keystorage.get_node_context()
-
-                self.sock = Connection(context)
-            else:
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self.sock.bind((self.hostname, self.port))
@@ -141,10 +122,12 @@ class FriConnectionHandler(threading.Thread):
                     break
 
                 if self.need_reduce:
-                    sock = reduce_socket(sock)
+                    sock = reduce_handle(sock.fileno())
 
                 self.queue.put(sock)
             except Exception, err:
+                logger.write = logger.debug
+                traceback.print_exc(file=logger)
                 logger.error('[FriConnectionHandler.accept] %s'%err)
 
         if self.sock:

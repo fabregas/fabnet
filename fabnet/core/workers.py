@@ -10,12 +10,15 @@ Copyright (C) 2013 Konstantin Andrusenko
 """
 import threading
 import traceback
+import socket
 import multiprocessing as mp
 
 from fabnet.utils.logger import logger
 from fabnet.core.constants import STOP_WORKER_EVENT
 from fabnet.core.socket_processor import SocketProcessor
+from multiprocessing.reduction import rebuild_handle
 
+from M2Crypto.SSL import Context, Connection
 
 class ThreadBasedAbstractWorker(threading.Thread):
     is_threaded = True
@@ -94,7 +97,17 @@ class ProcessBasedAbstractWorker(mp.Process):
 
 
 class ThreadBasedFriWorker(ThreadBasedAbstractWorker):
+    def __init__(self, name, queue, ssl_context=None):
+        ThreadBasedAbstractWorker.__init__(self, name, queue)
+        self.__ssl_context = ssl_context
+
     def worker_routine(self, socket):
+        if self.__ssl_context:
+            socket = Connection(self.__ssl_context, socket)
+            socket.setup_ssl()
+            socket.set_accept_state()
+            socket.accept_ssl()
+
         socket_proc = SocketProcessor(socket)
 
         try:
@@ -110,8 +123,21 @@ class ThreadBasedFriWorker(ThreadBasedAbstractWorker):
 
 
 class ProcessBasedFriWorker(ProcessBasedAbstractWorker):
+    def __init__(self, name, queue, ssl_context=None):
+        ProcessBasedAbstractWorker.__init__(self, name, queue)
+        self.__ssl_context = ssl_context
+
     def worker_routine(self, reduced_socket):
-        sock = reduced_socket[0](*reduced_socket[1])
+        fd = rebuild_handle(reduced_socket)
+        sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
+        mp.forking.close(fd)
+
+        if self.__ssl_context:
+            sock = Connection(self.__ssl_context, sock)
+            sock.setup_ssl()
+            sock.set_accept_state()
+            sock.accept_ssl()
+
         socket_proc = SocketProcessor(sock)
 
         try:
