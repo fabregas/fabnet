@@ -71,7 +71,7 @@ class FriClient:
                 else:
                     sock.settimeout(read_timeout)
 
-            return proc.get_packet()
+            return proc.recv_packet()
         finally:
             if proc:
                 proc.close_socket()

@@ -36,7 +36,7 @@ RC_NOT_MY_NEIGHBOUR = 22
 RC_REQ_CERTIFICATE = 1010
 
 #flag for worker stopping
-STOP_THREAD_EVENT = None
+STOP_WORKER_EVENT = None
 
 #thread statuses
 S_PENDING = -1
