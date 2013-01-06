@@ -59,17 +59,18 @@ class FriClient:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(conn_timeout)
 
+
             sock.connect((hostname, port))
 
             proc = SocketProcessor(sock, self.certificate)
-
-            proc.send_packet(packet)
 
             if read_timeout:
                 if self.is_ssl:
                     sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=read_timeout))
                 else:
                     sock.settimeout(read_timeout)
+
+            proc.send_packet(packet)
 
             return proc.recv_packet()
         finally:
@@ -88,6 +89,7 @@ class FriClient:
 
     def call_sync(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
+            packet.sync = True
             packet = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
 
             return packet

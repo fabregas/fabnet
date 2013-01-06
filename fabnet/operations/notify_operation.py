@@ -55,7 +55,7 @@ class NotifyOperation(OperationBase):
                 else:
                     logger.info('[NOTIFICATION.%s][%s] *%s* %s'%(event_type, event_provider, event_topic, event_message))
 
-            self.operator.on_network_notify(event_type, event_provider, event_topic, event_message)
+            #self.operator.on_network_notify(event_type, event_provider, event_topic, event_message)
         except Exception, err:
             logger.error('[NotifyOperation] %s'%err)
 

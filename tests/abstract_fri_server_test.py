@@ -45,13 +45,13 @@ class MyThreadBasedFriProcessor(ThreadBasedFriWorker):
 #   self.__test_server(FileBasedKeyStorage(VALID_STORAGE, PASSWD))
 
 class TestAbstractFriServer(unittest.TestCase):
-    def __start_server(self, processor_class, routine, ssl_context=None, add_args=()):
+    def __start_server(self, processor_class, routine, ks=None, add_args=()):
         server_name = 'test-node'
         cur_thread = threading.current_thread()
         cur_thread.setName('%s-main'%server_name)
 
         workers_mgr = WorkersManager(processor_class, min_count=1, max_count=8, \
-                                server_name=server_name, init_params=(ssl_context,))
+                                server_name=server_name, init_params=(ks,))
         fri_server = FriServer('127.0.0.1', 6666, workers_mgr, server_name)
 
         fri_server.start()
@@ -93,9 +93,8 @@ class TestAbstractFriServer(unittest.TestCase):
             self.assertEqual(resp.ret_message, 'Unknown operation "SomeMethod"')
             time.sleep(1)
 
-        ssl_context = ks.get_node_context()
-        self.__start_server(MyThreadBasedFriProcessor, call_methods, ssl_context)
-        self.__start_server(MyProcessBasedFriProcessor, call_methods, ssl_context)
+        self.__start_server(MyThreadBasedFriProcessor, call_methods, ks)
+        self.__start_server(MyProcessBasedFriProcessor, call_methods, ks)
 
 
     def test02_workers_nossl_spawn_stop(self):
@@ -158,13 +157,11 @@ class TestAbstractFriServer(unittest.TestCase):
             time.sleep(10)
 
 
-
-        ssl_context = ks.get_node_context()
         print '======== MyThreadBasedFriProcessor stress test...'
-        self.__start_server(MyThreadBasedFriProcessor, stress_routine, ssl_context)
+        self.__start_server(MyThreadBasedFriProcessor, stress_routine, ks)
 
         print '======== MyProcessBasedFriProcessor stress test...'
-        self.__start_server(MyProcessBasedFriProcessor, stress_routine, ssl_context)
+        self.__start_server(MyProcessBasedFriProcessor, stress_routine, ks)
 
 
 

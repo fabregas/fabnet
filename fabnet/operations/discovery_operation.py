@@ -11,21 +11,12 @@ Copyright (C) 2012 Konstantin Andrusenko
 """
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.operations.constants import MNO_APPEND
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
-                        ONE_DIRECT_NEIGHBOURS_COUNT, \
                         NODE_ROLE, CLIENT_ROLE, RC_OK
 from fabnet.utils.logger import logger
 
 class DiscoveryOperation(OperationBase):
     ROLES = [NODE_ROLE]
-
-    def __init__(self, operator):
-        OperationBase.__init__(self, operator)
-        self.__discovery_cache = {}
-        self.__new_upper = None
-        self.__new_superior = None
-
 
     def process(self, packet):
         """In this method should be implemented logic of processing
@@ -38,7 +29,7 @@ class DiscoveryOperation(OperationBase):
         uppers = self.operator.get_neighbours(NT_UPPER)
         superiors = self.operator.get_neighbours(NT_SUPERIOR)
         return FabnetPacketResponse(ret_parameters={'uppers': uppers, \
-                'superiors': superiors, 'node': self.operator.self_address})
+                'superiors': superiors, 'node': self.self_address})
 
     def callback(self, packet, sender=None):
         """In this method should be implemented logic of processing
@@ -59,89 +50,5 @@ class DiscoveryOperation(OperationBase):
         uppers = packet.ret_parameters.get('uppers', [])
         superiors = packet.ret_parameters.get('superiors', [])
 
-        self.__discovery_cache[node] = (uppers, superiors)
+        self.operator.start_discovery_process(node, uppers, superiors)
 
-        interset_nodes = list(set(superiors) & set(uppers))
-        interset = None
-        for interset in interset_nodes:
-            if interset not in self.__discovery_cache:
-                continue
-
-            int_uppers, int_superiors = self.__discovery_cache[interset]
-
-            if not self.__new_superior:
-                if len(uppers) > ONE_DIRECT_NEIGHBOURS_COUNT:
-                    self.__new_superior = interset
-                elif len(int_uppers) > ONE_DIRECT_NEIGHBOURS_COUNT:
-                    self.__new_superior = node
-
-            if len(superiors) > ONE_DIRECT_NEIGHBOURS_COUNT:
-                self.__new_upper = interset
-            elif len(int_superiors) > ONE_DIRECT_NEIGHBOURS_COUNT:
-                self.__new_upper = node
-
-            if self.__new_upper is None and self.__new_superior is None:
-                self.__new_upper = node
-                #self.__new_superior = interset
-
-            if self.__new_upper and self.__new_superior:
-                self._manage_new_neighbours()
-                return
-
-            break #one neighbour found
-        else:
-            for interset in interset_nodes:
-                if interset not in self.__discovery_cache:
-                    #call discovery
-                    self._init_operation(interset, 'DiscoveryOperation', {})
-                    return
-
-
-        for superior in superiors:
-            if superior in self.__discovery_cache:
-                continue
-            #call discovery next...
-            self._init_operation(superior, 'DiscoveryOperation', {})
-            return
-
-
-        for node, (uppers, superiors) in self.__discovery_cache.items():
-            if node in (self.__new_upper, self.__new_superior):
-                continue
-            if not self.__new_upper and len(uppers) > ONE_DIRECT_NEIGHBOURS_COUNT:
-                self.__new_upper = uppers[0]
-            elif not self.__new_superior and len(superiors) > ONE_DIRECT_NEIGHBOURS_COUNT:
-                self.__new_superior = superiors[0]
-
-            if self.__new_superior and self.__new_upper:
-                break
-        else:
-            for node, (uppers, superiors) in self.__discovery_cache.items():
-                if node in (self.__new_upper, self.__new_superior):
-                    continue
-                if not self.__new_upper and len(superiors) <= ONE_DIRECT_NEIGHBOURS_COUNT:
-                    self.__new_upper = node
-                elif not self.__new_superior and len(uppers) <= ONE_DIRECT_NEIGHBOURS_COUNT:
-                    self.__new_superior = node
-
-                if self.__new_superior and self.__new_upper:
-                    break
-            else:
-                if self.__new_superior:
-                    self.__new_upper = self.__new_superior
-                else:
-                    self.__new_superior = self.__new_upper
-
-        #send ManageNeighbour request
-        self._manage_new_neighbours()
-
-    def _manage_new_neighbours(self):
-        logger.info('Discovered neigbours: %s and %s'%(self.__new_superior, self.__new_upper))
-
-        parameters = { 'neighbour_type': NT_SUPERIOR, 'operation': MNO_APPEND,
-                        'node_address': self.operator.self_address, 'operator_type': self.operator.OPTYPE }
-        self._init_operation(self.__new_superior, 'ManageNeighbour', parameters)
-
-        parameters = { 'neighbour_type': NT_UPPER, 'operation': MNO_APPEND,
-                        'node_address': self.operator.self_address, 'operator_type': self.operator.OPTYPE }
-        self._init_operation(self.__new_upper, 'ManageNeighbour', parameters)

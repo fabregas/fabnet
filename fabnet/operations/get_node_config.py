@@ -19,6 +19,7 @@ from fabnet.core.config import Config
 
 class GetNodeConfigOperation(OperationBase):
     ROLES = [NODE_ROLE]
+    NAME = 'GetNodeConfig'
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
@@ -38,5 +39,5 @@ class GetNodeConfigOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        return FabnetPacketResponse(ret_parameters=Config.get_config_dict())
+        return FabnetPacketResponse(ret_parameters=self.operator.get_config())
 

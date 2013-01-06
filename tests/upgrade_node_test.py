@@ -6,7 +6,7 @@ import signal
 import json
 import random
 import  sqlite3
-from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.fri_client import FriClient
 from fabnet.core.operator import Operator
 from fabnet.utils.logger import logger
@@ -28,7 +28,7 @@ class TestUpgradeNode(unittest.TestCase):
             os.system('find . -name *.pyc -delete')
 
             address = '127.0.0.1:1987'
-            args = ['/usr/bin/python', '/tmp/fabnet_node_code/fabnet/bin/fabnet-node', address, 'init-fabnet', 'test_upgr_node', '/tmp', 'DHT']
+            args = ['/usr/bin/python', '/tmp/fabnet_node_code/fabnet/bin/fabnet-node', address, 'init-fabnet', 'test_upgr_node', '/tmp', 'BASE']
             args.append('--nodaemon')
             server_proc = subprocess.Popen(args)
             time.sleep(1)

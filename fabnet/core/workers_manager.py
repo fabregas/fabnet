@@ -16,11 +16,13 @@ from Queue import Queue as ThreadQueue
 
 
 from fabnet.utils.logger import logger
-from fabnet.core.constants import STOP_WORKER_EVENT
+from fabnet.core.constants import STOP_WORKER_EVENT, S_PENDING, S_ERROR, S_INWORK,\
+                                    MIN_WORKERS_COUNT, MAX_WORKERS_COUNT
 
 
 class WorkersManager(threading.Thread):
-    def __init__(self, worker_class, min_count=2, max_count=10, server_name='srv', init_params=()):
+    def __init__(self, worker_class, min_count=MIN_WORKERS_COUNT, \
+                    max_count=MAX_WORKERS_COUNT, server_name='srv', init_params=()):
         threading.Thread.__init__(self)
         self.min_count = min_count
         self.max_count = max_count
@@ -35,6 +37,7 @@ class WorkersManager(threading.Thread):
         self.__workers = []
         self.__workers_idx = 0
         self.__lock = threading.Lock()
+        self.__status = S_PENDING
         self.stopped = threading.Event()
 
     def get_queue(self):
@@ -43,6 +46,19 @@ class WorkersManager(threading.Thread):
             return self.queue
         finally:
             self.__lock.release()
+
+    def get_workers_name(self):
+        return self.worker_class.__name__
+
+    def iter_children(self):
+        self.__lock.acquire()
+        try:
+            for worker in self.__workers:
+                if worker.is_alive():
+                    yield worker
+        finally:
+            self.__lock.release()
+
 
     def get_workers_stat(self):
         act_count = busy_count = 0
@@ -61,11 +77,24 @@ class WorkersManager(threading.Thread):
         return act_count, busy_count
 
     def run(self):
-        cur_thread = threading.current_thread()
-        cur_thread.setName('%s-WorkersManager'%self.server_name)
+        try:
+            cur_thread = threading.current_thread()
+            cur_thread.setName('%s-%s-Manager'%(self.server_name, self.worker_class.__name__))
+            for i in range(self.min_count):
+                self.__spawn_worker()
 
-        for i in range(self.min_count):
-            self.__spawn_worker()
+            self.__lock.acquire()
+            self.__status = S_INWORK
+            self.__lock.release()
+        except Exception, err:
+            self.__lock.acquire()
+            self.__status = S_ERROR
+            self.__lock.release()
+            logger.error(err)
+            import traceback
+            logger.write = logger.debug
+            traceback.print_exc(file=logger)
+            raise err
 
         logger.info('Started %s work threads!'%self.min_count)
         not_empty_queue_count = 0
@@ -138,7 +167,7 @@ class WorkersManager(threading.Thread):
 
 
     def stop(self):
-        logger.info('stopping workers manager...')
+        logger.info('stopping workers manager for %s...'%self.worker_class.__name__)
         self.stopped.set()
         self.__lock.acquire()
         try:
@@ -158,5 +187,22 @@ class WorkersManager(threading.Thread):
         finally:
             self.__lock.release()
 
-        logger.info('workers manager is stopped!')
+        logger.info('workers manager for %s is stopped!'%self.worker_class.__name__)
+
+
+    def start_carefully(self):
+        self.start()
+        while True:
+            self.__lock.acquire()
+            try:
+                if self.__status != S_PENDING:
+                    break
+            finally:
+                self.__lock.release()
+
+            time.sleep(.1)
+
+        if self.__status == S_ERROR:
+            manager_name = '%s-%s-Manager'%(self.server_name, self.worker_class.__name__)
+            raise Exception('%s does not started!!!'%manager_name)
 

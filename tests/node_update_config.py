@@ -7,10 +7,11 @@ import json
 import random
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
-from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_server import FriServer
+from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.fri_client import FriClient
-from fabnet.dht_mgmt.dht_operator import DHTOperator
 from fabnet.utils.logger import logger
+from fabnet.core.node import Node
 
 logger.setLevel(logging.DEBUG)
 
@@ -19,11 +20,10 @@ class TestNodeUpdateConfig(unittest.TestCase):
         try:
             server = None
             address = '127.0.0.1:1987'
-            operator = DHTOperator(address)
+            server = Node('127.0.0.1', 1987, '/tmp', 'test_node',
+                    ks_path=None, ks_passwd=None, node_type='BASE')
 
-            server = FriServer('0.0.0.0', 1987, operator, server_name='node_test')
-            ret = server.start()
-            self.assertEqual(ret, True)
+            server.start(None)
             time.sleep(.5)
 
             fri_client = FriClient()

@@ -237,7 +237,8 @@ class FabnetPacketRequest(FabnetPacket):
         return ret_dict
 
     def __repr__(self):
-        return '{%s}[%s] %s %s'%(self.message_id, self.sender, self.method, str(self.parameters))
+        sync_s = 'sync' if self.sync else 'async'
+        return '{%s}[%s][%s] %s %s'%(self.message_id, self.sender, sync_s, self.method, str(self.parameters))
 
 
 class FabnetPacketResponse(FabnetPacket):

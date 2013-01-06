@@ -150,6 +150,9 @@ class SocketProcessor:
         if self.__can_close_socket and self.__sock:
             self.__close_sock()
 
+    def is_closed(self):
+        return self.__sock == None
+
     def __close_sock(self):
         try:
             self.__sock.shutdown(socket.SHUT_RDWR)

@@ -33,6 +33,8 @@ class NeedCertificate(Exception):
 class ExpiredCertificate(Exception):
     pass
 
+class InvalidCertificate(Exception):
+    pass
 
 class AbstractKeyStorage:
     def __init__(self, ks_path, passwd):
@@ -60,7 +62,7 @@ class AbstractKeyStorage:
 
         cert_end_dt = cert.get_not_after().get_datetime().utctimetuple()
         if cert_end_dt < datetime.utcnow().utctimetuple():
-            raise Exception('Certificate is out of date')
+            raise InvalidCertificate('Certificate is out of date')
 
         cert_type = cert.get_subject().OU
         role = None
@@ -71,10 +73,10 @@ class AbstractKeyStorage:
             root_pubkey = self._client_base_pubkey
             role = CLIENT_ROLE
         else:
-            raise Exception('Unknown certificate type: %s'%cert_type)
+            raise InvalidCertificate('Unknown certificate type: %s'%cert_type)
 
         if not cert.verify(root_pubkey):
-            raise Exception('Certificate verification is failed!')
+            raise InvalidCertificate('Certificate verification is failed!')
 
         return role
 

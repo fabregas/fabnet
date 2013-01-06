@@ -10,17 +10,21 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 This module contains the OperationBase interface
 """
-
-import threading
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.utils.logger import logger
 
+class PermissionDeniedException(Exception):
+    pass
+
 class OperationBase:
     ROLES = []
+    NAME = None
 
-    def __init__(self, operator):
-        self.operator = operator
-        self.__lock = threading.RLock()
+    @classmethod
+    def get_name(cls):
+        if cls.NAME is None:
+            cls.NAME = cls.__name__
+        return cls.NAME
 
     @classmethod
     def check_role(cls, role):
@@ -29,7 +33,14 @@ class OperationBase:
             return
 
         if role not in cls.ROLES:
-            raise Exception('Permission denied!')
+            raise PermissionDeniedException('Permission denied!')
+
+    def __init__(self, operator, fri_client, self_address, home_dir, lock_obj):
+        self.operator = operator
+        self.self_address = self_address
+        self.home_dir = home_dir
+        self.__fri_client = fri_client
+        self.__lock = lock_obj
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
@@ -76,20 +87,24 @@ class OperationBase:
 
     def _init_operation(self, node_address, operation, parameters, sync=False, binary_data=''):
         """Initiate new operation"""
-        req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, \
-                parameters=parameters, binary_data=binary_data, sync=sync)
-        return self.operator.call_node(node_address, req)
+        if sync:
+            req = FabnetPacketRequest(method=operation, sender=self.self_address, \
+                    parameters=parameters, binary_data=binary_data, sync=sync)
+            return self.__fri_client.call_sync(node_address, req)
+
+        if binary_data:
+            raise Exception('Sending binary data from operation in async mode is disabled!')
+        message_id = self.operator.async_remote_call(node_address, operation, parameters, False)
+        return message_id
 
     def _init_network_operation(self, operation, parameters):
         """Initiate new operation over fabnet network"""
-        req = FabnetPacketRequest(method=operation, sender=self.operator.self_address, parameters=parameters)
-        self.operator.call_network(req)
+        message_id = self.operator.async_remote_call(None, operation, parameters, True)
 
-    def _lock(self):
-        self.__lock.acquire()
-
-    def _unlock(self):
-        self.__lock.release()
+    def _throw_event(self, event_type, event_topic, event_message):
+        self._init_network_operation('NotifyOperation', {'event_type':str(event_type), \
+                'event_message':str(event_message), 'event_topic': str(event_topic), \
+                'event_provider':self.self_address})
 
     def _cache_response(self, packet):
         """Cache response from node for using it from other operations objects"""
@@ -97,10 +112,10 @@ class OperationBase:
 
     def _get_cached_response(self, message_id, from_node):
         """Get cached response from some node"""
-        return self.operator.get_message_item(message_id,from_node)
+        return self.operator.get_message_item(message_id, from_node)
 
-    def _throw_event(self, event_type, event_topic, event_message):
-        self._init_network_operation('NotifyOperation', {'event_type':str(event_type), \
-                'event_message':str(event_message), 'event_topic': str(event_topic), \
-                'event_provider':self.operator.self_address})
+    def _lock(self):
+        self.__lock.acquire()
 
+    def _unlock(self):
+        self.__lock.release()

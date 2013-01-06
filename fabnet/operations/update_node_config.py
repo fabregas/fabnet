@@ -19,6 +19,7 @@ from fabnet.core.config import Config
 
 class UpdateNodeConfigOperation(OperationBase):
     ROLES = [NODE_ROLE]
+    NAME = 'UpdateNodeConfig'
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
@@ -42,7 +43,7 @@ class UpdateNodeConfigOperation(OperationBase):
         if config is None:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='No new config found!')
 
-        Config.update_config(config)
+        self.operator.update_config(config)
 
         return FabnetPacketResponse()
 

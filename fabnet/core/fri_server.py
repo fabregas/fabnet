@@ -36,7 +36,7 @@ class FriServer:
     def start(self):
         self.stopped = False
 
-        self.workers_manager.start()
+        self.workers_manager.start_carefully()
         self.__conn_handler_thread.start()
 
         while self.__conn_handler_thread.status == S_PENDING:
@@ -76,8 +76,8 @@ class FriServer:
 
         self.__conn_handler_thread.join()
         self.stopped = True
-        logger.info('FriServer is stopped!')
         self.workers_manager.stop()
+        logger.info('FriServer is stopped!')
 
 
 class FriConnectionHandler(threading.Thread):
@@ -131,6 +131,7 @@ class FriConnectionHandler(threading.Thread):
                 logger.error('[FriConnectionHandler.accept] %s'%err)
 
         if self.sock:
+            self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
             del self.sock
 

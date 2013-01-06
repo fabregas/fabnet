@@ -8,7 +8,10 @@ import random
 import  sqlite3
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
-from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+constants.STAT_COLLECTOR_TIMEOUT = 1
+constants.STAT_OSPROC_TIMEOUT = 1
+from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.node import Node
 from fabnet.core.fri_client import FriClient
 from fabnet.core.operator import Operator
 from fabnet.utils.logger import logger
@@ -20,15 +23,14 @@ class TestNodeStatistic(unittest.TestCase):
         try:
             server = None
             address = '127.0.0.1:1987'
-            operator = Operator(address)
 
-            server = FriServer('0.0.0.0', 1987, operator, server_name='node_test')
-            ret = server.start()
-            self.assertEqual(ret, True)
-            time.sleep(.5)
+            node = Node('127.0.0.1', 1987, '/tmp', 'node_stat_test',
+                        ks_path=None, ks_passwd=None, node_type='BASE')
+            node.start(None)
+            server = node
+            time.sleep(1)
 
-            packet = { 'message_id': 323232,
-                        'method': 'NodeStatistic',
+            packet = {  'method': 'NodeStatistic',
                         'sender': '',
                         'parameters': {'reset_op_stat': True},
                         'sync': True}
@@ -36,20 +38,34 @@ class TestNodeStatistic(unittest.TestCase):
 
             client = FriClient()
             ret_packet = client.call_sync('127.0.0.1:1987', packet_obj)
+            time.sleep(1.5)
+            packet_obj = FabnetPacketRequest(**packet)
+            ret_packet = client.call_sync('127.0.0.1:1987', packet_obj)
 
             self.assertEqual(isinstance(ret_packet, FabnetPacketResponse), True)
             self.assertEqual(ret_packet.ret_code, 0, ret_packet.ret_message)
             print ret_packet.ret_parameters
-            self.assertTrue(int(ret_packet.ret_parameters['workers_count']) > 2)
-            self.assertEqual(int(ret_packet.ret_parameters['uppers_balance']), -1)
-            self.assertEqual(int(ret_packet.ret_parameters['superiors_balance']), -1)
-            self.assertTrue(int(ret_packet.ret_parameters['threads']) > 6)
-            self.assertTrue(int(ret_packet.ret_parameters['memory']) > 1000)
-            self.assertEqual(len(ret_packet.ret_parameters['methods_stat']), 8)
-            self.assertEqual(ret_packet.ret_parameters['agents_count']>2, True)
+            self.assertEqual(int(ret_packet.ret_parameters['NeighboursInfo']['uppers_balance']), -1)
+            self.assertEqual(int(ret_packet.ret_parameters['NeighboursInfo']['superiors_balance']), -1)
+            self.assertTrue(float(ret_packet.ret_parameters['SystemInfo']['loadavg_5']) >= 0)
+            self.assertTrue(float(ret_packet.ret_parameters['SystemInfo']['loadavg_10']) >= 0)
+            self.assertTrue(float(ret_packet.ret_parameters['SystemInfo']['loadavg_15']) >= 0)
+            self.assertTrue(len(ret_packet.ret_parameters['SystemInfo']['uptime']) > 0)
+            self.assertTrue(float(ret_packet.ret_parameters['FriAgentWMStat']['workers']) > 0)
+            self.assertTrue(float(ret_packet.ret_parameters['FriAgentWMStat']['busy']) == 0)
+            self.assertTrue(float(ret_packet.ret_parameters['OperatorWorkerWMStat']['workers']) > 0)
+            self.assertTrue(float(ret_packet.ret_parameters['OperatorWorkerWMStat']['busy']) == 1)
+            self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorWMStat']['workers']) > 0)
+            self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorWMStat']['busy']) == 0)
+            self.assertTrue(float(ret_packet.ret_parameters['FriServerProcStat']['threads']) > 0)
+            self.assertTrue(float(ret_packet.ret_parameters['FriServerProcStat']['memory']) > 1000)
+            self.assertTrue(float(ret_packet.ret_parameters['OperatorProcStat']['threads']) > 0)
+            self.assertTrue(float(ret_packet.ret_parameters['OperatorProcStat']['memory']) > 1000)
+            self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorsProcStat']['threads']) > 0)
+            self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorsProcStat']['memory']) > 1000)
 
-            self.assertEqual(ret_packet.ret_parameters['methods_stat']['NodeStatistic']['call_cnt'], 0)
-            self.assertEqual(ret_packet.ret_parameters['methods_stat']['NodeStatistic']['avg_proc_time'], '0')
+            self.assertTrue(ret_packet.ret_parameters['OperationsProcTime']['NodeStatistic'] > 0)
+            self.assertEqual(ret_packet.ret_parameters['OperationsProcTime']['TopologyCognition'], 0)
 
             time.sleep(.2)
         finally:

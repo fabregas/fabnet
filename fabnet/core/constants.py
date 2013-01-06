@@ -31,7 +31,11 @@ RQ_SIZE = 100
 RC_OK = 0
 RC_ERROR = 1
 RC_UNEXPECTED = -1
-RC_DONT_STARTED = 2
+RC_DONT_STARTED = -2
+RC_ALREADY_PROCESSED = -3
+RC_MESSAGE_ID_NOT_FOUND = -4
+RC_PERMISSION_DENIED = -5
+RC_INVALID_CERT = -6
 RC_NOT_MY_NEIGHBOUR = 22
 RC_REQ_CERTIFICATE = 1010
 
@@ -76,4 +80,11 @@ ET_ALERT = 'alert'
 ET_INFO = 'info'
 
 #unix socket for communication with Operator process
-OPERATOR_SOCKET_ADDRESS = '/tmp/fabnet-operator.socket'
+OPERATOR_SOCKET_ADDRESS = '/tmp/%s-fabnet-operator.socket'
+
+STAT_COLLECTOR_TIMEOUT = 10
+STAT_OSPROC_TIMEOUT = 20
+
+#statistic objects
+SO_OPERS_TIME = 'OperationsProcTime'
+SI_SYS_INFO = 'SystemInfo'

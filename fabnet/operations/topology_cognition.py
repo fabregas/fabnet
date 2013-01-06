@@ -27,33 +27,6 @@ TOPOLOGY_DB = 'fabnet_topology.db'
 class TopologyCognition(OperationBase):
     ROLES = [NODE_ROLE]
 
-    def __init__(self, operator):
-        OperationBase.__init__(self, operator)
-        self.__last_dt = datetime.now()
-        self.__balanced = threading.Event()
-
-    def get_last_processed_dt(self):
-        self._lock()
-        try:
-            return self.__last_dt
-        finally:
-            self._unlock()
-
-    def get_discovered_nodes(self):
-        db = os.path.join(self.operator.home_dir, TOPOLOGY_DB)
-        if not os.path.exists(db):
-            return {}
-        conn = DBConnection(db)
-        rows = conn.select("SELECT node_address, superiors, uppers, old_data FROM fabnet_nodes")
-        conn.close()
-
-        nodes = {}
-        for row in rows:
-            nodes[row[0]] = (row[1].split(','), row[2].split(','), int(row[3]))
-
-        return nodes
-
-
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
         for resend it to neighbours
@@ -63,7 +36,7 @@ class TopologyCognition(OperationBase):
                 or None for disabling packet resend to neigbours
         """
         if packet.sender is None:
-            conn = DBConnection(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
+            conn = DBConnection(os.path.join(self.home_dir, TOPOLOGY_DB))
 
             conn.execute("CREATE TABLE IF NOT EXISTS fabnet_nodes(node_address TEXT, node_name TEXT, superiors TEXT, uppers TEXT, old_data INT)")
             conn.execute("UPDATE fabnet_nodes SET old_data=1")
@@ -80,19 +53,13 @@ class TopologyCognition(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        self._lock()
-        try:
-            self.__last_dt = datetime.now()
-        finally:
-            self._unlock()
-
         ret_params = {}
         upper_neighbours = self.operator.get_neighbours(NT_UPPER)
         superior_neighbours = self.operator.get_neighbours(NT_SUPERIOR)
 
         ret_params.update(packet.parameters)
-        ret_params['node_address'] = self.operator.self_address
-        ret_params['node_name'] = self.operator.node_name
+        ret_params['node_address'] = self.self_address
+        ret_params['node_name'] = self.operator.get_node_name()
         ret_params['upper_neighbours'] = upper_neighbours
         ret_params['superior_neighbours'] = superior_neighbours
 
@@ -122,8 +89,7 @@ class TopologyCognition(OperationBase):
         if (node_address is None) or (superior_neighbours is None) or (upper_neighbours is None):
             raise Exception('TopologyCognition response packet is invalid! Packet: %s'%str(packet.to_dict()))
 
-
-        conn = DBConnection(os.path.join(self.operator.home_dir, TOPOLOGY_DB))
+        conn = DBConnection(os.path.join(self.home_dir, TOPOLOGY_DB))
 
         self._lock()
         try:
@@ -139,41 +105,6 @@ class TopologyCognition(OperationBase):
             conn.close()
 
         if packet.ret_parameters.get('need_rebalance', False):
-            self._lock()
-            try:
-                self.smart_neighbours_rebalance(node_address, superior_neighbours, upper_neighbours)
-            finally:
-                self._unlock()
-
-
-    def smart_neighbours_rebalance(self, node_address, superior_neighbours, upper_neighbours):
-        if self.__balanced.is_set():
-            return
-
-        if node_address == self.operator.self_address:
-            return
-
-        uppers = self.operator.get_neighbours(NT_UPPER)
-        superiors = self.operator.get_neighbours(NT_SUPERIOR)
-        if (node_address in uppers) or (node_address in superiors):
-            return
-
-        if ONE_DIRECT_NEIGHBOURS_COUNT > len(superiors) >= (ONE_DIRECT_NEIGHBOURS_COUNT+1):
-            return
-
-
-        intersec_count = len(set(uppers) & set(superiors))
-        if intersec_count == 0:
-            #good neighbours connections
-            self.__balanced.set()
-            return
-
-        intersec_count = len(set(superior_neighbours) & set(upper_neighbours))
-        if intersec_count > 0 and (len(upper_neighbours) <= ONE_DIRECT_NEIGHBOURS_COUNT):
-            parameters = { 'neighbour_type': NT_UPPER, 'operation': MNO_APPEND,
-                            'node_address': self.operator.self_address,
-                            'operator_type': self.operator.OPTYPE }
-            self._init_operation(node_address, 'ManageNeighbour', parameters)
-            self.__balanced.set()
+            self.operator.smart_neighbours_rebalance(node_address, superior_neighbours, upper_neighbours)
 
 

@@ -14,11 +14,12 @@ import resource
 from datetime import datetime
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
+from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE, SI_SYS_INFO
 
 
 class NodeStatisticOperation(OperationBase):
     ROLES = [NODE_ROLE]
+    NAME = 'NodeStatistic'
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
@@ -49,24 +50,13 @@ class NodeStatisticOperation(OperationBase):
         loadavgstr = open('/proc/loadavg', 'r').readline().strip()
         data = loadavgstr.split()
 
-        rss = threads = ''
-        lines = open('/proc/%i/status'%os.getpid(),'r').readlines()
-        for line in lines:
-            (param, value) = line.split()[:2]
-            if param.startswith('VmRSS'):
-                rss = value.strip()
-            elif param.startswith('Threads'):
-                threads = value.strip()
-        res = resource.getrusage(resource.RUSAGE_SELF)
+        sysinfo = {}
+        sysinfo['uptime'] = str(datetime.now() - self.operator.get_start_datetime())
+        sysinfo['loadavg_5'] = data[0]
+        sysinfo['loadavg_10'] = data[1]
+        sysinfo['loadavg_15'] = data[2]
 
-        ret_params['loadavg_5'] = data[0]
-        ret_params['loadavg_10'] = data[1]
-        ret_params['loadavg_15'] = data[2]
-        ret_params['utime'] = str(res.ru_utime)
-        ret_params['stime'] = str(res.ru_stime)
-        ret_params['memory'] = rss
-        ret_params['threads'] = threads
-        ret_params['uptime'] = str(datetime.now() - self.operator.start_datetime)
+        ret_params[SI_SYS_INFO] = sysinfo
         return FabnetPacketResponse(ret_parameters=ret_params)
 
     def callback(self, packet, sender=None):

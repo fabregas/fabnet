@@ -40,7 +40,7 @@ class UpgradeNodeOperation(OperationBase):
             if not origin_url:
                 raise Exception('origin_url does not found')
 
-            f_upgrage_log = open(os.path.join(self.operator.home_dir, 'upgrade_node.log'), 'a')
+            f_upgrage_log = open(os.path.join(self.home_dir, 'upgrade_node.log'), 'a')
             f_upgrage_log.write('='*80+'\n')
             f_upgrage_log.write('UPGRADE FROM %s ... NOW = %s\n'%(origin_url, datetime.now()))
             f_upgrage_log.write('='*80+'\n')
@@ -55,8 +55,9 @@ class UpgradeNodeOperation(OperationBase):
             if ret != 0:
                 raise Exception('git pull failed: %s'%cerr)
 
-            ret, cout, cerr = run_command_ex(['./fabnet/bin/upgrade-node', self.operator.OPTYPE])
-            f_upgrage_log.write('===> ./fabnet/bin/upgrade-node %s  finished with code %s\n'%(self.operator.OPTYPE, ret))
+            optype = self.operator.get_type()
+            ret, cout, cerr = run_command_ex(['./fabnet/bin/upgrade-node', optype])
+            f_upgrage_log.write('===> ./fabnet/bin/upgrade-node %s  finished with code %s\n'%(optype, ret))
             f_upgrage_log.write('===> stdout: \n%s'%cout)
             f_upgrage_log.write('===> stderr: \n%s'%cerr)
             if ret != 0:
