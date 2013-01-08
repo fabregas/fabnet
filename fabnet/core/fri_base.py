@@ -238,7 +238,9 @@ class FabnetPacketRequest(FabnetPacket):
 
     def __repr__(self):
         sync_s = 'sync' if self.sync else 'async'
-        return '{%s}[%s][%s] %s %s'%(self.message_id, self.sender, sync_s, self.method, str(self.parameters))
+        cast_s = 'multicast' if self.is_multicast else 'unicast'
+        return '{%s}[%s][%s][%s] %s %s'%(self.message_id, self.sender, \
+                    sync_s, cast_s, self.method, str(self.parameters))
 
 
 class FabnetPacketResponse(FabnetPacket):

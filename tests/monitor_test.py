@@ -10,7 +10,7 @@ import string
 import hashlib
 import subprocess
 import signal
-from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.fri_client import FriClient
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
@@ -57,7 +57,7 @@ class TestMonitorNode(unittest.TestCase):
                 args.append('--debug')
             p = subprocess.Popen(args)
             logger.warning('{SNP} PROCESS STARTED')
-            time.sleep(0.1)
+            time.sleep(1)
 
             PROCESSES.append(p)
             #if len(ADDRESSES) > 2:
@@ -90,8 +90,8 @@ class TestMonitorNode(unittest.TestCase):
                     time.sleep(.5)
                     continue
 
-                uppers_balance = int(ret_packet.ret_parameters[u'uppers_balance'])
-                superiors_balance = int(ret_packet.ret_parameters[u'superiors_balance'])
+                uppers_balance = int(ret_packet.ret_parameters['NeighboursInfo'][u'uppers_balance'])
+                superiors_balance = int(ret_packet.ret_parameters['NeighboursInfo'][u'superiors_balance'])
                 if uppers_balance >= 0 and superiors_balance >= 0:
                     return
                 else:

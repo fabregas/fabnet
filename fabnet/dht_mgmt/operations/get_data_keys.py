@@ -22,6 +22,8 @@ from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 
 class GetKeysInfoOperation(OperationBase):
     ROLES = [NODE_ROLE, CLIENT_ROLE]
+    NAME='GetKeysInfo'
+
     def _validate_key(self, key):
         try:
             if len(key) != 40:
@@ -55,11 +57,12 @@ class GetKeysInfoOperation(OperationBase):
         ret_keys = []
         for key in keys:
             long_key = self._validate_key(key)
-            range_obj = self.operator.ranges_table.find(long_key)
+            range_obj = self.operator.find_range(long_key)
             if not range_obj:
                 logger.warning('[GetKeysInfoOperation] Internal error: No hash range found for key=%s!'%key)
             else:
-                ret_keys.append((key, is_replica, range_obj.node_address))
+                _, _, node_address = range_obj
+                ret_keys.append((key, is_replica, node_address))
             is_replica = True
 
         return FabnetPacketResponse(ret_parameters={'keys_info': ret_keys})

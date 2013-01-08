@@ -7,12 +7,13 @@ import json
 import random
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
-from fabnet.core.fri_server import FriServer, FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_client import FriClient
 from fabnet.core.operator import Operator
 from fabnet.operations.manage_neighbours import ManageNeighbour
 from fabnet.utils.logger import logger
 
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 
 
 class TestServerThread(threading.Thread):
@@ -29,13 +30,13 @@ class TestServerThread(threading.Thread):
             if random.randint(0, 1):
                 d = {"sender": node, "parameters": {"operator_type":"DHT", "node_address": node, "operation": operation, "neighbour_type": n_type}, "method": "ManageNeighbour"}
                 packet = FabnetPacketRequest(**d)
-                print self.manage_neighbours.process(packet).ret_parameters
+                #print self.manage_neighbours.process(packet).ret_parameters
             else:
                 d_append = [True, False][random.randint(0, 1)]
                 d_remove = [True, False][random.randint(0, 1)]
                 d = {"sender": node, "ret_parameters": {"operator_type":"DHT", "node_address": node, "operation": operation, "neighbour_type": n_type, 'dont_append': d_append, 'dont_remove': d_remove}, "method": "ManageNeighbour"}
                 packet = FabnetPacketResponse(**d)
-                print self.manage_neighbours.callback(packet)
+                #print self.manage_neighbours.callback(packet)
 
 
 
@@ -48,7 +49,7 @@ class TestManageMeighbours(unittest.TestCase):
     def test_manage_neighbours(self):
         operator = Operator('127.0.0.1:1986')
 
-        manage_neighbours = ManageNeighbour(operator)
+        manage_neighbours = ManageNeighbour(operator, FriClient(), '127.0.0.1:1986', '/tmp', None)
 
         manage_neighbours._init_operation = _init_operation_mock
 

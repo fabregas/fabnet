@@ -26,23 +26,20 @@ from fabnet.utils.db_conn import DBOperationalException, DBEmptyResult
 from fabnet.utils.logger import logger
 from fabnet.utils.internal import total_seconds
 
+from fabnet.monitor.constants import DEFAULT_MONITOR_CONFIG, MONITOR_DB, UP, DOWN
 from fabnet.monitor.topology_cognition_mon import TopologyCognitionMon
+from fabnet.monitor.notify_operation_mon import NotifyOperationMon
 
-MONITOR_DB = 'fabnet_monitor_db'
-
-UP = 1
-DOWN = 0
-
-OPERMAP =  {'TopologyCognition': TopologyCognitionMon}
+OPERLIST = [NotifyOperationMon, TopologyCognitionMon]
 
 class MonitorOperator(Operator):
     OPTYPE = 'Monitor'
 
-    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown'):
-        Operator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name)
+    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown', config={}):
+        Operator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name, config)
 
-        Config.update_config({'COLLECT_NODES_STAT_TIMEOUT': 40,
-                                'DISCOVERY_TOPOLOGY_TIMEOUT': 60})
+        Config.update_config(DEFAULT_MONITOR_CONFIG)
+        Config.update_config(config)
 
         self.__monitor_db_path = "dbname=%s user=postgres"%MONITOR_DB
         self._conn = self._init_db()
@@ -135,19 +132,6 @@ class MonitorOperator(Operator):
         self._conn.execute("UPDATE nodes_info SET status=%s, statistic=%s, last_check=%s \
                             WHERE node_address=%s", (UP, stat, datetime.now(), nodeaddr))
 
-
-    def on_network_notify(self, notify_type, notify_provider, notify_topic, message):
-        """This method should be imlemented for some actions
-            on received network nofitications
-        """
-        logger.info('[NOTIFICATION][%s][%s] *%s* %s'%(notify_type, notify_provider, notify_topic, message))
-        self._conn.execute("INSERT INTO notification (node_address, notify_type, notify_topic, notify_msg, notify_dt) VALUES (%s, %s, %s, %s, %s)", \
-                    (notify_provider, notify_type, notify_topic, message, datetime.now()))
-
-        if notify_topic == 'NodeUp':
-            self.change_node_status(notify_provider, UP)
-        elif notify_topic == 'NodeDown':
-            self.change_node_status(notify_provider, DOWN)
 
 
 class CollectNodeStatisticsThread(threading.Thread):
@@ -261,4 +245,4 @@ class DiscoverTopologyThread(threading.Thread):
         self.stopped.set()
 
 
-MonitorOperator.update_operations_map(OPERMAP)
+MonitorOperator.update_operations_list(OPERLIST)

@@ -71,7 +71,7 @@ class OperationsManager:
             if operation_obj is None:
                 if packet.is_multicast:
                     #transit packet
-                    self.operator_cl.call_to_neighbours(packet.message_id, packet.method, packet.parameters)
+                    self.operator_cl.call_to_neighbours(packet.message_id, packet.method, packet.parameters, packet.is_multicast)
                     return
                 else:
                     raise Exception('Method "%s" does not implemented! Available methods: %s'%(packet.method, self.__operations.keys()))
@@ -83,7 +83,7 @@ class OperationsManager:
             message_id = packet.message_id
             n_packet = operation_obj.before_resend(packet)
             if n_packet:
-                self.operator_cl.call_to_neighbours(message_id, packet.method, packet.parameters)
+                self.operator_cl.call_to_neighbours(message_id, packet.method, packet.parameters, packet.is_multicast)
 
             s_packet = operation_obj.process(packet)
             if s_packet:

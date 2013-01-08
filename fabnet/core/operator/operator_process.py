@@ -15,6 +15,7 @@ import os
 import pickle
 import time
 import threading
+import traceback
 import multiprocessing as mp
 from Queue import Queue
 from multiprocessing.connection import Listener, Client
@@ -50,10 +51,11 @@ class OperatorWorker(ThreadBasedAbstractWorker):
             raw_resp = pickle.dumps({'rcode': 0, 'resp': resp})
             conn.send_bytes(raw_resp)
         except Exception, err:
-            logger.error('operator error: "%s"'%err.__class__.__name__)
-            raw_resp = pickle.dumps({'rcode': 1, 'rmsg': str(err)})
+            logger.error('operator error: [%s] %s'%(err.__class__.__name__, err))
+            #logger.write = logger.debug
+            #traceback.print_exc(file=logger)
+            raw_resp = pickle.dumps({'rcode': 1, 'ex': err})
             conn.send_bytes(raw_resp)
-            raise err
         finally:
             conn.close()
 
@@ -88,8 +90,8 @@ class OperatorClient:
 
         resp = pickle.loads(raw_resp)
         if resp.get('rcode', 1) != 0:
-            raise Exception('Operator method "%s" failed! Details: %s'% \
-                                (method, resp.get('rmsg','unknown')))
+            exc = resp.get('ex', Exception('unknown operator error'))
+            raise exc
 
         return resp.get('resp', None)
 
@@ -98,12 +100,14 @@ class OperatorClient:
 
 class OperatorProcess(mp.Process):
     def __init__(self, operator_class, self_address, home_dir, keystore, is_init_node, server_name='',\
-                    min_workers=MIN_WORKERS_COUNT, max_workers=MAX_WORKERS_COUNT, authkey=''):
+                    min_workers=MIN_WORKERS_COUNT, max_workers=MAX_WORKERS_COUNT, authkey='', config={}):
         mp.Process.__init__(self)
         self.__is_stopped = mp.Value("b", True, lock=mp.Lock())
         self.__status =  mp.Value("i", S_PENDING, lock=mp.Lock())
         self.__operator_class = operator_class
-        self.__operator_args = (self_address, home_dir, keystore, is_init_node, server_name)
+        self.__operator_args = (self_address, home_dir, keystore, is_init_node, server_name, config)
+        self.__operator = None
+        self.__workers_mgr = None
 
         self.__authkey = authkey
         self.__server_name = server_name
@@ -159,8 +163,10 @@ class OperatorProcess(mp.Process):
         try:
             if listener:
                 listener.close()
-            self.__operator.stop()
-            self.__workers_mgr.stop()
+            if self.__operator:
+                self.__operator.stop()
+            if self.__workers_mgr:
+                self.__workers_mgr.stop()
         except Exception, err:
             logger.error('Error while stopping Operator process. Details: %s'%err)
         finally:

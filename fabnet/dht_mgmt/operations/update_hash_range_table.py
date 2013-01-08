@@ -20,6 +20,8 @@ from fabnet.utils.logger import logger
 
 class UpdateHashRangeTableOperation(OperationBase):
     ROLES = [NODE_ROLE]
+    NAME = 'UpdateHashRangeTable'
+
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
         for resend it to neighbours
@@ -39,7 +41,8 @@ class UpdateHashRangeTableOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        if self.operator.ranges_table.empty():
+        _, icnt = self.operator.get_ranges_table_status()
+        if icnt == 0:
             logger.debug('Received update for hash ranges table, but it is not initialized yet. Skip operation...')
             return
 
@@ -50,14 +53,14 @@ class UpdateHashRangeTableOperation(OperationBase):
         ap_obj_list = [HashRange(a[0], a[1], a[2]) for a in append_lst]
         self._lock()
         try:
-            self.operator.ranges_table.apply_changes(rm_obj_list, ap_obj_list)
+            self.operator.apply_ranges_table_changes(rm_obj_list, ap_obj_list)
 
             logger.debug('RM RANGE: %s'%', '.join([r.to_str() for r in rm_obj_list]))
             logger.debug('APP RANGE: %s'%', '.join([a.to_str() for a in ap_obj_list]))
         except Exception, err:
             logger.error('UpdateHashRangeTable error: %s'%err)
             if not packet.sender:
-                self.operator.check_dht_range()
+                self.operator.check_dht_range(False) #reinit=False
         finally:
             self._unlock()
 

@@ -226,8 +226,7 @@ class OSProcessesStatisticCollector(threading.Thread):
                     self.operator_cl.update_statistic('%sProcStat'%pid_group_name, pid, p_stat)
 
                 for workers_manager in self.workers_manager_list:
-                    w_act, w_busy = workers_manager.get_workers_stat()
-                    w_count = w_act + w_busy
+                    w_count, w_busy = workers_manager.get_workers_stat()
 
                     self.operator_cl.update_statistic('%sWMStat'%workers_manager.get_workers_name(), \
                                             'WM', {'workers': w_count, 'busy': w_busy})

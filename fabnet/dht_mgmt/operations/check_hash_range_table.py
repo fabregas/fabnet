@@ -16,20 +16,20 @@ from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE, RC_DONT_STARTED
 from fabnet.dht_mgmt.constants import RC_NEED_UPDATE, DS_INITIALIZE
-from fabnet.core.config import Config
 from fabnet.utils.logger import logger
 
 class CheckHashRangeTableOperation(OperationBase):
     ROLES = [NODE_ROLE]
+    NAME = 'CheckHashRangeTable'
 
     def _get_ranges_table(self, from_addr, mod_index, ranges_count):
-        if not self.operator.ranges_table.empty():
-            for i in xrange(Config.RANGES_TABLE_FLAPPING_TIMEOUT):
-                time.sleep(1)
-                c_mod_index = self.operator.ranges_table.get_mod_index()
-                c_ranges_count = self.operator.ranges_table.count()
-                if c_mod_index == mod_index and ranges_count == c_ranges_count:
-                    return
+        for i in xrange(self.operator.get_config_value('RANGES_TABLE_FLAPPING_TIMEOUT')):
+            c_mod_index, c_ranges_count = self.operator.get_ranges_table_status()
+            if c_ranges_count == 0:
+                break
+            if c_mod_index == mod_index and ranges_count == c_ranges_count:
+                return
+            time.sleep(1)
 
         logger.info('Ranges table is invalid! Requesting table from %s'% from_addr)
         self._init_operation(from_addr, 'GetRangesTable', {})
@@ -42,8 +42,8 @@ class CheckHashRangeTableOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        if self.operator.status == DS_INITIALIZE:
-            return FabnetPacketResponse(ret_code=RC_DONT_STARTED, ret_message='Node is not initialized yet!')
+        if self.operator.get_status() == DS_INITIALIZE:
+            return FabnetPacketResponse(ret_code=RC_OK, ret_message='Node is not initialized yet!')
 
         f_mod_index = packet.parameters.get('mod_index', None)
         if f_mod_index is None:
@@ -61,13 +61,12 @@ class CheckHashRangeTableOperation(OperationBase):
         if range_end is None:
             raise Exception('range_end parameter is expected for CheckHashRangeTable operation')
 
-        c_mod_index = self.operator.ranges_table.get_mod_index()
+        c_mod_index, c_ranges_count = self.operator.get_ranges_table_status()
 
         if c_mod_index == f_mod_index:
             return FabnetPacketResponse()
 
         found_range = self._find_range(range_start, range_end, packet.sender)
-        c_ranges_count = self.operator.ranges_table.count()
         if not found_range:
             logger.debug('CheckHashRangeTable: sender range does not found in local hash table...')
             if ranges_count < c_ranges_count:
@@ -78,32 +77,22 @@ class CheckHashRangeTableOperation(OperationBase):
 
         logger.debug('CheckHashRangeTable: f_mod_index=%s c_mod_index=%s'%(f_mod_index, c_mod_index))
         if f_mod_index > c_mod_index:
-            #self._get_ranges_table(packet.sender, c_mod_index)
             return FabnetPacketResponse()
         else:
             return FabnetPacketResponse(ret_code=RC_NEED_UPDATE, \
                     ret_parameters={'mod_index': c_mod_index, 'ranges_count': c_ranges_count})
 
     def _find_range(self, range_start, range_end, sender):
-        h_range = self.operator.ranges_table.find(range_start)
+        h_range = self.operator.find_range(range_start)
         if not h_range:
             return False
 
-        if h_range.start == range_start  and h_range.end == range_end \
-            and h_range.node_address:
+        start, end, node_address = h_range
+
+        if start == range_start and end == range_end and node_address == sender:
             return True
 
         return False
-
-
-    def _remove_node_range(self, nodeaddr):
-        for range_obj in self.operator.ranges_table.iter_table():
-            if range_obj.node_address == nodeaddr:
-                logger.info('Node %s went from DHT. Updating hash range table on network...'%range_obj.node_address)
-                rm_lst = [(range_obj.start, range_obj.end, range_obj.node_address)]
-                parameters = {'append': [], 'remove': rm_lst}
-                self._init_network_operation('UpdateHashRangeTable', parameters)
-                break
 
 
     def callback(self, packet, sender=None):
@@ -119,8 +108,8 @@ class CheckHashRangeTableOperation(OperationBase):
         """
         logger.debug('CheckHashRangeTable response from %s: %s %s'%(packet.from_node, packet.ret_code, packet.ret_message))
         if packet.ret_code == RC_DONT_STARTED:
-            self._remove_node_range(packet.from_node)
-            time.sleep(Config.WAIT_DHT_TABLE_UPDATE)
+            self.operator.remove_node_range(packet.from_node)
+            time.sleep(self.operator.get_config_value('WAIT_DHT_TABLE_UPDATE'))
             self.operator.check_near_range()
         elif packet.ret_code == RC_OK:
             self.operator.check_near_range()

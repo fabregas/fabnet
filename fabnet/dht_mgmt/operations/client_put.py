@@ -17,11 +17,17 @@ from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.dht_mgmt.constants import MIN_REPLICA_COUNT
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.key_utils import KeyUtils
+from fabnet.dht_mgmt.fs_mapped_ranges import TmpFile
 from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 
 
 class ClientPutOperation(OperationBase):
     ROLES = [NODE_ROLE, CLIENT_ROLE]
+    NAME = 'ClientPutData'
+
+    def init_locals(self):
+        self.node_name = self.operator.get_node_name()
+
     def _validate_key(self, key):
         try:
             if len(key) != 40:
@@ -59,33 +65,37 @@ class ClientPutOperation(OperationBase):
 
         succ_count = 0
         is_replica = False
-        keys = KeyUtils.generate_new_keys(self.operator.node_name, replica_count, prime_key=key)
+        keys = KeyUtils.generate_new_keys(self.node_name, replica_count, prime_key=key)
         errors = []
-        dht_range = self.operator.get_dht_range()
-        tempfile = dht_range.mktemp(packet.binary_data)
-        for key in keys:
-            range_obj = self.operator.ranges_table.find(long(key, 16))
-            if not range_obj:
-                logger.debug('[ClientPutOperation] Internal error: No hash range found for key=%s!'%key)
-            else:
-                params = {'key': key, 'checksum': checksum, 'is_replica': is_replica, \
-                            'primary_key': keys[0], 'replica_count': replica_count}
-                if succ_count >= wait_writes_count:
-                    self._init_operation(range_obj.node_address, 'PutDataBlock', params, binary_data=tempfile.chunks())
+        tempfile_path = self.operator.get_tempfile()
+        tempfile = TmpFile(tempfile_path, packet.binary_data)
+        try:
+            for key in keys:
+                h_range = self.operator.find_range(key)
+                if not h_range:
+                    logger.debug('[ClientPutOperation] Internal error: No hash range found for key=%s!'%key)
                 else:
-                    resp = self._init_operation(range_obj.node_address, 'PutDataBlock', params, sync=True, binary_data=tempfile.chunks())
-                    if resp.ret_code != RC_OK:
-                        logger.error('[ClientPutOperation] PutDataBlock error from %s: %s'%(range_obj.node_address, resp.ret_message))
-                        errors.append('From %s: %s'%(range_obj.node_address, resp.ret_message))
+                    _, _, node_address = h_range
+                    params = {'key': key, 'checksum': checksum, 'is_replica': is_replica, \
+                                'primary_key': keys[0], 'replica_count': replica_count}
+                    if succ_count >= wait_writes_count:
+                        self._init_operation(node_address, 'PutDataBlock', params, binary_data=tempfile.chunks())
+                    else:
+                        resp = self._init_operation(node_address, 'PutDataBlock', params, sync=True, binary_data=tempfile.chunks())
+                        if resp.ret_code != RC_OK:
+                            logger.error('[ClientPutOperation] PutDataBlock error from %s: %s'%(node_address, resp.ret_message))
+                            errors.append('From %s: %s'%(node_address, resp.ret_message))
 
-                        continue
-                        #if self.operator.self_address == range_obj.node_address:
-                        #    continue
-                        #
-                        #FIXME: saving data block to local reservation
-                    succ_count += 1
+                            continue
+                            #if self.self_address == range_obj.node_address:
+                            #    continue
+                            #
+                            #FIXME: saving data block to local reservation
+                        succ_count += 1
 
-            is_replica = True
+                is_replica = True
+        finally:
+            tempfile.remove()
 
         if wait_writes_count > succ_count:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Writing data error! Details: \n' + '\n'.join(errors))

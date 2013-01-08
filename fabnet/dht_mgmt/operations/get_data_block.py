@@ -11,7 +11,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 """
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesNoData
+from fabnet.dht_mgmt.fs_mapped_ranges import FileBasedChunks, FSHashRangesNoData
 from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.dht_mgmt.constants import RC_NO_DATA
 from fabnet.dht_mgmt.data_block import DataBlockHeader
@@ -19,6 +19,7 @@ from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 
 class GetDataBlockOperation(OperationBase):
     ROLES = [NODE_ROLE, CLIENT_ROLE]
+    NAME = 'GetDataBlock'
 
     def process(self, packet):
         """In this method should be implemented logic of processing
@@ -33,15 +34,12 @@ class GetDataBlockOperation(OperationBase):
         if key is None:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Key is not found in request packet!')
 
-        dht_range = self.operator.get_dht_range()
         try:
-            if not is_replica:
-                data = dht_range.get(key)
-            else:
-                data = dht_range.get_replica(key)
-        except FSHashRangesNoData, err:
-            return FabnetPacketResponse(ret_code=RC_NO_DATA, ret_message='No data found!')
+            path = self.operator.get_data_block_path(key, is_replica)
+        except Exception, err:
+            return FabnetPacketResponse(ret_code=RC_NO_DATA, ret_message=str(err))
 
+        data = FileBasedChunks(path)
         header = data.read(DataBlockHeader.HEADER_LEN)
         _, _, checksum, _ = DataBlockHeader.unpack(header)
 

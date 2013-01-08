@@ -26,6 +26,7 @@ INIT_NEIGHBOUR = 'init-fabnet'
 def stop(s, p):
     global fabnet_node, started
     try:
+        logger.info('STOPPING FABNET NODE...')
         if fabnet_node:
             fabnet_node.stop()
             logger.info('Fabnet node is stopped')
@@ -37,7 +38,7 @@ def stop(s, p):
 def start(args):
     try:
         global fabnet_node, started
-        if args[-1] == '--nodaemon':
+        if args and args[-1] == '--nodaemon':
             nodaemon = True
             args = args[:-1]
         else:
@@ -83,10 +84,7 @@ def start(args):
 
             try:
                 fabnet_node = node.Node(hostname, port, home_dir, node_name, ks_path, ks_passwd, node_type)
-                started = fabnet_node.start(neighbour)
-                if not started:
-                    logger.error('Node does not started!')
-                    sys.exit(1)
+                fabnet_node.start(neighbour)
 
                 signal.signal(signal.SIGINT, stop)
 

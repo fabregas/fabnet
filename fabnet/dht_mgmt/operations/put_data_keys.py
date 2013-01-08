@@ -21,6 +21,11 @@ from fabnet.dht_mgmt.key_utils import KeyUtils
 
 class PutKeysInfoOperation(OperationBase):
     ROLES = [NODE_ROLE, CLIENT_ROLE]
+    NAME = 'PutKeysInfo'
+
+    def init_locals(self):
+        self.node_name = self.operator.get_node_name()
+
     def _validate_key(self, key):
         try:
             if len(key) != 40:
@@ -41,13 +46,14 @@ class PutKeysInfoOperation(OperationBase):
         if key is not None:
             self._validate_key(key)
         else:
-            key = KeyUtils.generate_key(self.operator.node_name)
+            key = KeyUtils.generate_key(self.node_name)
 
-        range_obj = self.operator.ranges_table.find(long(key, 16))
+        range_obj = self.operator.find_range(key)
         if not range_obj:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message=\
                         '[PutKeysInfoOperation] Internal error: No hash range found for key=%s!'%key)
 
-        return FabnetPacketResponse(ret_parameters={'key_info': (key, range_obj.node_address)})
+        _, _, node_address = range_obj
+        return FabnetPacketResponse(ret_parameters={'key_info': (key, node_address)})
 
 

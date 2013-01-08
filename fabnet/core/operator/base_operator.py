@@ -63,7 +63,9 @@ class Operator:
         cls.OPERATIONS_LIST = []
         cls.OPERATIONS_LIST = base_list + operations_list
 
-    def __init__(self, self_address, home_dir='/tmp/', key_storage=None, is_init_node=False, node_name='unknown-node'):
+    def __init__(self, self_address, home_dir='/tmp/', key_storage=None, \
+                    is_init_node=False, node_name='unknown-node', config={}):
+        self.update_config(config)
         self.msg_container = MessageContainer(MC_SIZE)
 
         self.__lock = threading.RLock()
@@ -193,6 +195,9 @@ class Operator:
     def get_config(self):
         return Config.get_config_dict()
 
+    def get_config_value(self, config_param):
+        return getattr(Config, config_param, None)
+
     def set_operator_api_workers_manager(self, api_workers_mgr):
         self.__api_workers_mgr = api_workers_mgr
 
@@ -220,8 +225,7 @@ class Operator:
         if self.__api_workers_mgr:
             workers_mgr_list.append(self.__api_workers_mgr)
         for workers_manager in workers_mgr_list:
-            w_act, w_busy = workers_manager.get_workers_stat()
-            w_count = w_act + w_busy
+            w_count, w_busy = workers_manager.get_workers_stat()
             ret_stat['%sWMStat'%workers_manager.get_workers_name()] = \
                                 {'workers': w_count, 'busy': w_busy}
 
@@ -469,6 +473,8 @@ class Operator:
         return self.__call_operation(from_address, packet)
 
     def __call_operation(self, address, packet):
+        if packet.is_response:
+            packet.from_node = self.self_address
         if hasattr(packet, 'sync') and packet.sync:
             return self.fri_client.call_sync(address, packet)
 
@@ -489,8 +495,8 @@ class Operator:
         self.__call_operation(sender, resp)
 
 
-    def call_to_neighbours(self, message_id, method, parameters):
-        req = FabnetPacketRequest(message_id=message_id, method=method, \
+    def call_to_neighbours(self, message_id, method, parameters, is_multicast):
+        req = FabnetPacketRequest(message_id=message_id, method=method, is_multicast=is_multicast,\
                         sender=self.self_address, parameters=parameters)
         neighbours = self.get_neighbours(NT_SUPERIOR)
         for neighbour in neighbours:

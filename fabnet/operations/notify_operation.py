@@ -55,10 +55,13 @@ class NotifyOperation(OperationBase):
                 else:
                     logger.info('[NOTIFICATION.%s][%s] *%s* %s'%(event_type, event_provider, event_topic, event_message))
 
-            #self.operator.on_network_notify(event_type, event_provider, event_topic, event_message)
+            self.on_network_notify(event_type, event_provider, event_topic, event_message)
         except Exception, err:
             logger.error('[NotifyOperation] %s'%err)
 
+    def on_network_notify(self, event_type, event_provider, event_topic, event_message):
+        """This method can be implemented for processing network notification"""
+        pass
 
     def callback(self, packet, sender):
         """In this method should be implemented logic of processing

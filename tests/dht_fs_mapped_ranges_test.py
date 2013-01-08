@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime
 
 from fabnet.utils.logger import logger
-from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
+from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges, TmpFile
 
 from fabnet.core.config import Config
 Config.update_config({'WAIT_FILE_MD_TIMEDELTA': 0.1})
@@ -20,6 +20,12 @@ START_RANGE_HASH = '%040x'%0
 END_RANGE_HASH = '%040x'%10000000000
 
 
+def tmpdata(data, f_end=''):
+    fname = '/tmp/tmpdata' + f_end
+    tmp = TmpFile(fname, data)
+    return fname
+
+
 class WriteThread(threading.Thread):
     def __init__(self, fs_ranges, start, end):
         threading.Thread.__init__(self)
@@ -29,7 +35,7 @@ class WriteThread(threading.Thread):
 
     def run(self):
         for i in range(self.start_i, self.end_i):
-            self.fs_ranges.put('%040x'%((i+1000)*100), 'T'*1000)
+            self.fs_ranges.put('%040x'%((i+1000)*100), tmpdata('T'*1000, '%s_%s'%(self.start_i, self.end_i)))
 
 class ReadThread(threading.Thread):
     def __init__(self, fs_ranges):
@@ -59,9 +65,9 @@ class TestFSMappedRanges(unittest.TestCase):
 
     def test01_discovery_ranges(self):
         fs_range = FSHashRanges(START_RANGE_HASH, END_RANGE_HASH, TEST_FS_RANGE_DIR)
-        fs_range.put(100, 'Test data #1')
-        fs_range.put(900, 'Test data #2')
-        fs_range.put(10005000, 'Test data #3')
+        fs_range.put(100, tmpdata('Test data #1'))
+        fs_range.put(900, tmpdata('Test data #2'))
+        fs_range.put(10005000, tmpdata('Test data #3'))
         fs_range.split_range(0, 100500)
         time.sleep(.2)
 
@@ -122,7 +128,7 @@ class TestFSMappedRanges(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(TEST_FS_RANGE_DIR, 'reservation_range')))
 
         rt.join()
-        new_range.put('%040x'%100500, 'final data test')
+        new_range.put('%040x'%100500, tmpdata('final data test'))
         data = new_range.get('%040x'%100500)
         self.assertEqual(data.data(), 'final data test')
 
@@ -134,7 +140,7 @@ class TestFSMappedRanges(unittest.TestCase):
             raise Exception('Expected error in this case.')
 
         extended_range = new_range.extend('%040x'%0, '%040x'%((45000)*100))
-        extended_range.put('%040x'%100500, 'final data test #2')
+        extended_range.put('%040x'%100500, tmpdata('final data test #2'))
         data = extended_range.get('%040x'%100500)
         self.assertEqual(data.data(), 'final data test #2')
 

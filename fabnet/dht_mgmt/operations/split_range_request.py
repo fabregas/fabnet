@@ -14,11 +14,12 @@ from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.utils.logger import logger
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
-from fabnet.core.config import Config
 
 
 class SplitRangeRequestOperation(OperationBase):
     ROLES = [NODE_ROLE]
+    NAME = 'SplitRangeRequest'
+
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node
@@ -35,16 +36,10 @@ class SplitRangeRequestOperation(OperationBase):
         if end_key is None:
             raise Exception('end_key is not found in SplitRangeRequest packet')
 
-
-        dht_range = self.operator.get_dht_range()
-
-        subranges = dht_range.get_subranges()
-        if subranges:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Already splitting')
-
-        ret_range, new_range = dht_range.split_range(start_key, end_key)
-
-        range_size = ret_range.get_all_related_data_size()
+        try:
+            range_size = self.operator.split_range(start_key, end_key)
+        except Exception, err:
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message=str(err))
 
         logger.debug('Range is splitted for %s. Subrange size: %s'%(packet.sender, range_size))
 
@@ -67,14 +62,7 @@ class SplitRangeRequestOperation(OperationBase):
             logger.info('Trying select other hash range...')
             self.operator.start_as_dht_member()
         else:
-            dht_range = self.operator.get_dht_range()
             subrange_size = int(packet.ret_parameters['range_size'])
-            estimated_data_size_perc = dht_range.get_estimated_data_percents(subrange_size)
-            if estimated_data_size_perc >= Config.ALLOW_USED_SIZE_PERCENTS:
-                logger.info('Requested range is huge for me :( canceling...')
-                self._init_operation(packet.from_node, 'SplitRangeCancel', {})
-            else:
-                logger.info('Requesting new range data from %s...'%packet.from_node)
-                self._init_operation(packet.from_node, 'GetRangeDataRequest', {})
+            self.operator.accept_foreign_subrange(packet.from_node, subrange_size)
 
 

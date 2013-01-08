@@ -67,30 +67,31 @@ class FileBasedChunks(FriBinaryData):
 
             chunk = self.__f_obj.read(block_size)
             if not chunk:
-                self.__eof()
+                self.close()
                 return None
             self.__read_bytes += len(chunk)
             return chunk
         except IOError, err:
-            self.__eof()
+            self.close()
             raise FSHashRangesException('Cant read data from file system. Details: %s'%err)
         except Exception, err:
-            self.__eof()
+            self.close()
             raise err
 
     def get_next_chunk(self):
         return self.read(self.__chunk_size)
 
-
-    def __eof(self):
+    def close(self):
         self.__no_data_flag = True
         if self.__f_obj:
             self.__f_obj.close()
 
 
 class TmpFile:
-    def __init__(self, f_path, binary_data):
+    def __init__(self, f_path, data):
         self.__f_path = f_path
+        if type(data) not in (list, tuple):
+            data = [data]
 
         try:
             fobj = open(self.__f_path, 'wb')
@@ -98,26 +99,29 @@ class TmpFile:
             raise FSHashRangesException('Cant create tmp file. Details: %s'%err)
 
         try:
-            while True:
-                chunk = binary_data.get_next_chunk()
-
-                if chunk is None:
-                    break
-
-                fobj.write(chunk)
+            for data_block in data:
+                if type(data_block) == str:
+                    fobj.write(data_block)
+                else:
+                    while True:
+                        chunk = data_block.get_next_chunk()
+                        if chunk is None:
+                            break
+                        fobj.write(chunk)
         except IOError, err:
-            os.unlink(self.__f_path)
             raise FSHashRangesException('Cant save tmp data to file system. Details: %s'%err)
         except Exception, err:
-            os.unlink(self.__f_path)
             raise err
         finally:
             fobj.close()
 
+    def file_path(self):
+        return self.__f_path
+
     def chunks(self):
         return FileBasedChunks(self.__f_path)
 
-    def __del__(self):
+    def remove(self):
         if os.path.exists(self.__f_path):
             os.unlink(self.__f_path)
 
@@ -278,6 +282,23 @@ class FSHashRanges:
         self.__move_lock = threading.Lock()
         self.__ret_range_i = None
 
+    def mktemp(self, binary_data):
+        if not binary_data:
+            return None
+
+        tmp_file = self.tempfile()
+        return TmpFile(tmp_file, binary_data)
+
+    def tempfile(self):
+        if self.__no_free_space_flag.is_set():
+            if self.get_free_size_percents() > Config.CRITICAL_FREE_SPACE_PERCENT:
+                self.__no_free_space_flag.clear()
+                logger.info('Range is unlocked for write...')
+            else:
+                raise FSHashRangesNoFreeSpace('No free space for saving data block')
+
+        return  os.path.join(self.__tmp_dir, hashlib.sha1(datetime.utcnow().isoformat()).hexdigest())
+
     def block_for_write(self):
         self.__no_free_space_flag.set()
 
@@ -340,104 +361,69 @@ class FSHashRanges:
             return '%040x'%key
         return key
 
-    def __check_ex_data_block(self, f_name, data):
-        if os.path.exists(f_name):
-            logger.debug('Checking data block datetime at %s...'%f_name)
-            f_obj = open(f_name, 'rb')
+    def __check_ex_data_block(self, old_f_name, new_f_name):
+        if os.path.exists(old_f_name):
+            logger.debug('Checking data block datetime at %s...'%old_f_name)
+            f_obj = open(old_f_name, 'rb')
             try:
                 stored_header = f_obj.read(DataBlockHeader.HEADER_LEN)
-
-                try:
-                    _, _, _, stored_dt = DataBlockHeader.unpack(stored_header)
-                except Exception, err:
-                    logger.error('Bad local data block header. %s'%err)
-                    return #we can store newer data block
-
-                _, _, _, new_dt = DataBlockHeader.unpack(data)
-
-                if new_dt < stored_dt:
-                    raise FSHashRangesOldDataDetected('Data block is already saved with newer datetime')
             finally:
                 f_obj.close()
 
-    def __write_data(self, f_name, data, check_dt=False):
-        if type(data) not in (list, tuple):
-            data = [data]
-
-        try:
-            if self.__no_free_space_flag.is_set():
-                if self.get_free_size_percents() > Config.CRITICAL_FREE_SPACE_PERCENT:
-                    self.__no_free_space_flag.clear()
-                    logger.info('Range is unlocked for write...')
-                else:
-                    raise FSHashRangesNoFreeSpace('No free space for saving data block')
-
-
-            rest_chunk = ''
-            if check_dt:
-                data_block = data[0]
-                if type(data_block) != str:
-                    data_block = data_block.get_next_chunk()
-                    rest_chunk = data_block
-
-                self.__check_ex_data_block(f_name, data_block)
-
-            f_obj = open(f_name, 'wb')
+            f_obj = open(new_f_name, 'rb')
             try:
-                for data_block in data:
-                    if type(data_block) == str:
-                        f_obj.write(data_block)
-                    else:
-                        if rest_chunk:
-                            f_obj.write(rest_chunk)
-
-                        while True:
-                            chunk = data_block.get_next_chunk()
-                            if chunk is None:
-                                break
-                            f_obj.write(chunk)
+                new_header = f_obj.read(DataBlockHeader.HEADER_LEN)
             finally:
                 f_obj.close()
-        except IOError, err:
-            raise FSHashRangesException('Cant save data to file system. Details: %s'%err)
+
+            try:
+                _, _, _, stored_dt = DataBlockHeader.unpack(stored_header)
+            except Exception, err:
+                logger.error('Bad local data block header. %s'%err)
+                return #we can store newer data block
+
+            _, _, _, new_dt = DataBlockHeader.unpack(new_header)
+
+            if new_dt < stored_dt:
+                raise FSHashRangesOldDataDetected('Data block is already saved with newer datetime')
 
 
-    def __read_data(self, file_path, header_only=False):
-        if not header_only:
-            return FileBasedChunks(file_path)
-
-        f_obj = open(file_path, 'rb')
-        try:
-            data = f_obj.read(DataBlockHeader.HEADER_LEN)
-        except IOError, err:
-            raise FSHashRangesException('Cant read data from file system. Details: %s'%err)
-        finally:
-            f_obj.close()
-
-        return data
-
-    def __put_data(self, key, data, save_to_reservation=False, check_dt=False):
+    def __put_data(self, key, tmp_file_path, save_to_reservation=False, save_to_replicas=False, check_dt=False):
         key = self._str_key(key)
-        if self.__block_flag.is_set():
+        need_lock = False
+
+        if save_to_replicas:
+            range_dir = self.__replica_dir
+        elif self.__block_flag.is_set():
             range_dir = self.__reservation_dir
-            is_reserv = True
         else:
             if save_to_reservation:
                 range_dir = self.__reservation_dir
             else:
                 range_dir = self.__range_dir
+                need_lock = True
 
+        dest = os.path.join(range_dir, key)
+        if check_dt:
+            self.__check_ex_data_block(dest, tmp_file_path)
+
+        if need_lock:
             self.__parallel_writes.inc()
-            is_reserv = False
 
         try:
-            self.__write_data(os.path.join(range_dir, key), data, check_dt)
+            shutil.move(tmp_file_path, dest)
         finally:
-            if not is_reserv:
+            if need_lock:
                 self.__parallel_writes.dec()
 
-    def __get_data(self, key, header_only=False):
+    def __get_data_path(self, key, is_replica=False):
         key = self._str_key(key)
+        if is_replica:
+            f_name = os.path.join(self.__replica_dir, key)
+            if not os.path.exists(f_name):
+                raise FSHashRangesNoData('No replica data found for key %s'% key)
+            return f_name
+
         file_path = os.path.join(self.__range_dir, key)
         if not os.path.exists(file_path):
             #check reservation range
@@ -445,7 +431,7 @@ class FSHashRanges:
             if not os.path.exists(file_path):
                 raise FSHashRangesNoData('No data found for key %s'% key)
 
-        return self.__read_data(file_path, header_only)
+        return file_path
 
     def __join_data(self, child_ranges):
         for child_range in child_ranges:
@@ -509,47 +495,42 @@ class FSHashRanges:
 
 
 
-    def put(self, key, data, check_dt=False):
+    def put(self, key, tmp_file_path, is_replica=False, check_dt=False):
+        if is_replica:
+            self.__put_data(key, tmp_file_path, save_to_replicas=True, check_dt=check_dt)
+            return
+
         if self.__child_ranges.size():
             for child_range in self.__child_ranges.copy():
                 if not child_range._in_range(key):
                     continue
-                return child_range.put(key, data)
+                return child_range.put(key, tmp_file_path, check_dt)
 
         if self._in_range(key):
-            self.__put_data(key, data, check_dt=check_dt)
+            self.__put_data(key, tmp_file_path, check_dt=check_dt)
         else:
-            self.__put_data(key, data, save_to_reservation=True, check_dt=check_dt)
+            self.__put_data(key, tmp_file_path, save_to_reservation=True, check_dt=check_dt)
 
-    def get(self, key):
-        '''WARNING: This method can fail when runned across split/join pocess'''
+
+    def get_path(self, key, is_replica=False):
+        if is_replica:
+            return self.__get_data_path(key, is_replica)
+
         if self.__child_ranges.size():
             for child_range in self.__child_ranges.copy():
                 if not child_range._in_range(key):
                     continue
                 try:
-                    data = child_range.get(key)
-                    return data
+                    return child_range.get_path(key)
                 except FSHashRangesNoData, err:
                     break
 
-        return self.__get_data(key)
+        return self.__get_data_path(key)
 
-
-    def put_replica(self, key, data, check_dt=False):
-        key = self._str_key(key)
-        f_name = os.path.join(self.__replica_dir, key)
-        self.__write_data(f_name, data, check_dt)
-
-
-    def get_replica(self, key):
-        key = self._str_key(key)
-        f_name = os.path.join(self.__replica_dir, key)
-        if not os.path.exists(f_name):
-            raise FSHashRangesNoData('No replica data found for key %s'% key)
-
-        return self.__read_data(f_name)
-
+    def get(self, key, is_replica=False):
+        '''WARNING: This method can fail when runned across split/join pocess'''
+        file_path = self.get_path(key, is_replica)
+        return FileBasedChunks(file_path)
 
     def extend(self, start_key, end_key):
         self.__move_lock.acquire()
@@ -629,7 +610,7 @@ class FSHashRanges:
         try:
             files = os.listdir(self.__range_dir)
             for digest in files:
-                yield digest, self.__get_data(digest)
+                yield digest, self.get(digest)
         except Exception, err:
             self._unblock_range()
             raise err
@@ -640,7 +621,7 @@ class FSHashRanges:
             return True
         return False
 
-    def __iter_data_blocks(self, proc_dir, foreign_only=False, header_only=False):
+    def __iter_data_blocks(self, proc_dir, foreign_only=False):
         self.__move_lock.acquire()
         try:
             files = os.listdir(proc_dir)
@@ -649,18 +630,18 @@ class FSHashRanges:
                     continue
                 file_path = os.path.join(proc_dir, digest)
                 if self._ensure_not_write(file_path):
-                    yield digest, self.__read_data(file_path, header_only), file_path
+                    yield digest, FileBasedChunks(file_path), file_path
         finally:
             self.__move_lock.release()
 
-    def iter_reservation(self, header_only=False):
-        return self.__iter_data_blocks(self.__reservation_dir, header_only=header_only)
+    def iter_reservation(self):
+        return self.__iter_data_blocks(self.__reservation_dir)
 
-    def iter_replicas(self, foreign_only=True, header_only=False):
-        return self.__iter_data_blocks(self.__replica_dir, foreign_only, header_only)
+    def iter_replicas(self, foreign_only=True):
+        return self.__iter_data_blocks(self.__replica_dir, foreign_only)
 
-    def iter_data_blocks(self, header_only=False):
-        return self.__iter_data_blocks(self.__range_dir, header_only=header_only)
+    def iter_data_blocks(self):
+        return self.__iter_data_blocks(self.__range_dir)
 
     def join_subranges(self):
         self.__move_lock.acquire()
@@ -769,11 +750,4 @@ class FSHashRanges:
         stat = os.statvfs(self.__range_dir)
         estimated_data_size_perc = (estimated_data_size * 100.) / (stat.f_blocks * stat.f_bsize)
         return estimated_data_size_perc
-
-    def mktemp(self, binary_data):
-        if not binary_data:
-            return None
-
-        tmp_file = os.path.join(self.__tmp_dir, hashlib.sha1(datetime.utcnow().isoformat()).hexdigest())
-        return TmpFile(tmp_file, binary_data)
 

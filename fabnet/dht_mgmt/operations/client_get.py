@@ -22,6 +22,7 @@ from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 
 class ClientGetOperation(OperationBase):
     ROLES = [NODE_ROLE, CLIENT_ROLE]
+    NAME = 'ClientGetData'
 
     def _validate_key(self, key):
         try:
@@ -58,13 +59,14 @@ class ClientGetOperation(OperationBase):
         for key in keys:
             long_key = self._validate_key(key)
 
-            range_obj = self.operator.ranges_table.find(long_key)
+            range_obj = self.operator.find_range(long_key)
             if not range_obj:
                 logger.warning('[ClientGetOperation] Internal error: No hash range found for key=%s!'%key)
             else:
-                resp = self._init_operation(range_obj.node_address, 'GetDataBlock', {'key': key, 'is_replica': is_replica}, sync=True)
+                _, _, node_address = range_obj
+                resp = self._init_operation(node_address, 'GetDataBlock', {'key': key, 'is_replica': is_replica}, sync=True)
                 if resp.ret_code:
-                    logger.warning('[ClientGetOperation] GetDataBlock error from %s: %s'%(range_obj.node_address, resp.ret_message))
+                    logger.warning('[ClientGetOperation] GetDataBlock error from %s: %s'%(node_address, resp.ret_message))
                 else:
                     data = resp.binary_data
                     checksum = resp.ret_parameters['checksum']

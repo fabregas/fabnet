@@ -17,6 +17,8 @@ import hashlib
 
 class GetRangeDataRequestOperation(OperationBase):
     ROLES = [NODE_ROLE]
+    NAME = 'GetRangeDataRequest'
+
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node
@@ -25,36 +27,10 @@ class GetRangeDataRequestOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        dht_range = self.operator.get_dht_range()
-
-        subranges = dht_range.get_subranges()
-        if not subranges:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Range is not splitted!')
-
-        ret_range, new_range = subranges
-
         try:
-            node_address = packet.sender
-            logger.debug('Starting subrange data transfering to %s'% node_address)
-            for key, data in ret_range.iter_range():
-                checksum = hashlib.sha1(data).hexdigest()
-                params = {'key': key, 'checksum': checksum, 'carefully_save': True}
-                resp = self._init_operation(node_address, 'PutDataBlock', params, binary_data=data, sync=True)
-                if resp.ret_code:
-                    raise Exception('Init PutDataBlock operation on %s error. Details: %s'%(node_address, resp.ret_message))
-
-            self.operator.update_dht_range(new_range)
+            self.operator.send_subrange_data(packet.sender)
         except Exception, err:
-            logger.error('GetRangeDataRequestOperation error: %s'%err)
-            dht_range.join_subranges()
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Send range data failed: %s'%err)
-
-
-        ret_range._destroy(force=True)
-        append_lst = [(ret_range.get_start(), ret_range.get_end(), node_address)]
-        append_lst.append((new_range.get_start(), new_range.get_end(), self.operator.self_address))
-        rm_lst = [(dht_range.get_start(), dht_range.get_end(), self.operator.self_address)]
-        self._init_network_operation('UpdateHashRangeTable', {'append': append_lst, 'remove': rm_lst})
+            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Error: %s'%err)
 
         return FabnetPacketResponse()
 

@@ -17,10 +17,12 @@ from fabnet.core.constants import RC_OK, RC_ERROR, \
                                     NODE_ROLE, CLIENT_ROLE
 from fabnet.dht_mgmt.constants import RC_OLD_DATA, RC_NO_FREE_SPACE
 from fabnet.dht_mgmt.data_block import DataBlockHeader
-from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesOldDataDetected, FSHashRangesNoFreeSpace
+from fabnet.dht_mgmt.fs_mapped_ranges import TmpFile, FSHashRangesOldDataDetected, FSHashRangesNoFreeSpace
 
 class PutDataBlockOperation(OperationBase):
     ROLES = [NODE_ROLE, CLIENT_ROLE]
+    NAME = "PutDataBlock"
+
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node
@@ -54,12 +56,10 @@ class PutDataBlockOperation(OperationBase):
             data_list.append(header)
 
         data_list.append(packet.binary_data)
-        dht_range = self.operator.get_dht_range()
+        tempfile_path = self.operator.get_tempfile()
         try:
-            if not is_replica:
-                dht_range.put(key, data_list, carefully_save)
-            else:
-                dht_range.put_replica(key, data_list, carefully_save)
+            tempfile = TmpFile(tempfile_path, data_list)
+            self.operator.put_data_block(key, tempfile_path, is_replica, carefully_save)
         except FSHashRangesOldDataDetected, err:
             return FabnetPacketResponse(ret_code=RC_OLD_DATA, ret_message=str(err))
         except FSHashRangesNoFreeSpace, err:

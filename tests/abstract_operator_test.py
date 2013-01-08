@@ -19,7 +19,14 @@ from Queue import Queue
 
 from fabnet.core.operator import OperatorProcess, OperatorClient
 
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
+
+class MyClass:
+    def __init__(self, msg):
+        self.__msg = msg
+
+    def get_msg(self):
+        return self.__msg
 
 
 class Operator:
@@ -34,6 +41,14 @@ class Operator:
 
     def test_object(self, resp):
         return FabnetPacketResponse(ret_code=0, ret_message='Response of %s'%resp.method)
+
+    def raise_exception(self, ex_msg):
+        from fabnet.core.fri_base import FriException
+        raise FriException(ex_msg)
+
+    def test_custom_class(self):
+        obj = MyClass('my test message')
+        return obj
 
     def set_operator_api_workers_manager(self, wm):
         pass
@@ -94,6 +109,20 @@ class TestAbstractOperator(unittest.TestCase):
 
             ret = cl.test_object(FabnetPacketRequest(method='TestMethod', parameters={'tst': 213}))
             self.assertEqual(ret.ret_code, 0, ret.ret_message)
+
+            try:
+                cl.raise_exception('test exception')
+            except Exception, err:
+                from fabnet.core.fri_base import FriException
+                self.assertEqual(err.__class__, FriException)
+                self.assertEqual(str(err), 'test exception')
+            else:
+                raise Exception('should be exception in this case')
+
+            obj = cl.test_custom_class()
+            self.assertEqual(obj.get_msg(), 'my test message')
+
+            #cl.sleep(7500)
         finally:
             proc.stop()
             proc.join()

@@ -17,6 +17,8 @@ from fabnet.core.constants import NODE_ROLE
 
 class SplitRangeCancelOperation(OperationBase):
     ROELS = [NODE_ROLE]
+    NAME = 'SplitRangeCancel'
+
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node
@@ -27,8 +29,7 @@ class SplitRangeCancelOperation(OperationBase):
         """
         logger.info('Canceled range splitting! Joining subranges.')
 
-        dht_range = self.operator.get_dht_range()
-        dht_range.join_subranges()
+        self.operator.join_subranges()
 
         return FabnetPacketResponse()
 

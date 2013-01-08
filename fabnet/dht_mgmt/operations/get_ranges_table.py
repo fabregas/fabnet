@@ -17,6 +17,8 @@ from fabnet.utils.logger import logger
 
 class GetRangesTableOperation(OperationBase):
     ROLES = [NODE_ROLE]
+    NAME = 'GetRangesTable'
+
     def process(self, packet):
         """In this method should be implemented logic of processing
         reuqest packet from sender node
@@ -25,10 +27,10 @@ class GetRangesTableOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
-        if self.operator.status == DS_INITIALIZE:
+        if self.operator.get_status() == DS_INITIALIZE:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Node is not initialized yet!')
 
-        ranges_table = self.operator.ranges_table.dump()
+        ranges_table = self.operator.dump_ranges_table()
 
         logger.info('Sending ranges table to %s'%packet.sender)
 
@@ -51,13 +53,13 @@ class GetRangesTableOperation(OperationBase):
 
         logger.info('Recevied ranges table')
 
-        self.operator.ranges_table.load(str(packet.ret_parameters['ranges_table']))
+        self.operator.restore_ranges_table(str(packet.ret_parameters['ranges_table']))
         logger.info('Ranges table is loaded to fabnet node')
 
-        if self.operator.status == DS_INITIALIZE:
+        if self.operator.get_status() == DS_INITIALIZE:
             logger.info('Starting node as DHT member')
             self.operator.start_as_dht_member()
         else:
-            self.operator.check_near_range(reinit_dht=True)
+            self.operator.check_near_range(True) #check with reinit_dht=True
 
 

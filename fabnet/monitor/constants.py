@@ -1,0 +1,9 @@
+
+
+DEFAULT_MONITOR_CONFIG = {'COLLECT_NODES_STAT_TIMEOUT': 40,
+                            'DISCOVERY_TOPOLOGY_TIMEOUT': 60}
+
+MONITOR_DB = 'fabnet_monitor_db'
+
+UP = 1
+DOWN = 0

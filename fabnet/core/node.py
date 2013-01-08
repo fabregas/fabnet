@@ -30,13 +30,15 @@ from fabnet.utils.logger import logger
 
 class Node:
     def __init__(self, hostname, port, home_dir, node_name='anonymous_node',
-                    ks_path=None, ks_passwd=None, node_type=None, bind_host='0.0.0.0'):
+                    ks_path=None, ks_passwd=None, node_type=None,
+                    bind_host='0.0.0.0', config={}):
         self.hostname = hostname
         self.bind_host = bind_host
         self.port = port
         self.home_dir = home_dir
         self.node_name = node_name
         self.node_type = node_type
+        self.config = config
         self.oper_client = OperatorClient(self.node_name)
         if ks_path:
             self.keystore = init_keystore(ks_path, ks_passwd)
@@ -61,7 +63,8 @@ class Node:
             logger.error('Node type "%s" does not found!'%self.node_type)
             return False
 
-        op_proc = OperatorProcess(operator_class, address, self.home_dir, self.keystore, is_init_node, self.node_name)
+        op_proc = OperatorProcess(operator_class, address, self.home_dir, self.keystore, \
+                                    is_init_node, self.node_name, config=self.config)
         op_proc.start_carefully()
 
         try:

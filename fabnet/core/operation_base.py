@@ -41,6 +41,13 @@ class OperationBase:
         self.home_dir = home_dir
         self.__fri_client = fri_client
         self.__lock = lock_obj
+        self.init_locals()
+
+    def init_locals(self):
+        """This method should be implemented for some local
+        variables initialization
+        """
+        pass
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation

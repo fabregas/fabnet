@@ -44,7 +44,7 @@ class TestNodeStatistic(unittest.TestCase):
 
             self.assertEqual(isinstance(ret_packet, FabnetPacketResponse), True)
             self.assertEqual(ret_packet.ret_code, 0, ret_packet.ret_message)
-            print ret_packet.ret_parameters
+            print json.dumps(ret_packet.ret_parameters)
             self.assertEqual(int(ret_packet.ret_parameters['NeighboursInfo']['uppers_balance']), -1)
             self.assertEqual(int(ret_packet.ret_parameters['NeighboursInfo']['superiors_balance']), -1)
             self.assertTrue(float(ret_packet.ret_parameters['SystemInfo']['loadavg_5']) >= 0)
