@@ -22,6 +22,7 @@ GIT_HOME = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 
 class UpgradeNodeOperation(OperationBase):
     ROLES = [NODE_ROLE]
+    NAME = 'UpgradeNode'
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
