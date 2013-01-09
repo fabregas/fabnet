@@ -275,6 +275,8 @@ class DHTOperator(Operator):
         end = dht_range.get_end()
 
         range_obj = self.ranges_table.find(start)
+        if not range_obj:
+            range_obj = self.ranges_table.find(end)
         if not range_obj or range_obj.start != start or range_obj.end != end or range_obj.node_address != self.self_address:
             msg = 'Invalid self range!'
             if range_obj:
@@ -284,7 +286,7 @@ class DHTOperator(Operator):
                 msg += 'Not found in hash table'
             logger.info(msg)
 
-            if reinit:
+            if (not range_obj) or reinit:
                 logger.warning('DHT range on this node is not found in ranges_table')
                 if range_obj:
                     logger.info('Self range: %040x-%040x, In hash table: %040x-%040x(%s)'%\

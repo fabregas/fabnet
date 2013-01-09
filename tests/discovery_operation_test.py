@@ -66,13 +66,13 @@ class TestDiscoverytOperation(unittest.TestCase):
             server1 = TestServerThread(1986)
             server1.start()
             server2 = TestServerThread(1987, '127.0.0.1:1986')
-            time.sleep(1)
+            time.sleep(1.5)
             server2.start()
             server3 = TestServerThread(1988, '127.0.0.1:1986')
-            time.sleep(1)
+            time.sleep(1.5)
             server3.start()
 
-            time.sleep(2)
+            time.sleep(2.5)
 
             operator = OperatorClient('node1986')
             operator1 = OperatorClient('node1987')
@@ -86,8 +86,9 @@ class TestDiscoverytOperation(unittest.TestCase):
             self.assertEqual(sorted(operator2.get_neighbours(NT_SUPERIOR)), ['127.0.0.1:1986', '127.0.0.1:1987'])
 
             server1.stop()
+            server1.join()
             server1 = None
-            time.sleep(1)
+            time.sleep(2)
             self.assertEqual(operator1.get_neighbours(NT_UPPER), ['127.0.0.1:1988'])
             self.assertEqual(operator1.get_neighbours(NT_SUPERIOR), ['127.0.0.1:1988'])
             self.assertEqual(operator2.get_neighbours(NT_UPPER), ['127.0.0.1:1987'])
@@ -96,18 +97,21 @@ class TestDiscoverytOperation(unittest.TestCase):
             try:
                 if server1:
                     server1.stop()
+                    server1.join()
             except Exception, err:
                 print 'ERROR while stopping server1: %s'%err
             time.sleep(1)
             try:
                 if server2:
                     server2.stop()
+                    server2.join()
             except Exception, err:
                 print 'ERROR while stopping server2: %s'%err
             time.sleep(1)
             try:
                 if server3:
                     server3.stop()
+                    server3.join()
             except Exception, err:
                 print 'ERROR while stopping server3: %s'%err
 
@@ -161,6 +165,7 @@ class TestDiscoverytOperation(unittest.TestCase):
             for server in servers:
                 if server:
                     server.stop()
+                    server.join()
                     time.sleep(1)
 
 

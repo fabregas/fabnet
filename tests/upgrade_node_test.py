@@ -31,7 +31,7 @@ class TestUpgradeNode(unittest.TestCase):
             args = ['/usr/bin/python', '/tmp/fabnet_node_code/fabnet/bin/fabnet-node', address, 'init-fabnet', 'test_upgr_node', '/tmp', 'DHT']
             args.append('--nodaemon')
             server_proc = subprocess.Popen(args)
-            time.sleep(1)
+            time.sleep(2)
 
             os.system("echo '{\"DHT\": 100500}' > UPGRADE_VERSION")
             packet_obj = FabnetPacketRequest(method='UpgradeNode', parameters={'origin_repo_url': 'bad_url'}, sync=True)

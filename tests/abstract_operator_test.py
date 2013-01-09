@@ -30,7 +30,7 @@ class MyClass:
 
 
 class Operator:
-    def __init__(self, self_address, home_dir, keystore, is_init_node, server_name):
+    def __init__(self, self_address, home_dir, keystore, is_init_node, server_name, config={}):
         pass
 
     def echo(self, message):

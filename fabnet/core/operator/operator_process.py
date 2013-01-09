@@ -125,6 +125,9 @@ class OperatorProcess(mp.Process):
             pass
         except Exception, err:
             logger.debug('[AbstractOperator.stop] connecting to operator is failed. details: %s'%err)
+        logger.info('waiting operator process finishing...')
+        self.join()
+        logger.info('operator process is stopped!')
 
     def run(self):
         cur_thread = threading.current_thread()
