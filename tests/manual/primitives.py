@@ -149,7 +149,7 @@ def put_data_to_network(addresses, stat_buffer, perc=10):
         if ret_packet.ret_code:
             raise Exception('ERROR! NodeStatistic failed on %s with message: %s'%(address, ret_packet.ret_message))
 
-        dht_info = ret_packet.ret_parameters['dht_info']
+        dht_info = ret_packet.ret_parameters['DHTInfo']
         start = dht_info['range_start']
         end = dht_info['range_end']
         len_r = long(end, 16) - long(start, 16)
@@ -208,7 +208,7 @@ def get_maximum_free_space(addresses, perc=0):
         else:
             raise Exception('ERROR! NodeStatistic failed on %s with message: %s'%(address, ret_packet.ret_message))
 
-        dht_info = ret_packet.ret_parameters['dht_info']
+        dht_info = ret_packet.ret_parameters['DHTInfo']
 
         if max_perc < dht_info['free_size_percents']:
             max_perc = dht_info['free_size_percents']
@@ -225,7 +225,7 @@ def destroy_data(address, nodenum):
     packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
     client = FriClient()
     ret_packet = client.call_sync(address, packet_obj)
-    dht_info = ret_packet.ret_parameters['dht_info']
+    dht_info = ret_packet.ret_parameters['DHTInfo']
     size = dht_info['range_size'] + dht_info['replicas_size']
 
     print '='*100
@@ -253,7 +253,7 @@ def call_repair_data(address, out_streem, expect_res, invalid_node=None):
     if invalid_node:
         packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
         ret_packet = client.call_sync(invalid_node, packet_obj)
-        dht_info = ret_packet.ret_parameters['dht_info']
+        dht_info = ret_packet.ret_parameters['DHTInfo']
         start = dht_info['range_start']
         end = dht_info['range_end']
         params = {'check_range_start': start, 'check_range_end': end}
@@ -294,7 +294,7 @@ def call_repair_data(address, out_streem, expect_res, invalid_node=None):
 
     packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
     ret_packet = client.call_sync(address, packet_obj)
-    dht_info = ret_packet.ret_parameters['dht_info']
+    dht_info = ret_packet.ret_parameters['DHTInfo']
     post_free_size = dht_info['free_size_percents']
 
     if post_free_size < free_size:
@@ -348,7 +348,7 @@ def wait_node(node):
             print 'Node %s does not init FRI server yet. Waiting it...'%node
             time.sleep(.5)
             continue
-        if ret_packet.ret_parameters['dht_info']['status'] != 'normwork':
+        if ret_packet.ret_parameters['DHTInfo']['status'] != 'normwork':
             print 'Node %s does not init as DHT member yet. Waiting...'%node
             time.sleep(.5)
             continue
@@ -365,10 +365,10 @@ def check_stat(address):
                 time.sleep(.5)
                 continue
 
-            uppers_balance = int(ret_packet.ret_parameters[u'uppers_balance'])
-            superiors_balance = int(ret_packet.ret_parameters[u'superiors_balance'])
+            uppers_balance = int(ret_packet.ret_parameters['NeighboursInfo'][u'uppers_balance'])
+            superiors_balance = int(ret_packet.ret_parameters['NeighboursInfo'][u'superiors_balance'])
             if uppers_balance >= 0 and superiors_balance >= 0:
-                if ret_packet.ret_parameters['dht_info']['status'] == 'normwork':
+                if ret_packet.ret_parameters['DHTInfo']['status'] == 'normwork':
                     break
                 print 'Node %s is not initialized as DHT member yet! Waiting...'%(address)
             else:
@@ -389,10 +389,10 @@ def print_ranges(addresses, out_streem):
         if ret_packet.ret_code:
             raise Exception('NodeStatistic failed on %s: %s'%(address, ret_packet.ret_message))
 
-        start = ret_packet.ret_parameters['dht_info']['range_start']
-        end = ret_packet.ret_parameters['dht_info']['range_end']
-        range_size = ret_packet.ret_parameters['dht_info']['range_size']
-        replicas_size = ret_packet.ret_parameters['dht_info']['replicas_size']
+        start = ret_packet.ret_parameters['DHTInfo']['range_start']
+        end = ret_packet.ret_parameters['DHTInfo']['range_end']
+        range_size = ret_packet.ret_parameters['DHTInfo']['range_size']
+        replicas_size = ret_packet.ret_parameters['DHTInfo']['replicas_size']
         ranges[address] = (start, end, range_size, replicas_size)
 
     h_ranges = HashRangesTable()
