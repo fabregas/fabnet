@@ -15,7 +15,7 @@ from datetime import datetime
 from fabnet.utils.logger import logger
 
 from fabnet.core.constants import ET_INFO
-from fabnet.core.fri_server import FabnetPacketRequest
+from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.core.fri_client import FriClient
 from fabnet.core.fri_base import RamBasedBinaryData
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
@@ -167,7 +167,7 @@ def put_data_to_network(addresses, stat_buffer, perc=10):
             data = Random.new().read(1024*1024)
             checksum =  hashlib.sha1(data).hexdigest()
 
-            params = {'checksum': checksum, 'wait_writes_count': 2}
+            params = {'checksum': checksum, 'wait_writes_count': 3}
             packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=RamBasedBinaryData(data), sync=True)
 
             ret_packet = client.call_sync(random.choice(addresses), packet_obj)
@@ -423,7 +423,7 @@ def put_data_blocks(addresses, block_size=1024, blocks_count=1000):
         data = Random.new().read(block_size)
         checksum =  hashlib.sha1(data).hexdigest()
 
-        params = {'checksum': checksum, 'wait_writes_count': 2}
+        params = {'checksum': checksum, 'wait_writes_count': 3}
         packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=RamBasedBinaryData(data), sync=True)
         nodeaddr = random.choice(addresses)
 

@@ -12,7 +12,7 @@ import sqlite3
 import shutil
 from fabnet.utils.logger import logger
 
-from fabnet.core.fri_server import FabnetPacketRequest
+from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.core.fri_client import FriClient
 logger.setLevel(logging.DEBUG)
 

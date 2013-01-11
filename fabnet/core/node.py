@@ -87,10 +87,8 @@ class Node:
         proc_pids = []
         proc_pids.append(('FriServer', os.getpid()))
         proc_pids.append(('Operator', op_proc.pid))
-        for child in workers_mgr.iter_children():
-            proc_pids.append(('OperationsProcessors', child.pid))
         self.osproc_stat = OSProcessesStatisticCollector(oper_manager.operator_cl, \
-                                        proc_pids, [workers_mgr], STAT_OSPROC_TIMEOUT)
+                                        self.node_name, [workers_mgr], STAT_OSPROC_TIMEOUT)
         self.osproc_stat.start()
 
         if is_init_node:

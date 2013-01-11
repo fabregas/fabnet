@@ -199,14 +199,14 @@ class StatisticCollector(threading.Thread):
 
 
 class OSProcessesStatisticCollector(threading.Thread):
-    def __init__(self, operator_client, pid_list, workers_mgr_list, timeout):
+    def __init__(self, operator_client, server_name, workers_mgr_list, timeout):
         threading.Thread.__init__(self)
 
         self.operator_cl = operator_client
         self.timeout = int(timeout)
         self.pid_list = pid_list
         self.workers_manager_list = workers_mgr_list
-        self.setName('osprocesses-statcol')
+        self.setName('%s-osprocesses-statcol'%server_name)
         self.stop_flag = threading.Event()
 
     def run(self):
@@ -221,15 +221,18 @@ class OSProcessesStatisticCollector(threading.Thread):
                 if self.stop_flag.is_set():
                     break
 
-                for pid_group_name, pid in self.pid_list:
-                    p_stat = self.get_process_stat(pid)
-                    self.operator_cl.update_statistic('%sProcStat'%pid_group_name, pid, p_stat)
-
                 for workers_manager in self.workers_manager_list:
                     w_count, w_busy = workers_manager.get_workers_stat()
 
                     self.operator_cl.update_statistic('%sWMStat'%workers_manager.get_workers_name(), \
                                             'WM', {'workers': w_count, 'busy': w_busy})
+
+                    for child in workers_manager.iter_children():
+                        pid = child.pid
+                        proc_pids.append(('OperationsProcessors', pid))
+                        p_stat = self.get_process_stat(child.pid)
+                        if p_stat:
+                            self.operator_cl.update_statistic('%sProcStat'%workers_manager.get_workers_name(), pid, p_stat)
             except Exception, err:
                 import traceback
                 logger.write = logger.debug
@@ -240,18 +243,26 @@ class OSProcessesStatisticCollector(threading.Thread):
     @classmethod
     def get_process_stat(cls, pid):
         rss = threads = ''
-        lines = open('/proc/%i/status'%pid,'r').readlines()
-        for line in lines:
-            (param, value) = line.split()[:2]
-            if param.startswith('VmRSS'):
-                rss = value.strip()
-            elif param.startswith('Threads'):
-                threads = value.strip()
+        if not os.path.exists('/proc/%i/status'%pid):
+            return None
 
-        procinfo = {}
-        procinfo['memory'] = int(rss)
-        procinfo['threads'] = int(threads)
-        return procinfo
+        try:
+            lines = open('/proc/%i/status'%pid,'r').readlines()
+            for line in lines:
+                (param, value) = line.split()[:2]
+                if param.startswith('VmRSS'):
+                    rss = value.strip()
+                elif param.startswith('Threads'):
+                    threads = value.strip()
+
+            procinfo = {}
+            procinfo['memory'] = int(rss)
+            procinfo['threads'] = int(threads)
+            return procinfo
+        except Exception, err:
+            logger.error('get_process_stat failed: %s'%err)
+            return None
+
 
     def stop(self):
         if not self.stop_flag.is_set():

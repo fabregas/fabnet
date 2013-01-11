@@ -404,8 +404,7 @@ class DHTOperator(Operator):
         try:
             logger.debug('Starting subrange data transfering to %s'% node_address)
             for key, data in ret_range.iter_range():
-                checksum = hashlib.sha1(data).hexdigest()
-                params = {'key': key, 'checksum': checksum, 'carefully_save': True}
+                params = {'key': key, 'carefully_save': True}
                 req = FabnetPacketRequest(method='PutDataBlock', \
                                     sender=self.self_address, binary_data=data, sync=True,
                                     parameters=params)
@@ -416,7 +415,7 @@ class DHTOperator(Operator):
 
             self.update_dht_range(new_range)
         except Exception, err:
-            logger.error('GetRangeDataRequestOperation error: %s'%err)
+            logger.error('send_subrange_data error: %s'%err)
             dht_range.join_subranges()
             raise err
 

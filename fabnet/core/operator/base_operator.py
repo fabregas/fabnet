@@ -52,6 +52,8 @@ OPERLIST = [ManageNeighbour, DiscoveryOperation, TopologyCognition, \
 
 NT_MAP = {NT_SUPERIOR: 'Superior', NT_UPPER: 'Upper'}
 
+class OperException(Exception):
+    pass
 
 class Operator:
     OPTYPE = 'Base'
