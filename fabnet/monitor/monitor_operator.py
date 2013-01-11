@@ -203,12 +203,6 @@ class DiscoverTopologyThread(threading.Thread):
                 if self.stopped.is_set():
                     break
 
-                try:
-                    tc_oper = self.operator.get_operation_instance('TopologyCognition')
-                except OperException, err:
-                    time.sleep(1)
-                    continue
-
                 from_addr = self.next_discovery_node()
                 if from_addr:
                     logger.info('Starting topology discovery from %s...'%from_addr)

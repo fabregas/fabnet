@@ -15,6 +15,7 @@ This module contains the classes implementation for working with statistic
      OSProcessesStatisticCollector -> operator -> Statistic
 """
 
+import os
 import copy
 import time
 import threading
@@ -204,7 +205,6 @@ class OSProcessesStatisticCollector(threading.Thread):
 
         self.operator_cl = operator_client
         self.timeout = int(timeout)
-        self.pid_list = pid_list
         self.workers_manager_list = workers_mgr_list
         self.setName('%s-osprocesses-statcol'%server_name)
         self.stop_flag = threading.Event()
@@ -229,8 +229,7 @@ class OSProcessesStatisticCollector(threading.Thread):
 
                     for child in workers_manager.iter_children():
                         pid = child.pid
-                        proc_pids.append(('OperationsProcessors', pid))
-                        p_stat = self.get_process_stat(child.pid)
+                        p_stat = self.get_process_stat(pid)
                         if p_stat:
                             self.operator_cl.update_statistic('%sProcStat'%workers_manager.get_workers_name(), pid, p_stat)
             except Exception, err:
