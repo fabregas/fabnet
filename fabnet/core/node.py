@@ -88,7 +88,7 @@ class Node:
         proc_pids.append(('FriServer', os.getpid()))
         proc_pids.append(('Operator', op_proc.pid))
         self.osproc_stat = OSProcessesStatisticCollector(oper_manager.operator_cl, \
-                                        self.node_name, [workers_mgr], STAT_OSPROC_TIMEOUT)
+                                        self.node_name, proc_pids, [workers_mgr], STAT_OSPROC_TIMEOUT)
         self.osproc_stat.start()
 
         if is_init_node:

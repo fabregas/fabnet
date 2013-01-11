@@ -61,8 +61,8 @@ class TestNodeStatistic(unittest.TestCase):
             self.assertTrue(float(ret_packet.ret_parameters['FriServerProcStat']['memory']) > 1000)
             self.assertTrue(float(ret_packet.ret_parameters['OperatorProcStat']['threads']) > 0)
             self.assertTrue(float(ret_packet.ret_parameters['OperatorProcStat']['memory']) > 1000)
-            self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorsProcStat']['threads']) > 0)
-            self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorsProcStat']['memory']) > 1000)
+            self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorProcStat']['threads']) > 0)
+            self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorProcStat']['memory']) > 1000)
 
             self.assertTrue(ret_packet.ret_parameters['OperationsProcTime']['NodeStatistic'] > 0)
             self.assertEqual(ret_packet.ret_parameters['OperationsProcTime']['TopologyCognition'], 0)

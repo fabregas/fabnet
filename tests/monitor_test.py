@@ -66,6 +66,7 @@ class TestMonitorNode(unittest.TestCase):
         for address in ADDRESSES:
             self._check_stat(address)
 
+        time.sleep(1.5)
         print 'NETWORK STARTED'
 
     def _wait_node(self, node):

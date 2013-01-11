@@ -51,11 +51,14 @@ class OperatorWorker(ThreadBasedAbstractWorker):
             raw_resp = pickle.dumps({'rcode': 0, 'resp': resp})
             conn.send_bytes(raw_resp)
         except Exception, err:
-            logger.error('operator error: [%s] %s'%(err.__class__.__name__, err))
+            #logger.error('operator error: [%s] %s'%(err.__class__.__name__, err))
             #logger.write = logger.debug
             #traceback.print_exc(file=logger)
-            raw_resp = pickle.dumps({'rcode': 1, 'ex': err})
-            conn.send_bytes(raw_resp)
+            try:
+                raw_resp = pickle.dumps({'rcode': 1, 'ex': err})
+                conn.send_bytes(raw_resp)
+            except Exception, s_err:
+                logger.error('operator cant send error message: [%s] %s. Details: %s'%(err.__class__.__name__, err, s_err))
         finally:
             conn.close()
 

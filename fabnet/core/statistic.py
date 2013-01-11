@@ -200,12 +200,13 @@ class StatisticCollector(threading.Thread):
 
 
 class OSProcessesStatisticCollector(threading.Thread):
-    def __init__(self, operator_client, server_name, workers_mgr_list, timeout):
+    def __init__(self, operator_client, server_name, pid_list, workers_mgr_list, timeout):
         threading.Thread.__init__(self)
 
         self.operator_cl = operator_client
         self.timeout = int(timeout)
         self.workers_manager_list = workers_mgr_list
+        self.pid_list = pid_list
         self.setName('%s-osprocesses-statcol'%server_name)
         self.stop_flag = threading.Event()
 
@@ -220,6 +221,11 @@ class OSProcessesStatisticCollector(threading.Thread):
 
                 if self.stop_flag.is_set():
                     break
+
+                for pid_desr, pid in self.pid_list:
+                    p_stat = self.get_process_stat(pid)
+                    if p_stat:
+                        self.operator_cl.update_statistic('%sProcStat'%pid_desr, pid, p_stat)
 
                 for workers_manager in self.workers_manager_list:
                     w_count, w_busy = workers_manager.get_workers_stat()

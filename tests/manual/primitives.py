@@ -248,7 +248,7 @@ def call_repair_data(address, out_streem, expect_res, invalid_node=None):
     params = {}
     packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
     ret_packet = client.call_sync(address, packet_obj)
-    dht_info = ret_packet.ret_parameters['dht_info']
+    dht_info = ret_packet.ret_parameters['DHTInfo']
     free_size = dht_info['free_size_percents']
     if invalid_node:
         packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
