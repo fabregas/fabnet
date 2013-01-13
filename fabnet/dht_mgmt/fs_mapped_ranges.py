@@ -711,18 +711,18 @@ class FSHashRanges:
         logger.info('Data is restored from reservation!')
 
     def __get_file_size(self, file_path):
-        stat = os.stat(file_path)
+        try:
+            stat = os.stat(file_path)
+        except OSError:
+            #no file found
+            return 0
         rest = stat.st_size % stat.st_blksize
         if rest:
             rest = stat.st_blksize - rest
         return stat.st_size + rest
 
     def get_range_size(self):
-        self.__move_lock.acquire()
-        try:
-            return sum([self.__get_file_size(os.path.join(self.__range_dir, f)) for f in os.listdir(self.__range_dir)])
-        finally:
-            self.__move_lock.release()
+        return sum([self.__get_file_size(os.path.join(self.__range_dir, f)) for f in os.listdir(self.__range_dir)])
 
     def get_replicas_size(self):
         return sum([self.__get_file_size(os.path.join(self.__replica_dir, f)) for f in os.listdir(self.__replica_dir)])

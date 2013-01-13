@@ -275,14 +275,14 @@ def call_repair_data(address, out_streem, expect_res, invalid_node=None):
         try_cnt += 1
 	
         try:
-            cnt = dbconn.select_one("SELECT count(*) FROM notification WHERE notify_topic='RepairDataBlocks statistic'")
+            cnt = dbconn.select_one("SELECT count(*) FROM notification WHERE notify_topic='RepairDataBlocks'")
         except Exception, err:
             print 'DB ERROR: %s'%err
         time.sleep(.2)
 
     dt = datetime.now() - t0
 
-    events = dbconn.select("SELECT node_address, notify_type, notify_msg, notify_dt FROM notification WHERE notify_topic='RepairDataBlocks statistic'")
+    events = dbconn.select("SELECT node_address, notify_type, notify_msg, notify_dt FROM notification WHERE notify_topic='RepairDataBlocks'")
     for event in events:
         out_streem.write('[%s][%s][%s] %s\n'%(event[0], event[3], event[1], event[2]))
 
@@ -336,6 +336,8 @@ def create_virt_net(nodes_count, port_move=0):
         processes.append(p)
         if len(addresses) > 2:
             check_stat(address)
+        else:
+            time.sleep(1.5)
 
     return addresses, processes
 

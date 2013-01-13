@@ -235,32 +235,20 @@ class Operator:
 
 
     def get_statistic(self):
-        self._lock()
-        try:
-            operator_stat = self.on_statisic_request()
-            null_op_stat = copy.copy(self.__null_oper_stat)
-            stat = self.__stat.dump()
-            op_stat = stat.get(SO_OPERS_TIME, {})
-            null_op_stat.update(op_stat)
-            stat[SO_OPERS_TIME] = null_op_stat
-            stat.update(operator_stat)
-            return stat
-        finally:
-            self._unlock()
+        operator_stat = self.on_statisic_request()
+        null_op_stat = copy.copy(self.__null_oper_stat)
+        stat = self.__stat.dump()
+        op_stat = stat.get(SO_OPERS_TIME, {})
+        null_op_stat.update(op_stat)
+        stat[SO_OPERS_TIME] = null_op_stat
+        stat.update(operator_stat)
+        return stat
 
     def reset_statistic(self):
-        self._lock()
-        try:
-            self.__stat.reset()
-        finally:
-            self._unlock()
+        self.__stat.reset()
 
     def update_statistic(self, stat_obj, stat_owner, stat):
-        self._lock()
-        try:
-            self.__stat.update(stat_obj, stat_owner, stat)
-        finally:
-            self._unlock()
+        self.__stat.update(stat_obj, stat_owner, stat)
 
     def register_request(self, message_id, method, sender):
         if method == KEEP_ALIVE_METHOD:

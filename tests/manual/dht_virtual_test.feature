@@ -13,7 +13,7 @@ Feature: DHT Init
         Then I collect topology from every node
 
         When stop 2 nodes
-        And wait 80 seconds
+        And wait 140 seconds
         Then I collect DHT statistic
         Then I get and check all data blocks
 
