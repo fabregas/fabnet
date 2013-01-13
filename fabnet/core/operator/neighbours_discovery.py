@@ -11,7 +11,7 @@ Copyright (C) 2013 Konstantin Andrusenko
 This module contains the NeigboursDiscoveryRoutines class implementation
 """
 import os
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.utils.db_conn import SqliteDBConnection as DBConnection
 from fabnet.operations.topology_cognition import TOPOLOGY_DB
 from fabnet.operations.constants import MNO_APPEND, MNO_REMOVE

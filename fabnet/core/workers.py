@@ -13,7 +13,7 @@ import traceback
 import socket
 import multiprocessing as mp
 
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import core_logger as logger
 from fabnet.core.constants import STOP_WORKER_EVENT
 from fabnet.core.socket_processor import SocketProcessor
 from multiprocessing.reduction import rebuild_handle

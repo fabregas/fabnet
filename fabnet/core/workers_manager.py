@@ -15,7 +15,7 @@ from multiprocessing import Queue as ProcessQueue
 from Queue import Queue as ThreadQueue
 
 
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import core_logger as logger
 from fabnet.core.constants import STOP_WORKER_EVENT, S_PENDING, S_ERROR, S_INWORK,\
                                     MIN_WORKERS_COUNT, MAX_WORKERS_COUNT
 

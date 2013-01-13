@@ -14,7 +14,7 @@ from datetime import datetime
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.utils.exec_command import run_command_ex
 from fabnet.core.constants import ET_ALERT, NODE_ROLE
 

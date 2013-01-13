@@ -13,7 +13,7 @@ import os
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.core.constants import NODE_ROLE, ET_INFO, ET_ALERT
 
 

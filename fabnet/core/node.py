@@ -25,7 +25,7 @@ from fabnet.core.operations_manager import OperationsManager
 from fabnet.core.workers_manager import WorkersManager
 from fabnet.core.constants import ET_INFO, STAT_OSPROC_TIMEOUT
 from fabnet.core.statistic import OSProcessesStatisticCollector
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import core_logger as logger
 
 
 class Node:

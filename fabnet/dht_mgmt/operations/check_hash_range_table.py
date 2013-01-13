@@ -16,7 +16,7 @@ from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE, RC_DONT_STARTED
 from fabnet.dht_mgmt.constants import RC_NEED_UPDATE, DS_INITIALIZE
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 
 class CheckHashRangeTableOperation(OperationBase):
     ROLES = [NODE_ROLE]

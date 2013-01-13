@@ -13,7 +13,7 @@ from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.constants import DS_INITIALIZE
 from fabnet.core.constants import RC_ERROR, RC_OK, NODE_ROLE
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 
 class GetRangesTableOperation(OperationBase):
     ROLES = [NODE_ROLE]

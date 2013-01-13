@@ -20,7 +20,7 @@ import copy
 import time
 import threading
 
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import core_logger as logger
 
 class StatAtom:
     def __init__(self, value, cnt=1):

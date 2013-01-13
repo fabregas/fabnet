@@ -13,8 +13,8 @@ This module contains the fabnet logger initialization
 import logging, logging.handlers
 import sys
 
-def init_logger():
-    logger = logging.getLogger('localhost')
+def init_logger(logger_name='localhost'):
+    logger = logging.getLogger(logger_name)
 
     logger.setLevel(logging.INFO)
 
@@ -27,7 +27,7 @@ def init_logger():
               facility=logging.handlers.SysLogHandler.LOG_DAEMON)
     #formatter = logging.Formatter('%(filename)s: %(levelname)s: %(message)s')
 
-    formatter = logging.Formatter('FABNET %(levelname)s [%(threadName)s] %(message)s')
+    formatter = logging.Formatter('FABNET-%(name)s %(levelname)s [%(threadName)s] %(message)s')
     hdlr.setFormatter(formatter)
     logger.addHandler(hdlr)
 
@@ -38,3 +38,5 @@ def init_logger():
     return logger
 
 logger = init_logger()
+core_logger = init_logger('CORE')
+oper_logger = init_logger('OPER')

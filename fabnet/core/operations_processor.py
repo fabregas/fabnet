@@ -13,7 +13,7 @@ This module contains the OperationsProcessor class implementation
 import traceback
 import threading
 
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_INVALID_CERT, \
                                 RC_REQ_CERTIFICATE, STAT_COLLECTOR_TIMEOUT, SO_OPERS_TIME

@@ -23,7 +23,7 @@ from fabnet.core.operator import Operator
 from fabnet.core.config import Config
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.utils.db_conn import DBOperationalException, DBEmptyResult
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.utils.internal import total_seconds
 
 from fabnet.monitor.constants import DEFAULT_MONITOR_CONFIG, MONITOR_DB, UP, DOWN

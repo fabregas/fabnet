@@ -17,7 +17,7 @@ import time
 from multiprocessing.queues import Queue
 from multiprocessing.reduction import reduce_handle
 
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import core_logger as logger
 from fabnet.core.constants import S_ERROR, S_PENDING, S_INWORK
 
 

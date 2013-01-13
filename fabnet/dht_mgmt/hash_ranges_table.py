@@ -15,7 +15,7 @@ import copy
 from sha import sha
 from datetime import datetime
 
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 
 
 class RangeException(Exception):

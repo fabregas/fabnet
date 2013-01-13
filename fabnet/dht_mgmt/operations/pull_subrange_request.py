@@ -12,7 +12,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 import os
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
 
 

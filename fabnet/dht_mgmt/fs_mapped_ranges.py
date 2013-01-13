@@ -17,7 +17,7 @@ import copy
 import time
 from datetime import datetime
 
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.utils.internal import total_seconds
 from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH
 from fabnet.core.config import Config

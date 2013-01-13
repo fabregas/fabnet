@@ -20,7 +20,7 @@ from fabnet.core.operator import Operator
 from hash_ranges_table import HashRange, HashRangesTable
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges
 from fabnet.core.fri_base import FabnetPacketRequest
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.core.config import Config
 from fabnet.dht_mgmt.constants import DS_INITIALIZE, DS_DESTROYING, DS_NORMALWORK, \
             DEFAULT_DHT_CONFIG, MIN_HASH, MAX_HASH, RC_OLD_DATA, RC_NO_FREE_SPACE

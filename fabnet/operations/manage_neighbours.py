@@ -15,7 +15,7 @@ from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
                         NODE_ROLE, CLIENT_ROLE, RC_OK, RC_ERROR
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.operations.constants import MNO_APPEND, MNO_REMOVE
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.operations.topology_cognition import TopologyCognition
 
 

@@ -20,7 +20,7 @@ from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
                         ONE_DIRECT_NEIGHBOURS_COUNT, \
                         NODE_ROLE, CLIENT_ROLE
 from fabnet.operations.constants import MNO_APPEND
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 
 TOPOLOGY_DB = 'fabnet_topology.db'
 

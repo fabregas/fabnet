@@ -11,7 +11,6 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the OperationBase interface
 """
 from fabnet.core.fri_base import FabnetPacketRequest
-from fabnet.utils.logger import logger
 
 class PermissionDeniedException(Exception):
     pass

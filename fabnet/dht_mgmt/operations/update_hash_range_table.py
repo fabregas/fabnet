@@ -16,7 +16,7 @@ from fabnet.dht_mgmt.constants import DS_NORMALWORK, DS_INITIALIZE, \
                             MAX_HASH, MIN_HASH
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
 from fabnet.dht_mgmt.hash_ranges_table import HashRange
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 
 class UpdateHashRangeTableOperation(OperationBase):
     ROLES = [NODE_ROLE]

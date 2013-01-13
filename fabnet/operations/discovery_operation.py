@@ -13,7 +13,7 @@ from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
                         NODE_ROLE, CLIENT_ROLE, RC_OK
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 
 class DiscoveryOperation(OperationBase):
     ROLES = [NODE_ROLE]

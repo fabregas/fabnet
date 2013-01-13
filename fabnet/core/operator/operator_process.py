@@ -25,7 +25,7 @@ from fabnet.core.workers import ThreadBasedAbstractWorker
 from fabnet.core.constants import OPERATOR_SOCKET_ADDRESS, \
                             S_PENDING, S_ERROR, S_INWORK, \
                             MIN_WORKERS_COUNT, MAX_WORKERS_COUNT
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 
 class OperatorWorker(ThreadBasedAbstractWorker):
     def __init__(self, name, queue, operator):

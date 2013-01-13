@@ -16,7 +16,7 @@ from fabnet.dht_mgmt.constants import RC_NO_DATA, RC_INVALID_DATA
 from fabnet.dht_mgmt.data_block import DataBlockHeader
 from fabnet.dht_mgmt.fs_mapped_ranges import FileBasedChunks
 from fabnet.core.constants import NODE_ROLE
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 
 class CheckDataBlockOperation(OperationBase):
     ROLES = [NODE_ROLE]

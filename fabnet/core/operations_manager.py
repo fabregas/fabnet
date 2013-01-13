@@ -15,7 +15,7 @@ from datetime import datetime
 from multiprocessing import RLock
 
 from fabnet.utils.internal import total_seconds
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import core_logger as logger
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.operator import OperatorClient
 from fabnet.core.fri_client import FriClient

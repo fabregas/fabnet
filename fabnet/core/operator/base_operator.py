@@ -17,7 +17,7 @@ import time
 from datetime import datetime, timedelta
 from Queue import Queue
 
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import oper_logger as logger
 from fabnet.core.config import Config
 from fabnet.utils.internal import total_seconds
 
