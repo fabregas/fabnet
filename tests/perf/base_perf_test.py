@@ -18,14 +18,15 @@ def check_errors(errors_queue):
         raise Exception(err_msg)
 
 def collect_perf_stat(nodes_list):
+    time.sleep(20)
     stat = collect_nodes_stat(nodes_list, reset=True)
     put_data_block_time = put_client_time = get_keys_info_time = get_data_block_time = timedelta()
 
     for node_stat in stat.values():
-        put_data_block_time += to_dt(node_stat['methods_stat']['PutDataBlock']['avg_proc_time'])
-        get_data_block_time += to_dt(node_stat['methods_stat']['GetDataBlock']['avg_proc_time'])
-        put_client_time += to_dt(node_stat['methods_stat']['ClientPutData']['avg_proc_time'])
-        get_keys_info_time += to_dt(node_stat['methods_stat']['GetKeysInfo']['avg_proc_time'])
+        put_data_block_time += to_dt(node_stat['OperationsProcTime']['PutDataBlock'])
+        get_data_block_time += to_dt(node_stat['OperationsProcTime']['GetDataBlock'])
+        put_client_time += to_dt(node_stat['OperationsProcTime']['ClientPutData'])
+        get_keys_info_time += to_dt(node_stat['OperationsProcTime']['GetKeysInfo'])
 
     return {'put_data_block_time': put_data_block_time/len(stat), \
                 'put_client_time': put_client_time/len(stat), \
@@ -113,8 +114,8 @@ if __name__ == '__main__':
         sys.exit(1)
     t0 = datetime.now()
     fout = None
-    TEST = more_parallel_test
-    #TEST = test_scenario
+    #TEST = more_parallel_test
+    TEST = test_scenario
     try:
         nodes_list = [n.strip() for n in sys.argv[1].split(',')]
         fout = open(sys.argv[2], 'w')

@@ -115,6 +115,9 @@ class TmpFile:
         finally:
             fobj.close()
 
+    def __del__(self):
+        self.remove()
+
     def file_path(self):
         return self.__f_path
 

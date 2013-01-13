@@ -11,7 +11,7 @@ from Queue import Empty
 from fabnet.utils.logger import logger
 from nimbus_client.core.fabnet_gateway import FabnetGateway
 
-from fabnet.core.fri_server import FabnetPacketRequest
+from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.core.fri_client import FriClient
 #logger.setLevel(logging.DEBUG)
 
@@ -35,6 +35,8 @@ class SecurityManagerMock:
         return data
 
 def to_dt(dt_str):
+    if type(dt_str) in (int, float):
+        return timedelta(0, dt_str)
     parts = dt_str.split(':')
     secs = 0
     if len(parts) > 1:
@@ -195,7 +197,14 @@ class MemoryMonitor:
                 continue
 
             for node_stat in stat.values():
-                mem = int(node_stat['memory'])
+                try:
+                    mem = int(node_stat['OperationsProcessorProcStat']['memory']) * int(node_stat['OperationsProcessorWMStat']['workers'])
+                    mem += int(node_stat['FriServerProcStat']['memory'])
+                    mem += int(node_stat['OperatorProcStat']['memory'])
+                except Exception, err:
+                    print 'memmon warning: %s'%err
+                    continue
+
                 if mem < min_memory:
                     min_memory = mem
                 if mem > max_memory:

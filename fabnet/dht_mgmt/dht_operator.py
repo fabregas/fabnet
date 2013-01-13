@@ -429,7 +429,7 @@ class DHTOperator(Operator):
         self.call_network(req)
 
     def find_range(self, key):
-        if type(key) == str:
+        if type(key) in (str, unicode):
             key = long(key, 16)
         range_obj = self.ranges_table.find(key)
         if not range_obj:

@@ -17,6 +17,7 @@ from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.dht_mgmt.constants import MIN_REPLICA_COUNT
 from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.key_utils import KeyUtils
+from fabnet.dht_mgmt.data_block import DataBlockHeader
 from fabnet.dht_mgmt.fs_mapped_ranges import TmpFile
 from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
 
@@ -64,38 +65,46 @@ class ClientPutOperation(OperationBase):
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Minimum replica count is equal to %s!'%MIN_REPLICA_COUNT)
 
         succ_count = 0
+        carefully_save = True
         is_replica = False
-        keys = KeyUtils.generate_new_keys(self.node_name, replica_count, prime_key=key)
         errors = []
+        local_save = None
+        keys = KeyUtils.generate_new_keys(self.node_name, replica_count, prime_key=key)
         tempfile_path = self.operator.get_tempfile()
-        tempfile = TmpFile(tempfile_path, packet.binary_data)
-        try:
-            for key in keys:
-                h_range = self.operator.find_range(key)
-                if not h_range:
-                    logger.debug('[ClientPutOperation] Internal error: No hash range found for key=%s!'%key)
+        header = DataBlockHeader.pack(keys[0], replica_count, checksum)
+        tempfile = TmpFile(tempfile_path, [header, packet.binary_data])
+        for key in keys:
+            h_range = self.operator.find_range(key)
+            if not h_range:
+                logger.info('[ClientPutOperation] Internal error: No hash range found for key=%s!'%key)
+            else:
+                _, _, node_address = h_range
+                params = {'key': key, 'is_replica': is_replica, 'replica_count': replica_count, 'carefully_save': carefully_save}
+                if succ_count >= wait_writes_count:
+                    self._init_operation(node_address, 'PutDataBlock', params, binary_data=tempfile.chunks())
                 else:
-                    _, _, node_address = h_range
-                    params = {'key': key, 'checksum': checksum, 'is_replica': is_replica, \
-                                'primary_key': keys[0], 'replica_count': replica_count}
-                    if succ_count >= wait_writes_count:
-                        self._init_operation(node_address, 'PutDataBlock', params, binary_data=tempfile.chunks())
+                    if self.self_address == node_address and local_save is None:
+                        local_save = (key, is_replica)
                     else:
                         resp = self._init_operation(node_address, 'PutDataBlock', params, sync=True, binary_data=tempfile.chunks())
                         if resp.ret_code != RC_OK:
                             logger.error('[ClientPutOperation] PutDataBlock error from %s: %s'%(node_address, resp.ret_message))
                             errors.append('From %s: %s'%(node_address, resp.ret_message))
+                        else:
+                            succ_count += 1
 
-                            continue
-                            #if self.self_address == range_obj.node_address:
-                            #    continue
-                            #
-                            #FIXME: saving data block to local reservation
-                        succ_count += 1
+            is_replica = True
 
-                is_replica = True
-        finally:
-            tempfile.remove()
+
+        try:
+            if local_save:
+                key, is_replica = local_save
+                self.operator.put_data_block(key, tempfile.file_path(), is_replica, carefully_save)
+                succ_count += 1
+        except Exception, err:
+            msg = 'Saving data block to local range is failed: %s'%err
+            logger.error(msg)
+            errors.append(msg)
 
         if wait_writes_count > succ_count:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Writing data error! Details: \n' + '\n'.join(errors))
