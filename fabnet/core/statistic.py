@@ -28,7 +28,7 @@ class StatAtom:
         self.__value = value
 
     def update(self, value, accumulate_cnt=None):
-        if accumulate_cnt is None:
+        if accumulate_cnt is None or self.__cnt is None:
             self.__value = value
             return
 
