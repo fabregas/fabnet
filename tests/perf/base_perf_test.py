@@ -48,10 +48,11 @@ def no_parallel_scenario(nodes_list, block_size, blocks_count):
         check_errors(errors_queue)
         get_dt = get_data(nodes_list, keys_queue, errors_queue)
         check_errors(errors_queue)
-        stat = collect_perf_stat(nodes_list)
     finally:
         ret = memmon.stop()
         min_mem, max_mem = ret
+
+    stat = collect_perf_stat(nodes_list)
 
     return put_dt, get_dt, stat['put_data_block_time'], stat['get_data_block_time'], stat['put_client_time'], stat['get_keys_info_time'], min_mem, max_mem
 
@@ -69,9 +70,10 @@ def parallel_scenario(threads_count, nodes_list, block_size, blocks_count):
         check_errors(errors_queue)
         get_dt, th_avg_get_dt = parallel_get_data(threads_count, nodes_list, keys_queue, errors_queue)
         check_errors(errors_queue)
-        stat = collect_perf_stat(nodes_list)
     finally:
         min_mem, max_mem = memmon.stop()
+
+    stat = collect_perf_stat(nodes_list)
 
     return th_avg_put_dt, th_avg_get_dt, stat['put_data_block_time'], stat['get_data_block_time'], stat['put_client_time'], stat['get_keys_info_time'], min_mem, max_mem
 
