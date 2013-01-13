@@ -116,8 +116,8 @@ if __name__ == '__main__':
         sys.exit(1)
     t0 = datetime.now()
     fout = None
-    #TEST = more_parallel_test
-    TEST = test_scenario
+    TEST = more_parallel_test
+    #TEST = test_scenario
     try:
         nodes_list = [n.strip() for n in sys.argv[1].split(',')]
         fout = open(sys.argv[2], 'w')

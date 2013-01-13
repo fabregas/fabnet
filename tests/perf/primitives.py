@@ -205,7 +205,7 @@ class MemoryMonitor:
                     print 'memmon warning: %s'%err
                     continue
 
-                if mem < min_memory:
+                if mem < min_memory and mem > 0:
                     min_memory = mem
                 if mem > max_memory:
                     max_memory = mem

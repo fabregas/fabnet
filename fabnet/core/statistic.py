@@ -231,7 +231,7 @@ class OSProcessesStatisticCollector(threading.Thread):
                     w_count, w_busy = workers_manager.get_workers_stat()
 
                     self.operator_cl.update_statistic('%sWMStat'%workers_manager.get_workers_name(), \
-                                            'WM', {'workers': w_count, 'busy': w_busy})
+                                            'WM', {'workers': (None, w_count), 'busy': (None, w_busy)})
 
                     for child in workers_manager.iter_children():
                         pid = child.pid
@@ -262,7 +262,7 @@ class OSProcessesStatisticCollector(threading.Thread):
 
             procinfo = {}
             procinfo['memory'] = int(rss)
-            procinfo['threads'] = int(threads)
+            procinfo['threads'] = (None, int(threads))
             return procinfo
         except Exception, err:
             logger.error('get_process_stat failed: %s'%err)

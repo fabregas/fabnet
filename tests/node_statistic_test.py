@@ -54,7 +54,7 @@ class TestNodeStatistic(unittest.TestCase):
             self.assertTrue(float(ret_packet.ret_parameters['FriAgentWMStat']['workers']) > 0)
             self.assertTrue(float(ret_packet.ret_parameters['FriAgentWMStat']['busy']) == 0)
             self.assertTrue(float(ret_packet.ret_parameters['OperatorWorkerWMStat']['workers']) > 0)
-            self.assertTrue(float(ret_packet.ret_parameters['OperatorWorkerWMStat']['busy']) == 1)
+            self.assertTrue(float(ret_packet.ret_parameters['OperatorWorkerWMStat']['busy']) >= 1)
             self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorWMStat']['workers']) > 0)
             self.assertTrue(float(ret_packet.ret_parameters['OperationsProcessorWMStat']['busy']) == 0)
             self.assertTrue(float(ret_packet.ret_parameters['FriServerProcStat']['threads']) > 0)

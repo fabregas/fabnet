@@ -102,18 +102,19 @@ class WorkersManager(threading.Thread):
 
         while not self.stopped.is_set():
             try:
-                time.sleep(.4)
-                if self.queue.empty():
+                time.sleep(.5)
+                act, busy = self.get_workers_stat()
+                if act != busy:
                     not_empty_queue_count = 0
                     empty_queue_count += 1
                 else:
                     not_empty_queue_count += 1
                     empty_queue_count = 0
 
-                if not_empty_queue_count >= 5:
+                if not_empty_queue_count >= 4:
                     self.__spawn_worker()
                     not_empty_queue_count = 0
-                elif empty_queue_count >= 15:
+                elif empty_queue_count >= 60:
                     self.__stop_worker()
                     empty_queue_count = 0
             except Exception, err:
