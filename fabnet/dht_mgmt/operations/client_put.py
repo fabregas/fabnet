@@ -71,7 +71,7 @@ class ClientPutOperation(OperationBase):
         local_save = None
         keys = KeyUtils.generate_new_keys(self.node_name, replica_count, prime_key=key)
         tempfile_path = self.operator.get_tempfile()
-        header = DataBlockHeader.pack(keys[0], replica_count, checksum)
+        header = DataBlockHeader.pack(keys[0], replica_count, checksum, packet.session_id)
         tempfile = TmpFile(tempfile_path, [header, packet.binary_data])
         for key in keys:
             h_range = self.operator.find_range(key)

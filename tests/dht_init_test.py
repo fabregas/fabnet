@@ -11,7 +11,7 @@ import hashlib
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.fri_client import FriClient
 from fabnet.core.fri_base import RamBasedBinaryData
-from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT
+from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT, RC_PERMISSION_DENIED
 from fabnet.dht_mgmt.data_block import DataBlockHeader
 from fabnet.dht_mgmt import constants
 from fabnet.core.config import Config
@@ -34,7 +34,7 @@ from fabnet.dht_mgmt.operations.split_range_request import SplitRangeRequestOper
 from fabnet.dht_mgmt.operations.update_hash_range_table import UpdateHashRangeTableOperation
 from fabnet.dht_mgmt.operations.check_hash_range_table import CheckHashRangeTableOperation
 
-from fabnet.utils.logger import logger
+from fabnet.utils.logger import core_logger as logger
 from fabnet.dht_mgmt.constants import DS_NORMALWORK, RC_OLD_DATA
 
 #logger.setLevel(logging.DEBUG)
@@ -94,10 +94,10 @@ class TestServerThread(threading.Thread):
             raise Exception('cant get node statistic. details: %s'%ret_packet.ret_message)
         return ret_packet.ret_parameters
 
-    def put_data_block(self, data, key, is_replica=False, npkey=False):
+    def put_data_block(self, data, key, is_replica=False, npkey=False, user_id=0):
         checksum = hashlib.sha1(data).hexdigest()
         params = {'key': key, 'checksum': checksum, 'is_replica':is_replica, \
-                'carefully_save': True, 'replica_count':2}
+                'carefully_save': True, 'replica_count': 2, 'user_id': user_id}
 
         if not npkey:
             params['primary_key'] = key
@@ -110,11 +110,11 @@ class TestServerThread(threading.Thread):
         return resp
 
 
-    def get_data_block(self, key, is_replica=False):
+    def get_data_block(self, key, is_replica=False, user_id=0):
         params = {'key': key, 'is_replica':is_replica}
         req = FabnetPacketRequest(method='GetDataBlock',\
                             sync=True, parameters=params)
-        client = FriClient()
+        client = FriClient(session_id=user_id)
         resp = client.call_sync('127.0.0.1:%s'%self.port, req)
         if resp.ret_code == constants.RC_NO_DATA:
             return None
@@ -189,8 +189,10 @@ class TestDHTInitProcedure(unittest.TestCase):
 
             data_block = 'Hello, fabregas!'
             replica_block = 'This is replica data!'
-            server.put_data_block(data_block, MAX_HASH-100500) #should be appended into reservation range
-            server1.put_data_block(replica_block, 100, is_replica=True)
+            resp = server.put_data_block(data_block, MAX_HASH-100500) #should be appended into reservation range
+            self.assertEqual(resp.ret_code, RC_OK, resp.ret_message)
+            resp = server1.put_data_block(replica_block, 100, is_replica=True)
+            self.assertEqual(resp.ret_code, RC_OK, resp.ret_message)
 
             time.sleep(2)
 
@@ -203,6 +205,22 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(data, None)
             data = server1.get_data_block(100, is_replica=True)
             self.assertEqual(data, None)
+
+            resp = server1.put_data_block('New data block', MAX_HASH-100500, user_id=3232)
+            self.assertEqual(resp.ret_code, RC_PERMISSION_DENIED, resp.ret_message)
+            data = server1.get_data_block(MAX_HASH-100500)
+            self.assertEqual(data.data(), data_block)
+
+            resp = server1.put_data_block('New data block', MAX_HASH-100, user_id=3232)
+            self.assertEqual(resp.ret_code, RC_OK, resp.ret_message)
+            data = server1.get_data_block(MAX_HASH-100, user_id=3232)
+            self.assertEqual(data.data(), 'New data block')
+            try:
+                server1.get_data_block(MAX_HASH-100)
+            except Exception, err:
+                pass
+            else:
+                raise Esception('should be exception in this case')
         finally:
             if server:
                 server.stop()
@@ -434,7 +452,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             packet_obj = FabnetPacketRequest(method='RepairDataBlocks', is_multicast=True, parameters=params)
             rcode, rmsg = client.call('127.0.0.1:1987', packet_obj)
             self.assertEqual(rcode, 0, rmsg)
-            time.sleep(1.5)
+            time.sleep(2)
 
             events = conn.select("SELECT notify_type, node_address, notify_msg FROM notification WHERE notify_topic='RepairDataBlocks'")
             conn.execute('DELETE FROM notification')

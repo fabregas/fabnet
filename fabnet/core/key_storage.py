@@ -53,8 +53,8 @@ class AbstractKeyStorage:
 
     def get_node_cert_key(self):
         cert = X509.load_cert_string(str(self._node_cert))
-        return cert.get_fingerprint()
-        #return cert.get_ext('authorityKeyIdentifier').get_value()[5:].strip().replace(':','')
+        user_key = cert.get_serial_number()
+        return user_key
 
     def verify_cert(self, cert_str):
         '''Verify certificate and return certificate role'''

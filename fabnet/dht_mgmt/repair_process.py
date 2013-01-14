@@ -76,7 +76,7 @@ class RepairProcess:
         self.__processed_local_blocks += 1
         try:
             raw_header = raw_data.read(DataBlockHeader.HEADER_LEN)
-            primary_key, replica_count, checksum, stored_dt = DataBlockHeader.unpack(raw_header)
+            primary_key, replica_count, checksum, user_id, stored_dt = DataBlockHeader.unpack(raw_header)
             if not is_replica:
                 if key != primary_key:
                     raise Exception('Primary key is invalid: %s != %s'%(key, primary_key))

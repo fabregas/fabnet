@@ -38,3 +38,12 @@ class KeyUtils:
             keys.append('%040x'%key)
 
         return keys
+
+    @classmethod
+    def to_hex(cls, key):
+        if type(key) in (int, long):
+            return '%040x'%key
+        if len(key) != 40:
+            return '%040x'%int(key,16)
+        return key
+

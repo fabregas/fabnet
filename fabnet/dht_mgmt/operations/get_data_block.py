@@ -12,7 +12,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.fs_mapped_ranges import FileBasedChunks, FSHashRangesNoData
-from fabnet.core.constants import RC_OK, RC_ERROR
+from fabnet.core.constants import RC_OK, RC_ERROR, RC_PERMISSION_DENIED
 from fabnet.dht_mgmt.constants import RC_NO_DATA
 from fabnet.dht_mgmt.data_block import DataBlockHeader
 from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
@@ -41,7 +41,10 @@ class GetDataBlockOperation(OperationBase):
 
         data = FileBasedChunks(path)
         header = data.read(DataBlockHeader.HEADER_LEN)
-        _, _, checksum, _ = DataBlockHeader.unpack(header)
+        _, _, checksum, user_id, _ = DataBlockHeader.unpack(header)
+        if user_id:
+            if packet.session_id != user_id:
+                return FabnetPacketResponse(ret_code=RC_PERMISSION_DENIED, ret_message='permission denied')
 
         return FabnetPacketResponse(binary_data=data, ret_parameters={'checksum': checksum})
 

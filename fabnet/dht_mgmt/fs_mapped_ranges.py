@@ -37,6 +37,9 @@ class FSHashRangesNoData(FSHashRangesException):
 class FSHashRangesOldDataDetected(FSHashRangesException):
     pass
 
+class FSHashRangesPermissionDenied(FSHashRangesException):
+    pass
+
 class FSHashRangesNoFreeSpace(FSHashRangesException):
     pass
 
@@ -380,15 +383,17 @@ class FSHashRanges:
                 f_obj.close()
 
             try:
-                _, _, _, stored_dt = DataBlockHeader.unpack(stored_header)
+                _, _, _, user_id, stored_dt = DataBlockHeader.unpack(stored_header)
             except Exception, err:
                 logger.error('Bad local data block header. %s'%err)
                 return #we can store newer data block
 
-            _, _, _, new_dt = DataBlockHeader.unpack(new_header)
+            _, _, _, new_user_id, new_dt = DataBlockHeader.unpack(new_header)
 
             if new_dt < stored_dt:
                 raise FSHashRangesOldDataDetected('Data block is already saved with newer datetime')
+            if new_user_id != user_id:
+                raise FSHashRangesPermissionDenied('Alien data block')
 
 
     def __put_data(self, key, tmp_file_path, save_to_reservation=False, save_to_replicas=False, check_dt=False):
