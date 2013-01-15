@@ -13,12 +13,21 @@ import copy
 
 class ConfigAttrs(type):
     __params = {}
-    __lock = threading.Lock()
+    __handlers = {}
+    __lock = threading.RLock()
+
+    @classmethod
+    def add_handler(cls, config_param, handler):
+        cls.__handlers[config_param] = handler
 
     @classmethod
     def update_config(cls, new_config):
         cls.__lock.acquire()
         try:
+            for key, value in new_config.items():
+                handler = cls.__handlers.get(key, None)
+                if handler:
+                    handler(key, value, cls.__params.get(key, None))
             cls.__params.update(new_config)
         finally:
             cls.__lock.release()

@@ -20,7 +20,7 @@ class Session:
 
 class SessionsManager:
     #TODO: make me smarter for flushing sessions...
-    def __init__(self, homedir):
+    def __init__(self, homedir=None):
         self.homedir = homedir
         self.__sessions = {}
 

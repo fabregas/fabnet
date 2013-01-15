@@ -19,10 +19,32 @@ from fabnet.utils.exec_command import run_command_ex
 from fabnet.core.constants import ET_ALERT, NODE_ROLE
 
 GIT_HOME = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
+VERSION_FILE = os.path.join(GIT_HOME, 'version')
 
 class UpgradeNodeOperation(OperationBase):
     ROLES = [NODE_ROLE]
     NAME = 'UpgradeNode'
+
+    @classmethod
+    def update_node_info(cls):
+        ver = 'unknown'
+        old_curdir = os.path.abspath(os.curdir)
+        try:
+            os.chdir(GIT_HOME)
+            ret, cout, cerr = run_command_ex(['git', 'describe', '--always', '--tag'])
+            if ret != 0:
+                raise Exception(cerr)
+            ver = cout.strip()
+        except Exception, err:
+            logger.error('"git describe --always --tag" failed: %s'%err)
+        finally:
+            os.chdir(old_curdir)
+
+        try:
+            open(VERSION_FILE, 'w').write(ver)
+        except Exception, err:
+            logger.error('Cant save version file %s. Details: %s'%(VERSION_FILE, err))
+
 
     def before_resend(self, packet):
         """In this method should be implemented packet transformation
@@ -63,6 +85,8 @@ class UpgradeNodeOperation(OperationBase):
             f_upgrage_log.write('===> stderr: \n%s'%cerr)
             if ret != 0:
                 raise Exception('upgrade-node script failed!')
+
+            self.update_node_info()
 
             f_upgrage_log.write('Node is upgraded successfully!\n\n')
         except Exception, err:

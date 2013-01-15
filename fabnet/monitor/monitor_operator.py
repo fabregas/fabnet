@@ -78,6 +78,7 @@ class MonitorOperator(Operator):
                 id serial PRIMARY KEY,
                 node_address varchar(512) UNIQUE NOT NULL,
                 node_name varchar(128) NOT NULL,
+                home_dir varchar(1024),
                 status integer NOT NULL DEFAULT 0,
                 superiors text,
                 uppers text,
@@ -116,16 +117,21 @@ class MonitorOperator(Operator):
             self._conn.execute("UPDATE nodes_info SET status=%s WHERE id=%s", (status, rows[0][0]))
 
 
-    def update_node_info(self, nodeaddr, node_name, superior_neighbours, upper_neighbours):
+    def update_node_info(self, nodeaddr, node_name, home_dir, superior_neighbours, upper_neighbours):
         superiors = ','.join(superior_neighbours)
         uppers = ','.join(upper_neighbours)
-        rows = self._conn.select("SELECT id FROM nodes_info WHERE node_address=%s", (nodeaddr, ))
+        rows = self._conn.select("SELECT id, node_name, home_dir, status, superiors, uppers \
+                                    FROM nodes_info WHERE node_address=%s", (nodeaddr, ))
         if not rows:
-            self._conn.execute("INSERT INTO nodes_info (node_address, node_name, status, superiors, uppers) \
-                                VALUES (%s, %s, %s, %s, %s)", (nodeaddr, node_name, UP, superiors, uppers))
+            self._conn.execute("INSERT INTO nodes_info (node_address, node_name, home_dir, status, superiors, uppers) \
+                                VALUES (%s, %s, %s, %s, %s, %s)", (nodeaddr, node_name, home_dir, UP, superiors, uppers))
         else:
-            self._conn.execute("UPDATE nodes_info SET status=%s, superiors=%s, uppers=%s WHERE id=%s", \
-                                (UP, superiors, uppers, rows[0][0]))
+            if rows[0][1:] == (node_name, home_dir, UP, superiors, uppers):
+                return
+            self._conn.execute("UPDATE nodes_info \
+                                SET node_name=%s, home_dir=%s, status=%s, superiors=%s, uppers=%s \
+                                WHERE id=%s", \
+                                (node_name, home_dir, UP, superiors, uppers, rows[0][0]))
 
 
     def update_node_stat(self, nodeaddr, stat):

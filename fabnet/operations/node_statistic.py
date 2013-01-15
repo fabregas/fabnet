@@ -14,7 +14,9 @@ import resource
 from datetime import datetime
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE, SI_SYS_INFO
+from fabnet.utils.logger import oper_logger as logger
+from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE, SI_SYS_INFO, SI_BASE_INFO
+from upgrade_node_operation import UpgradeNodeOperation, VERSION_FILE
 
 
 class NodeStatisticOperation(OperationBase):
@@ -30,6 +32,16 @@ class NodeStatisticOperation(OperationBase):
                 or None for disabling packet resend to neigbours
         """
         pass
+
+    def get_node_version(self):
+        if not os.path.exists(VERSION_FILE):
+            UpgradeNodeOperation.update_node_info()
+
+        try:
+            return open(VERSION_FILE).read().strip()
+        except Exception, err:
+            logger.error('Cant read version from file %s. Detials: %s'%(VERSION_FILE, err))
+            return 'unknown'
 
     def process(self, packet):
         """In this method should be implemented logic of processing
@@ -47,6 +59,13 @@ class NodeStatisticOperation(OperationBase):
         if reset_op_stat:
             self.operator.reset_statistic()
 
+        if packet.parameters.get('base_info', False):
+            baseinfo = {}
+            baseinfo['node_name'] = self.operator.get_node_name()
+            baseinfo['home_dir'] = self.operator.get_home_dir()
+            baseinfo['node_types'] = [self.operator.get_type()] #FIXME in future, node can has more than one type
+            ret_params[SI_BASE_INFO] = baseinfo
+
         loadavgstr = open('/proc/loadavg', 'r').readline().strip()
         data = loadavgstr.split()
 
@@ -55,6 +74,7 @@ class NodeStatisticOperation(OperationBase):
         sysinfo['loadavg_5'] = data[0]
         sysinfo['loadavg_10'] = data[1]
         sysinfo['loadavg_15'] = data[2]
+        sysinfo['fabnet_version'] = self.get_node_version()
 
         ret_params[SI_SYS_INFO] = sysinfo
         return FabnetPacketResponse(ret_parameters=ret_params)
