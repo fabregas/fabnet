@@ -84,12 +84,12 @@ def init_fri_client(ks_path):
 def call_remote(hostname, login, commands, password=''):
     session = pxssh.pxssh()
     session.logfile_read = open(LOG_FILE, 'a')
-    session.login(hostname, login, password, auto_prompt_reset=False)
+    session.login(hostname, login, password, auto_prompt_reset=True)
     try:
         for command in commands:
             session.sendline(command)
             try:
-                index = session.expect(['[#$]', 'Key storage password:'])
+                index = session.expect([session.PROMPT, 'Key storage password:'])
                 if index == 1: #ks password request
                     pwd = getpass.getpass('Key storage password:')
                     session.sendline(pwd)
@@ -202,8 +202,14 @@ def reload_nodes(fri_client, nodes):
             raise Exception('Node %s does not reloaded!'%node.node_name)
 
 
+def remote_access(fri_client, nodes):
+    for node in nodes:
+        print '-> connecting to %s node...'%node.node_name
+        os.system('ssh %s@%s'%(FABNET_USERNAME, node.get_hostname()))
+
+
 if __name__ == '__main__':
-    usage = "usage: %prog upgrade|stop-nodes|start-nodes|reload-nodes [options]"
+    usage = "usage: %prog upgrade|stop-nodes|start-nodes|reload-nodes|remote-access [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('-n', '--nodes', dest="nodes",
                 help="list of nodes in pdsh style")
@@ -217,7 +223,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     command = args[0]
-    if command not in ['upgrade', 'stop-nodes', 'start-nodes', 'reload-nodes']:
+    if command not in ['upgrade', 'stop-nodes', 'start-nodes', 'reload-nodes', 'remote-access']:
         parser.error('Invalid command "%s"'%command)
 
     try:
@@ -237,6 +243,8 @@ if __name__ == '__main__':
             start_nodes(fri_client, nodes)
         elif command == 'reload-nodes':
             reload_nodes(fri_client, nodes)
+        elif command == 'remote-access':
+            remote_access(fri_client, nodes)
 
     except Exception, err:
         sys.stderr.write('Error: %s\n'%err)
