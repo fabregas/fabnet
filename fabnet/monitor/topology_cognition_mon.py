@@ -43,11 +43,12 @@ class TopologyCognitionMon(TopologyCognition):
         upper_neighbours = packet.ret_parameters.get('upper_neighbours', None)
         node_name = packet.ret_parameters.get('node_name', '')
         home_dir = packet.ret_parameters.get('home_dir', '')
+        node_type = packet.ret_parameters.get('node_type', '')
 
         if (node_address is None) or (superior_neighbours is None) or (upper_neighbours is None):
             raise Exception('TopologyCognition response packet is invalid! Packet: %s'%str(packet.to_dict()))
 
-        self.operator.update_node_info(node_address, node_name, home_dir, superior_neighbours, upper_neighbours)
+        self.operator.update_node_info(node_address, node_name, home_dir, node_type, superior_neighbours, upper_neighbours)
 
         if packet.ret_parameters.get('need_rebalance', False):
             self.operator.smart_neighbours_rebalance(node_address, superior_neighbours, upper_neighbours)

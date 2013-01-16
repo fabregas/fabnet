@@ -61,6 +61,7 @@ class TopologyCognition(OperationBase):
         ret_params['node_address'] = self.self_address
         ret_params['node_name'] = self.operator.get_node_name()
         ret_params['home_dir'] = self.operator.get_home_dir()
+        ret_params['node_type'] = self.operator.get_type()
         ret_params['upper_neighbours'] = upper_neighbours
         ret_params['superior_neighbours'] = superior_neighbours
 

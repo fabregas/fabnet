@@ -1,0 +1,217 @@
+#!/usr/bin/python
+"""
+Copyright (C) 2013 Konstantin Andrusenko
+    See the documentation for further information on copyrights,
+    or contact the author. All Rights Reserved.
+
+@author Konstantin Andrusenko
+@date January 18, 2013
+"""
+
+import os
+import sys
+import time
+import getpass
+
+PYPATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
+sys.path.insert(0, PYPATH)
+
+from optparse import OptionParser
+from ClusterShell.NodeSet import NodeSet
+
+from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
+from fabnet.utils.db_conn import DBOperationalException, DBEmptyResult
+from fabnet.monitor.constants import MONITOR_DB, UP, DOWN
+from fabnet.core.fri_base import FabnetPacketRequest
+from fabnet.core.fri_client import FriClient
+from fabnet.core.key_storage import init_keystore
+from fabnet.core.constants import RC_OK
+
+FABNET_REPO_URL = 'https://github.com/fabregas/fabnet.git'
+FABNET_USERNAME = 'nimbus'
+NODE_START_TIMEOUT = 10
+
+class Node:
+    def __init__(self, node_name, node_addr, home_dir, node_type):
+        self.node_name = node_name
+        self.node_addr = node_addr
+        self.home_dir = home_dir
+        self.node_type = node_type
+
+    def get_hostname(self):
+        return self.node_addr.split(':')[0]
+
+    def get_port(self):
+        return self.node_addr.split(':')[1]
+
+
+def parse_nodes(pdsh_nodes):
+    conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
+
+    if not pdsh_nodes:
+        try:
+            nodes = conn.select("SELECT node_name,node_address,home_dir,node_type FROM nodes_info WHERE status=%s", (UP,))
+        except DBEmptyResult:
+            raise Exception('No nodes found in database!')
+        return [Node(r[0], r[1], r[2], r[3]) for r in nodes]
+
+    hosts = NodeSet(pdsh_nodes)
+    ret_nodes = []
+    for host in hosts:
+        try:
+            nodeaddr, home_dir, node_type = conn.select_row("SELECT node_address,home_dir,node_type FROM nodes_info WHERE node_name=%s", (host,))
+        except DBEmptyResult:
+            raise Exception('Node "%s" does not found in database!'%host)
+        ret_nodes.append(Node(host, nodeaddr, home_dir, node_type))
+    return ret_nodes
+
+
+def init_fri_client(ks_path):
+    if ks_path:
+        ks_passwd = getpass.getpass('Key storage password: ')
+        key_storage = init_keystore(ks_path, ks_passwd)
+        cert = key_storage.get_node_cert()
+        ckey = key_storage.get_node_cert_key()
+    else:
+        cert = ckey = None
+
+    return FriClient(bool(cert), cert, ckey)
+
+
+def upgrade_nodes(fri_client, nodes):
+    packet = FabnetPacketRequest(method='UpgradeNode', sender=None, parameters={"origin_repo_url": FABNET_REPO_URL})
+
+    rcode, rmsg = fri_client.call(nodes[0].node_addr, packet)
+    if rcode != RC_OK:
+        raise Exception('UpgradeNode operation call on %s failed: %s'%(nodes[0].node_addr, rmsg))
+
+
+def request_node_statistic(fri_client, node_addr):
+    packet = FabnetPacketRequest(method='NodeStatistic', sender=None, sync=True)
+    resp = fri_client.call_sync(node_addr, packet)
+    if resp.ret_code != RC_OK:
+        return None
+    return resp.ret_parameters
+
+def get_random_online_node():
+    conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
+
+    try:
+        node = conn.select_row("SELECT node_name,node_address,home_dir,node_type FROM nodes_info WHERE status=%s ORDER BY RANDOM() LIMIT 1", (UP,))
+    except DBEmptyResult:
+        return None
+    return Node(node[0], node[1], node[2], node[3])
+
+
+def start_nodes(fri_client, nodes):
+    neighbour = None
+    for node in nodes:
+        print '-> starting %s node...'%node.node_name
+        stat = request_node_statistic(fri_client, node.node_addr)
+        if stat:
+            print 'Warning: node %s is already started'%node.node_name
+            continue
+
+        if not neighbour:
+            neighbour = get_random_online_node()
+            if not neighbour:
+                neighbour = 'init-fabnet'
+            else:
+                neighbour = neighbour.node_addr
+
+        command = 'FABNET_NODE_HOST="%s" FABNET_NODE_PORT="%s" FABNET_NODE_HOME="%s" python ~/fabnet_node/fabnet/bin/node-daemon start %s %s %s'% \
+                    (node.get_hostname(), node.get_port(), node.home_dir, neighbour, node.node_name, node.node_type)
+
+        rem_command = 'ssh %s@%s %s'%(FABNET_USERNAME, node.get_hostname(), command)
+        ret = os.system(rem_command)
+        if ret:
+            err = 'Cant execute "%s"!'%rem_command
+            if neighbour == 'init-fabnet':
+                raise Exception(err)
+            else:
+                print 'Warning: %s'%err
+                continue
+
+        for i in xrange(NODE_START_TIMEOUT):
+            time.sleep(1)
+            stat = request_node_statistic(fri_cleint, node.node_addr)
+            if stat:
+                print '-> node %s is started!'%node.node_name
+                break
+        else:
+            if neighbour == 'init-fabnet':
+                raise Exception('Init node %s (%s) does not started...'%(node.node_name, node.node_addr))
+            else:
+                print 'Warning: node %s (%s) does not started!'%(node.node_name, node.node_addr)
+                continue
+
+        neighbour = node.node_addr
+        time.sleep(1)
+
+
+def stop_nodes(fri_client, nodes):
+    for node in nodes:
+        print '-> stopping %s node...'%node.node_name
+
+        command = 'FABNET_NODE_HOME="%s" python ~/fabnet_node/fabnet/bin/node-daemon stop'% node.home_dir
+
+        rem_command = 'ssh %s@%s %s'%(FABNET_USERNAME, node.get_hostname(), command)
+        ret = os.system(rem_command)
+        if ret:
+            err = 'Cant execute "%s"!'%rem_command
+            print 'Warning: %s'%err
+
+def reload_nodes(fri_client, nodes):
+    for node in nodes:
+        print '-> reloading %s node...'%node.node_name
+
+        command = 'FABNET_NODE_HOME="%s" python ~/fabnet_node/fabnet/bin/node-daemon reload'% node.home_dir
+
+        rem_command = 'ssh %s@%s %s'%(FABNET_USERNAME, node.get_hostname(), command)
+        ret = os.system(rem_command)
+        if ret:
+            err = 'Cant execute "%s"!'%rem_command
+            print 'Warning: %s'%err
+        else:
+            time.sleep(1)
+
+
+if __name__ == '__main__':
+    usage = "usage: %prog upgrade|stop-nodes|start-nodes|reload-nodes [options]"
+    parser = OptionParser(usage=usage)
+    parser.add_option('-n', '--nodes', dest="nodes",
+                help="list of nodes in pdsh style")
+    parser.add_option('-k', '--key-storage', dest="ks_path",
+                help="path to key storage (that allow run administrative commands)")
+
+    (options, args) = parser.parse_args(sys.argv[1:])
+
+    if len(args) != 1:
+        parser.print_help()
+        sys.exit(1)
+
+    command = args[0]
+    if command not in ['upgrade', 'stop-nodes', 'start-nodes', 'reload-nodes']:
+        parser.error('Invalid command "%s"'%command)
+
+    try:
+        nodes = parse_nodes(options.nodes)
+        if not nodes:
+            raise Exception('No nodes found!')
+
+        fri_client = init_fri_client(options.ks_path)
+
+        if command == 'upgrade':
+            upgrade_nodes(fri_client, nodes)
+        elif command == 'stop-nodes':
+            stop_nodes(fri_client, nodes)
+        elif command == 'start-nodes':
+            start_nodes(fri_client, nodes)
+        elif command == 'reload-nodes':
+            reload_nodes(fri_client, nodes)
+
+    except Exception, err:
+        sys.stderr.write('Error: %s\n'%err)
+        sys.exit(1)
+
+
