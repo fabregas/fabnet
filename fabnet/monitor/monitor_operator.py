@@ -35,8 +35,8 @@ OPERLIST = [NotifyOperationMon, TopologyCognitionMon]
 class MonitorOperator(Operator):
     OPTYPE = 'Monitor'
 
-    def __init__(self, self_address, home_dir='/tmp/', certfile=None, is_init_node=False, node_name='unknown', config={}):
-        Operator.__init__(self, self_address, home_dir, certfile, is_init_node, node_name, config)
+    def __init__(self, self_address, home_dir='/tmp/', key_storage=None, is_init_node=False, node_name='unknown', config={}):
+        Operator.__init__(self, self_address, home_dir, key_storage, is_init_node, node_name, config)
 
         Config.update_config(DEFAULT_MONITOR_CONFIG)
         Config.update_config(config)
@@ -44,7 +44,14 @@ class MonitorOperator(Operator):
         self.__monitor_db_path = "dbname=%s user=postgres"%MONITOR_DB
         self._conn = self._init_db()
 
-        self.__collect_nodes_stat_thread = CollectNodeStatisticsThread(self)
+        if key_storage:
+            cert = key_storage.get_node_cert()
+            ckey = key_storage.get_node_cert_key()
+        else:
+            cert = ckey = None
+        client = FriClient(bool(cert), cert, ckey)
+
+        self.__collect_nodes_stat_thread = CollectNodeStatisticsThread(self, client)
         self.__collect_nodes_stat_thread.setName('%s-CollectNodeStatisticsThread'%self.node_name)
         self.__collect_nodes_stat_thread.start()
 
@@ -142,15 +149,15 @@ class MonitorOperator(Operator):
 
 
 class CollectNodeStatisticsThread(threading.Thread):
-    def __init__(self, operator):
+    def __init__(self, operator, client):
         threading.Thread.__init__(self)
         self.operator = operator
+        self.client = client
         self.stopped = threading.Event()
 
     def run(self):
         logger.info('Thread started!')
 
-        client = FriClient()
         while not self.stopped.is_set():
             dt = 0
             try:
@@ -162,7 +169,7 @@ class CollectNodeStatisticsThread(threading.Thread):
                     logger.debug('Get statistic from %s'%nodeaddr)
 
                     packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
-                    ret_packet = client.call_sync(nodeaddr, packet_obj)
+                    ret_packet = self.client.call_sync(nodeaddr, packet_obj)
                     if ret_packet.ret_code:
                         self.operator.change_node_status(nodeaddr, DOWN)
                     else:
