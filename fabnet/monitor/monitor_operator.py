@@ -51,16 +51,21 @@ class MonitorOperator(Operator):
             cert = ckey = None
         client = FriClient(bool(cert), cert, ckey)
 
-        self.__collect_nodes_stat_thread = CollectNodeStatisticsThread(self, client)
-        self.__collect_nodes_stat_thread.setName('%s-CollectNodeStatisticsThread'%self.node_name)
-        self.__collect_nodes_stat_thread.start()
+        self.__collect_up_nodes_stat_thread = CollectNodeStatisticsThread(self, client, UP)
+        self.__collect_up_nodes_stat_thread.setName('%s-UP-CollectNodeStatisticsThread'%self.node_name)
+        self.__collect_up_nodes_stat_thread.start()
+
+        self.__collect_dn_nodes_stat_thread = CollectNodeStatisticsThread(self, client, DOWN)
+        self.__collect_dn_nodes_stat_thread.setName('%s-DN-CollectNodeStatisticsThread'%self.node_name)
+        self.__collect_dn_nodes_stat_thread.start()
 
         self.__discovery_topology_thrd = DiscoverTopologyThread(self)
         self.__discovery_topology_thrd.setName('%s-DiscoverTopologyThread'%self.node_name)
         self.__discovery_topology_thrd.start()
 
     def stop_inherited(self):
-        self.__collect_nodes_stat_thread.stop()
+        self.__collect_up_nodes_stat_thread.stop()
+        self.__collect_dn_nodes_stat_thread.stop()
         self.__discovery_topology_thrd.stop()
 
         self.__collect_nodes_stat_thread.join()
@@ -110,9 +115,9 @@ class MonitorOperator(Operator):
         return conn
 
 
-    def get_nodes_list(self):
+    def get_nodes_list(self, status=UP):
         try:
-            return self._conn.select_col("SELECT node_address FROM nodes_info WHERE status=%s", (UP,))
+            return self._conn.select_col("SELECT node_address FROM nodes_info WHERE status=%s", (status,))
         except DBEmptyResult:
             return []
 
@@ -149,10 +154,11 @@ class MonitorOperator(Operator):
 
 
 class CollectNodeStatisticsThread(threading.Thread):
-    def __init__(self, operator, client):
+    def __init__(self, operator, client, check_status=UP):
         threading.Thread.__init__(self)
         self.operator = operator
         self.client = client
+        self.check_status = check_status
         self.stopped = threading.Event()
 
     def run(self):
@@ -162,23 +168,22 @@ class CollectNodeStatisticsThread(threading.Thread):
             dt = 0
             try:
                 t0 = datetime.now()
-                logger.info('Collecting nodes statistic...')
-                nodeaddrs = self.operator.get_nodes_list()
+                logger.debug('Collecting %s nodes statistic...'%self.check_status)
+                nodeaddrs = self.operator.get_nodes_list(self.check_status)
 
                 for nodeaddr in nodeaddrs:
                     logger.debug('Get statistic from %s'%nodeaddr)
 
                     packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
                     ret_packet = self.client.call_sync(nodeaddr, packet_obj)
-                    if ret_packet.ret_code:
+                    if self.check_status == UP and ret_packet.ret_code:
                         self.operator.change_node_status(nodeaddr, DOWN)
                     else:
                         stat = json.dumps(ret_packet.ret_parameters)
                         self.operator.update_node_stat(nodeaddr, stat)
 
-
                 dt = total_seconds(datetime.now() - t0)
-                logger.info('Nodes stat is collected. Processed secs: %s'%dt)
+                logger.debug('Nodes (with status=%s) stat is collected. Processed secs: %s'%(self.check_status, dt))
             except Exception, err:
                 logger.error(str(err))
             finally:
