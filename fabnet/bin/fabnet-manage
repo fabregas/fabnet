@@ -18,6 +18,8 @@ sys.path.insert(0, PYPATH)
 
 from optparse import OptionParser
 from ClusterShell.NodeSet import NodeSet
+import pexpect
+import pxssh
 
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.utils.db_conn import DBOperationalException, DBEmptyResult
@@ -30,6 +32,7 @@ from fabnet.core.constants import RC_OK
 FABNET_REPO_URL = 'https://github.com/fabregas/fabnet.git'
 FABNET_USERNAME = 'nimbus'
 NODE_START_TIMEOUT = 10
+LOG_FILE = '/tmp/fabnet-manage.log'
 
 class Node:
     def __init__(self, node_name, node_addr, home_dir, node_type):
@@ -78,6 +81,25 @@ def init_fri_client(ks_path):
     return FriClient(bool(cert), cert, ckey)
 
 
+def call_remote(hostname, login, commands, password=''):
+    session = pxssh.pxssh()
+    session.logfile_read = open(LOG_FILE, 'a')
+    session.login(hostname, login, password, auto_prompt_reset=False)
+    try:
+        for command in commands:
+            session.sendline(command)
+            try:
+                index = session.expect(['[#$]', 'Key storage password:'])
+                if index == 1: #ks password request
+                    pwd = getpass.getpass('Key storage password:')
+                    session.sendline(pwd)
+                    session.expect('[#$]')
+            except pexpect.TIMEOUT, err:
+                raise Exception('Command "%s" is timeouted!'%command)
+    finally:
+        session.logout()
+
+
 def upgrade_nodes(fri_client, nodes):
     packet = FabnetPacketRequest(method='UpgradeNode', sender=None, parameters={"origin_repo_url": FABNET_REPO_URL})
 
@@ -122,10 +144,9 @@ def start_nodes(fri_client, nodes):
         command = 'FABNET_NODE_HOST="%s" FABNET_NODE_PORT="%s" FABNET_NODE_HOME="%s" python /home/%s/fabnet_node/fabnet/bin/node-daemon start %s %s %s'% \
                     (node.get_hostname(), node.get_port(), node.home_dir, FABNET_USERNAME, neighbour, node.node_name, node.node_type)
 
-        rem_command = 'ssh %s@%s %s'%(FABNET_USERNAME, node.get_hostname(), command)
-        ret = os.system(rem_command)
-        if ret:
-            err = 'Cant execute "%s"!'%rem_command
+        try:
+            call_remote(node.get_hostname(), FABNET_USERNAME, [command])
+        except Exception, err:
             if neighbour == 'init-fabnet':
                 raise Exception(err)
             else:
@@ -154,26 +175,31 @@ def stop_nodes(fri_client, nodes):
         print '-> stopping %s node...'%node.node_name
 
         command = 'FABNET_NODE_HOME="%s" python /home/%s/fabnet_node/fabnet/bin/node-daemon stop'% (node.home_dir, FABNET_USERNAME)
-
-        rem_command = 'ssh %s@%s %s'%(FABNET_USERNAME, node.get_hostname(), command)
-        ret = os.system(rem_command)
-        if ret:
-            err = 'Cant execute "%s"!'%rem_command
+        try:
+            call_remote(node.get_hostname(), FABNET_USERNAME, [command])
+        except Exception, err:
             print 'Warning: %s'%err
 
 def reload_nodes(fri_client, nodes):
     for node in nodes:
         print '-> reloading %s node...'%node.node_name
 
-        command = 'FABNET_NODE_HOME="%s" python /home/%s/fabnet_node/fabnet/bin/node-daemon reload'% (node.home_dir, FABNET_USERNAME)
+        stat = request_node_statistic(fri_client, node.node_addr)
+        if not stat:
+            print 'Warning: node %s does not started. skipping...'%node.node_name
+            continue
 
-        rem_command = 'ssh %s@%s %s'%(FABNET_USERNAME, node.get_hostname(), command)
-        ret = os.system(rem_command)
-        if ret:
-            err = 'Cant execute "%s"!'%rem_command
-            print 'Warning: %s'%err
-        else:
+        command = 'FABNET_NODE_HOME="%s" python /home/%s/fabnet_node/fabnet/bin/node-daemon reload'% (node.home_dir, FABNET_USERNAME)
+        call_remote(node.get_hostname(), FABNET_USERNAME, [command])
+
+        for i in xrange(NODE_START_TIMEOUT):
             time.sleep(1)
+            stat = request_node_statistic(fri_client, node.node_addr)
+            if stat:
+                print '-> node %s is reloaded!'%node.node_name
+                break
+        else:
+            raise Exception('Node %s does not reloaded!'%node.node_name)
 
 
 if __name__ == '__main__':
@@ -200,6 +226,8 @@ if __name__ == '__main__':
             raise Exception('No nodes found!')
 
         fri_client = init_fri_client(options.ks_path)
+
+        open(LOG_FILE,'w').write('#---------- fabnet-manage remote calls log -----\n\n')
 
         if command == 'upgrade':
             upgrade_nodes(fri_client, nodes)

@@ -177,13 +177,14 @@ class CollectNodeStatisticsThread(threading.Thread):
                     packet_obj = FabnetPacketRequest(method='NodeStatistic', sync=True)
                     ret_packet = self.client.call_sync(nodeaddr, packet_obj)
                     if self.check_status == UP and ret_packet.ret_code:
+                        logger.warning('Node with address %s does not response... Details: %s'%(nodeaddr, ret_packet))
                         self.operator.change_node_status(nodeaddr, DOWN)
                     else:
                         stat = json.dumps(ret_packet.ret_parameters)
                         self.operator.update_node_stat(nodeaddr, stat)
 
                 dt = total_seconds(datetime.now() - t0)
-                logger.debug('Nodes (with status=%s) stat is collected. Processed secs: %s'%(self.check_status, dt))
+                logger.info('Nodes (with status=%s) stat is collected. Processed secs: %s'%(self.check_status, dt))
             except Exception, err:
                 logger.error(str(err))
             finally:
