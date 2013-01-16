@@ -13,7 +13,7 @@ DEFAULT_HOME = os.path.abspath(os.path.join(os.environ.get('HOME', '/tmp'), 'fab
 
 
 def usage():
-    print('Usage: %s start <neighbour node>[:port] <node name> <node type> [<key storage path>]'%sys.argv[0])
+    print('Usage: %s start <neighbour node>[:port] <node name> <node type>'%sys.argv[0])
     print('           or')
     print('       %s reload'%sys.argv[0])
     print('           or')
@@ -21,6 +21,7 @@ def usage():
     print('           or')
     print('       %s status'%sys.argv[0])
     print('\n   You can redefine following environment variables: FABNET_NODE_HOST, FABNET_NODE_PORT, FABNET_NODE_HOME')
+    print('   If you want start secured fabnet node, home directory should contain key storage file named in format *.ks')
 
 
 def stop_node():
@@ -83,14 +84,21 @@ if __name__ == '__main__':
 
         node_name = sys.argv[3]
         node_type = sys.argv[4]
-        keystore = ''
-        if len(sys.argv) > 5:
-            keystore = sys.argv[5]
 
         ip_addr = os.environ.get('FABNET_NODE_HOST', '0.0.0.0')
         port = os.environ.get('FABNET_NODE_PORT', DEFAULT_PORT)
         home_dir = os.environ.get('FABNET_NODE_HOME', DEFAULT_HOME)
         node_address = '%s:%s'%(ip_addr, port)
+
+        if not os.path.exists(home_dir):
+            print('Error! Home directory %s does not exists'%home_dir)
+            sys.exit(1)
+
+        keystore = ''
+        for fname in os.listdir(home_dir):
+            if fname.endswith('.ks'):
+                keystore = os.path.join(home_dir, fname)
+                break
 
         start_node(node_address, neighbour, node_name, home_dir, node_type, keystore)
     elif sys.argv[1] == 'stop':

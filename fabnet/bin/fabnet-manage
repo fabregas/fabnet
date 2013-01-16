@@ -134,7 +134,7 @@ def start_nodes(fri_client, nodes):
 
         for i in xrange(NODE_START_TIMEOUT):
             time.sleep(1)
-            stat = request_node_statistic(fri_cleint, node.node_addr)
+            stat = request_node_statistic(fri_client, node.node_addr)
             if stat:
                 print '-> node %s is started!'%node.node_name
                 break

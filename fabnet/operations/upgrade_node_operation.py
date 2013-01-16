@@ -69,6 +69,7 @@ class UpgradeNodeOperation(OperationBase):
             f_upgrage_log.write('='*80+'\n')
 
             os.chdir(GIT_HOME)
+            os.system('git checkout -- .') #clear local changes...
             os.system('git config --local --replace-all remote.origin.url %s'%origin_url)
 
             ret, cout, cerr = run_command_ex(['git', 'pull'])
