@@ -12,7 +12,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 import threading
 import pickle
 import copy
-from sha import sha
+import hashlib
 from datetime import datetime
 
 from fabnet.utils.logger import oper_logger as logger
@@ -64,7 +64,7 @@ class HashRangesTable:
     def get_checksum(self):
         self.__lock.acquire()
         try:
-            checksum = sha()
+            checksum = hashlib.sha1()
             for range_obj in self.__ranges:
                 checksum.update(range_obj.to_str())
             return checksum.hexdigest()
