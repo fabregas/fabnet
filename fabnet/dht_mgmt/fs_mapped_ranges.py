@@ -91,8 +91,10 @@ class FileBasedChunks(FriBinaryData):
 
 
 class TmpFile:
-    def __init__(self, f_path, data):
+    def __init__(self, f_path, data, seek=0):
         self.__f_path = f_path
+        self.__checksum = hashlib.sha1()
+
         if type(data) not in (list, tuple):
             data = [data]
 
@@ -102,15 +104,18 @@ class TmpFile:
             raise FSHashRangesException('Cant create tmp file. Details: %s'%err)
 
         try:
+            if seek:
+                fobj.write('\x00'*seek)
+
             for data_block in data:
                 if type(data_block) == str:
-                    fobj.write(data_block)
+                    self.__int_write(fobj, data_block)
                 else:
                     while True:
                         chunk = data_block.get_next_chunk()
                         if chunk is None:
                             break
-                        fobj.write(chunk)
+                        self.__int_write(fobj, chunk)
         except IOError, err:
             raise FSHashRangesException('Cant save tmp data to file system. Details: %s'%err)
         except Exception, err:
@@ -118,8 +123,31 @@ class TmpFile:
         finally:
             fobj.close()
 
+    def __int_write(self, fobj, data):
+        self.__checksum.update(data)
+        fobj.write(data)
+
     def __del__(self):
         self.remove()
+
+    def checksum(self):
+        return self.__checksum.hexdigest()
+
+    def write(self, data, seek=None):
+        try:
+            fobj = open(self.__f_path, 'r+b')
+        except IOError, err:
+            raise FSHashRangesException('Cant create tmp file. Details: %s'%err)
+
+        try:
+            if seek is not None:
+                fobj.seek(seek, 0)
+            else:
+                fobj.seek(0, 2) #seek to EOF
+
+            self.__int_write(fobj, data)
+        finally:
+            fobj.close()
 
     def file_path(self):
         return self.__f_path

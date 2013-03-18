@@ -52,12 +52,8 @@ class ClientPutOperation(OperationBase):
         if key is not None:
             self._validate_key(key)
 
-        checksum = packet.parameters.get('checksum', None)
         replica_count = int(packet.parameters.get('replica_count', MIN_REPLICA_COUNT))
         wait_writes_count = int(packet.parameters.get('wait_writes_count', 1))
-        if checksum is None:
-            return FabnetPacketResponse(ret_code=RC_ERROR,
-                    ret_message='Checksum does not found in request packet!')
 
         if wait_writes_count > (replica_count+1):
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Cant waiting more replicas than saving!')
@@ -70,9 +66,13 @@ class ClientPutOperation(OperationBase):
         errors = []
         local_save = None
         keys = KeyUtils.generate_new_keys(self.node_name, replica_count, prime_key=key)
+
         tempfile_path = self.operator.get_tempfile()
+        tempfile = TmpFile(tempfile_path, packet.binary_data, seek=DataBlockHeader.HEADER_LEN)
+        checksum = tempfile.checksum()
         header = DataBlockHeader.pack(keys[0], replica_count, checksum, packet.session_id)
-        tempfile = TmpFile(tempfile_path, [header, packet.binary_data])
+        tempfile.write(header, seek=0)
+
         for key in keys:
             h_range = self.operator.find_range(key)
             if not h_range:
@@ -95,7 +95,6 @@ class ClientPutOperation(OperationBase):
 
             is_replica = True
 
-
         try:
             if local_save:
                 key, is_replica = local_save
@@ -109,6 +108,6 @@ class ClientPutOperation(OperationBase):
         if wait_writes_count > succ_count:
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Writing data error! Details: \n' + '\n'.join(errors))
 
-        return FabnetPacketResponse(ret_parameters={'key': keys[0]})
+        return FabnetPacketResponse(ret_parameters={'key': keys[0], 'checksum': checksum})
 
 
