@@ -116,7 +116,13 @@ class FriConnectionHandler(threading.Thread):
         while True:
             try:
                 (sock, addr) = self.sock.accept()
+            except Exception, err:
+                logger.write = logger.debug
+                traceback.print_exc(file=logger)
+                logger.error('[FriConnectionHandler.accept crash] %s'%err)
+                break
 
+            try:
                 if self.stopped.is_set():
                     sock.close()
                     break
@@ -128,7 +134,7 @@ class FriConnectionHandler(threading.Thread):
             except Exception, err:
                 logger.write = logger.debug
                 traceback.print_exc(file=logger)
-                logger.error('[FriConnectionHandler.accept] %s'%err)
+                logger.error('[FriConnectionHandler.run] %s'%err)
 
         if self.sock:
             self.sock.shutdown(socket.SHUT_RDWR)

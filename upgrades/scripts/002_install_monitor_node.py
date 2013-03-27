@@ -21,6 +21,10 @@ class InstallMonitor(BaseFabnetUpgradeScript):
         self.emerge_install('psycopg')
         self.print_notice()
 
+    def upgrade_deb(self, osver, is64bit):
+        self.aptget_install('postgresql')
+        self.aptget_install('python-psycopg2')
+
 
 if __name__ == '__main__':
     sys.exit(InstallMonitor().run())

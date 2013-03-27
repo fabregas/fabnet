@@ -107,6 +107,13 @@ class BaseFabnetUpgradeScript:
         if ret:
             raise Exception('"%s" failed!'%cmd)
 
+    def aptget_install(self, package):
+        cmd = 'sudo apt-get install -y %s'%package
+        print(cmd)
+        ret = os.system(cmd)
+        if ret:
+            raise Exception('"%s" failed!'%cmd)
+
     def upgrade_win(self, osver, is64bit):
         pass
 

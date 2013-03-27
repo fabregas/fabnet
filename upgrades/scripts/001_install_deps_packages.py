@@ -14,6 +14,10 @@ class InstallDeps(BaseFabnetUpgradeScript):
         self.emerge_install('pysqlite')
         self.emerge_install('m2crypto')
 
+    def upgrade_deb(self, osver, is64bit):
+        self.aptget_install('python-m2crypto')
+        self.aptget_install('python-pysqlite2')
+
 
 
 if __name__ == '__main__':
