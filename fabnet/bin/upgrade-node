@@ -4,6 +4,7 @@ import os
 import sys
 import subprocess
 import json
+import copy
 
 # UPGRADE_VERSION
 # fabnet/
@@ -64,8 +65,9 @@ def get_next_upgrade_script(cur_ver):
 
 
 def run_script(script_name, node_type):
+    env = copy.copy(os.environ)
     proc = subprocess.Popen(['python', os.path.join(SCRIPTS_DIR, script_name)], \
-                    env={'PYTHONPATH': PYPATH, 'NODE_TYPE': node_type})
+                    env=env.update({'PYTHONPATH': PYPATH, 'NODE_TYPE': node_type}))
 
     cout, cerr = proc.communicate()
 
