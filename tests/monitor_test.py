@@ -103,11 +103,12 @@ class TestMonitorNode(unittest.TestCase):
                 raise err
 
     def test00_initnet(self):
+        os.system('dropdb -U postgres %s'%MONITOR_DB)
+        self.create_net(4)
+
         conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
         conn.select('select 1')
         conn.close()
-        os.system('dropdb -U postgres %s'%MONITOR_DB)
-        self.create_net(4)
 
     def test99_stopnet(self):
         for process in PROCESSES:

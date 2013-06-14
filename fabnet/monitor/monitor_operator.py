@@ -68,7 +68,6 @@ class MonitorOperator(Operator):
         self.__collect_dn_nodes_stat_thread.stop()
         self.__discovery_topology_thrd.stop()
 
-        self.__collect_nodes_stat_thread.join()
         self.__discovery_topology_thrd.join()
         self._conn.close()
 

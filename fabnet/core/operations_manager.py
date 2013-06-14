@@ -101,7 +101,7 @@ class OperationsManager:
                             ret_code=1, ret_message= '[OpPROC] %s'%err)
             logger.write = logger.debug
             traceback.print_exc(file=logger)
-            logger.error('[Operator.process] %s'%err)
+            logger.error('[OperationsManager.process] %s'%err)
             return err_packet
         finally:
             if self.__op_stat is not None and t0:

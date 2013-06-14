@@ -121,7 +121,6 @@ class WorkersManager(threading.Thread):
                 ret_message = 'run() error: %s' % err
                 logger.error(ret_message)
 
-        logger.info('workers manager is stopped!')
 
     def __spawn_worker(self):
         logger.debug('starting new worker')
@@ -188,6 +187,7 @@ class WorkersManager(threading.Thread):
         finally:
             self.__lock.release()
 
+        self.join()
         logger.info('workers manager for %s is stopped!'%self.worker_class.__name__)
 
 

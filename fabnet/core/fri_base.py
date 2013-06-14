@@ -40,6 +40,9 @@ class FriBinaryData:
             data += chunk
         return data
 
+    def close(self):
+        pass
+
 class RamBasedBinaryData(FriBinaryData):
     def __init__(self, data, chunk_size=None):
         if not chunk_size:
@@ -154,6 +157,10 @@ class FabnetPacket:
         self.binary_chunk_idx = packet.get('binary_chunk_idx', 0)
         self.binary_chunk_cnt = packet.get('binary_chunk_cnt', 0)
 
+    def __del__(self):
+        if isinstance(self.binary_data, FriBinaryData):
+            self.binary_data.close()
+
     def validate(self):
         """This method may be implemented
            in inherited class for packet validation
@@ -239,8 +246,9 @@ class FabnetPacketRequest(FabnetPacket):
     def __repr__(self):
         sync_s = 'sync' if self.sync else 'async'
         cast_s = 'multicast' if self.is_multicast else 'unicast'
-        return '{%s}[%s][%s][%s] %s %s'%(self.message_id, self.sender, \
-                    sync_s, cast_s, self.method, str(self.parameters))
+        h_bin = '[HAS_BIN]' if self.binary_data else ''
+        return '{%s}[%s][%s][%s]%s %s %s'%(self.message_id, self.sender, \
+                    sync_s, cast_s, h_bin, self.method, str(self.parameters))
 
 
 class FabnetPacketResponse(FabnetPacket):

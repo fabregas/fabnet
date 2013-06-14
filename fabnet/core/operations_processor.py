@@ -51,8 +51,7 @@ class OperationsProcessor(ProcessBasedFriWorker):
                 role = self.check_session(socket_processor, packet.session_id, is_chunked)
 
             if not (packet.is_request and packet.sync):
-                socket_processor.send_packet(self.ok_packet)
-                socket_processor.close_socket()
+                socket_processor.close_socket(send_on_close=self.ok_packet)
 
             if packet.is_request:
                 ret_packet = self.oper_manager.process(packet, role)
