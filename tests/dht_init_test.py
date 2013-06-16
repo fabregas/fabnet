@@ -52,6 +52,7 @@ class TestServerThread(threading.Thread):
         self.neighbour = neighbour
         self.config = config
         self.is_monitor = is_monitor
+        self.__lock = threading.Lock()
 
     def run(self):
         address = '127.0.0.1:%s'%self.port
@@ -72,9 +73,12 @@ class TestServerThread(threading.Thread):
                     ks_path=None, ks_passwd=None, node_type=node_type, config=config)
         node.start(self.neighbour)
 
-        self.operator = OperatorClient('node_%s'%self.port)
-
-        self.stopped = False
+        self.__lock.acquire()
+        try:
+            self.operator = OperatorClient('node_%s'%self.port)
+            self.stopped = False
+        finally:
+            self.__lock.release()
 
         while not self.stopped:
             time.sleep(0.1)
@@ -146,6 +150,15 @@ class TestServerThread(threading.Thread):
     def get_replicas_dir(self):
         return os.path.join(self.home_dir, 'dht_range/replica_data')
 
+    def get_status(self):
+        self.__lock.acquire()
+        try:
+            if self.operator is None:
+                return None
+            return self.operator.get_status()
+        finally:
+            self.__lock.release()
+
 
 class TestDHTInitProcedure(unittest.TestCase):
     def test01_dht_init(self):
@@ -165,8 +178,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             time.sleep(1)
             server1 = TestServerThread(1987, home2, neighbour='127.0.0.1:1986')
             server1.start()
-            time.sleep(3)
-            self.assertEqual(server1.operator.get_status(), DS_NORMALWORK)
+            time.sleep(.2)
+            self.__wait_oper_status(server1, DS_NORMALWORK)
 
             node86_stat = server.get_stat()
             node87_stat = server1.get_stat()
@@ -227,6 +240,12 @@ class TestDHTInitProcedure(unittest.TestCase):
             if server1:
                 server1.stop()
 
+    def __wait_oper_status(self, server, status):
+        for i in xrange(10):
+            if server.get_status() == status:
+                return
+            time.sleep(.5)
+        self.assertEqual(server.get_status(), status)
 
     def test02_dht_init_fail(self):
         server = server1 = None
@@ -257,8 +276,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             server.operator.join_subranges()
             time.sleep(.2)
             server1.operator.update_config({'ALLOW_USED_SIZE_PERCENTS':70})
-            time.sleep(1.5)
-            self.assertEqual(server1.operator.get_status(), DS_NORMALWORK)
+            self.__wait_oper_status(server1, DS_NORMALWORK)
 
             data_block = 'Hello, fabregas! '*100
             checksum = hashlib.sha1(data_block).hexdigest()
@@ -290,8 +308,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             time.sleep(1)
             server1 = TestServerThread(1987, home2, neighbour='127.0.0.1:1986',  config={'DHT_CYCLE_TRY_COUNT':10, 'ALLOW_USED_SIZE_PERCENTS':70})
             server1.start()
-            time.sleep(2.5)
-            self.assertEqual(server1.operator.get_status(), DS_NORMALWORK)
+            self.__wait_oper_status(server1, DS_NORMALWORK)
 
             print 'REMOVING 1987 NODE RANGE FROM DHT'
             rm_list = [(MAX_HASH/2+1, MAX_HASH, '127.0.0.1:1987')]
@@ -299,9 +316,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             packet_obj = FabnetPacketRequest(method='UpdateHashRangeTable', sender='127.0.0.1:1986', parameters=params)
             server.operator.call_network(packet_obj)
 
-            time.sleep(2.5)
-            self.assertEqual(server.operator.get_status(), DS_NORMALWORK)
-            self.assertEqual(server1.operator.get_status(), DS_NORMALWORK)
+            self.__wait_oper_status(server, DS_NORMALWORK)
+            self.__wait_oper_status(server1, DS_NORMALWORK)
 
             table_dump = server1.operator.dump_ranges_table()
             table = HashRangesTable()
@@ -333,9 +349,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             time.sleep(1)
             server1 = TestServerThread(1987, home2, neighbour='127.0.0.1:1986')
             server1.start()
-            time.sleep(2.5)
-            self.assertEqual(server.operator.get_status(), DS_NORMALWORK)
-            self.assertEqual(server1.operator.get_status(), DS_NORMALWORK)
+            self.__wait_oper_status(server, DS_NORMALWORK)
+            self.__wait_oper_status(server1, DS_NORMALWORK)
 
             step = MAX_HASH/2/100
             for i in range(100):
@@ -348,18 +363,18 @@ class TestDHTInitProcedure(unittest.TestCase):
 
             step = MAX_HASH/2/10
             for i in range(10):
-                data = ''.join(random.choice(string.letters) for i in xrange(7*1024))
+                data = ''.join(random.choice(string.letters) for i in xrange(8*1024))
                 server.put_data_block(data, i*step, is_replica=True)
 
             node86_stat = server.get_stat()
             node87_stat = server1.get_stat()
 
-            self.assertEqual(node86_stat['DHTInfo']['free_size_percents'] < 10, True)
+            self.assertEqual(node86_stat['DHTInfo']['free_size_percents'] < 10, True, node86_stat['DHTInfo']['free_size_percents'] )
             self.assertEqual(node87_stat['DHTInfo']['free_size_percents'] > 90, True)
             time.sleep(1.5)
             node86_stat = server.get_stat()
             node87_stat = server1.get_stat()
-            self.assertEqual(node86_stat['DHTInfo']['free_size_percents'] > 15, True)
+            self.assertEqual(node86_stat['DHTInfo']['free_size_percents'] > 15, True, node86_stat['DHTInfo']['free_size_percents'] )
             self.assertEqual(node87_stat['DHTInfo']['free_size_percents'] < 90, True)
         finally:
             if server:
@@ -395,14 +410,10 @@ class TestDHTInitProcedure(unittest.TestCase):
             time.sleep(1)
             monitor = TestServerThread(1990, monitor_home, is_monitor=True, neighbour='127.0.0.1:1986')
             monitor.start()
-            time.sleep(2)
+            time.sleep(1.5)
 
-            for i in range(10):
-                if server1.operator.get_status() == DS_NORMALWORK:
-                    break
-                time.sleep(1)
-            else:
-                raise Exception('Server1 does not started!')
+            self.__wait_oper_status(server, DS_NORMALWORK)
+            self.__wait_oper_status(server1, DS_NORMALWORK)
 
             data = 'Hello, fabregas!'*10
             data_key = server.put(data)
@@ -511,11 +522,14 @@ class TestDHTInitProcedure(unittest.TestCase):
         os.system('sudo mkdir /tmp/mnt_%s'%name)
         os.system('sudo mount -t ext2 %s /tmp/mnt_%s'%(dev, name))
         os.system('sudo chmod 777 /tmp/mnt_%s -R'%name)
+        os.system('rm -rf /tmp/mnt_%s/*'%name)
         return '/tmp/mnt_%s'%name
 
     def _destroy_fake_hdd(self, name, dev='/dev/loop0'):
-        os.system('sudo umount /tmp/mnt_%s'%name)
-        os.system('sudo losetup -d %s'%dev)
+        ret = os.system('sudo umount /tmp/mnt_%s'%name)
+        self.assertEqual(ret, 0, 'destroy_fake_hdd failed')
+        ret = os.system('sudo losetup -d %s'%dev)
+        self.assertEqual(ret, 0, 'destroy_fake_hdd failed')
         os.system('sudo rm /tmp/%s'%name)
         os.system('sudo rm -rf /tmp/mnt_%s'%name)
 

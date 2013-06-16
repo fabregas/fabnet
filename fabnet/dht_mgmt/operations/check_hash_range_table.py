@@ -15,7 +15,7 @@ import time
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE, RC_DONT_STARTED
-from fabnet.dht_mgmt.constants import RC_NEED_UPDATE, DS_INITIALIZE
+from fabnet.dht_mgmt.constants import RC_NEED_UPDATE, DS_INITIALIZE, DS_DESTROYING 
 from fabnet.utils.logger import oper_logger as logger
 
 class CheckHashRangeTableOperation(OperationBase):
@@ -107,7 +107,12 @@ class CheckHashRangeTableOperation(OperationBase):
                 or None for disabling packet resending
         """
         logger.debug('CheckHashRangeTable response from %s: %s %s'%(packet.from_node, packet.ret_code, packet.ret_message))
+        if self.operator.get_status() == DS_DESTROYING:
+            return
+
         if packet.ret_code == RC_DONT_STARTED:
+            if self.self_address == packet.from_node:
+                return
             self.operator.remove_node_range(packet.from_node)
             time.sleep(self.operator.get_config_value('WAIT_DHT_TABLE_UPDATE'))
             self.operator.check_near_range()

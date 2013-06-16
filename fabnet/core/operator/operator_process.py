@@ -65,12 +65,12 @@ class OperatorWorker(ThreadBasedAbstractWorker):
 
 class OperatorClient:
     def __init__(self, server_name, authkey=None):
-        self.__authket = authkey
+        self.__authkey = authkey
         self.__server_name = server_name
 
     def __getattr__(self, method):
         if method.startswith('_'):
-            return None
+            raise AttributeError('no attribute "%s" found!'%method)
 
         return lambda *args: self.__call(method, args)
 

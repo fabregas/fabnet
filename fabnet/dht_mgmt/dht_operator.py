@@ -104,7 +104,7 @@ class DHTOperator(Operator):
         return stat
 
     def _move_range(self, range_obj):
-        logger.info('Node %s (it me) went from DHT. Updating hash range table on network...'%range_obj.node_address)
+        logger.info('Node %s went from DHT. Updating hash range table on network...'%range_obj.node_address)
         rm_lst = [(range_obj.start, range_obj.end, range_obj.node_address)]
         parameters = {'append': [], 'remove': rm_lst}
 
@@ -129,7 +129,6 @@ class DHTOperator(Operator):
 
         self.__check_hash_table_thread.stop()
         self.__monitor_dht_ranges.stop()
-
         time.sleep(Config.DHT_STOP_TIMEOUT)
         self.__check_hash_table_thread.join()
         self.__monitor_dht_ranges.join()
@@ -303,45 +302,49 @@ class DHTOperator(Operator):
         if failed_range:
             return
 
-        self_dht_range = self.get_dht_range()
+        self._lock()
+        try:
+            self_dht_range = self.get_dht_range()
 
-        if self_dht_range.get_end() != MAX_HASH:
-            next_range = self.ranges_table.find(self_dht_range.get_end()+1)
-            if not next_range:
-                next_exists_range = self.ranges_table.find_next(self_dht_range.get_end()-1)
-                if next_exists_range:
-                    end = next_exists_range.start-1
-                else:
-                    end = MAX_HASH
-                new_dht_range = self_dht_range.extend(self_dht_range.get_end()+1, end)
-                self.update_dht_range(new_dht_range)
+            if self_dht_range.get_end() != MAX_HASH:
+                next_range = self.ranges_table.find(self_dht_range.get_end()+1)
+                if not next_range:
+                    next_exists_range = self.ranges_table.find_next(self_dht_range.get_end()-1)
+                    if next_exists_range:
+                        end = next_exists_range.start-1
+                    else:
+                        end = MAX_HASH
+                    new_dht_range = self_dht_range.extend(self_dht_range.get_end()+1, end)
+                    self.update_dht_range(new_dht_range)
 
-                rm_lst = [(self_dht_range.get_start(), self_dht_range.get_end(), self.self_address)]
-                append_lst = [(new_dht_range.get_start(), new_dht_range.get_end(), self.self_address)]
+                    rm_lst = [(self_dht_range.get_start(), self_dht_range.get_end(), self.self_address)]
+                    append_lst = [(new_dht_range.get_start(), new_dht_range.get_end(), self.self_address)]
 
-                logger.info('Extended range by next neighbours')
+                    logger.info('Extended range by next neighbours')
 
-                req = FabnetPacketRequest(method='UpdateHashRangeTable', \
-                        sender=self.self_address, parameters={'append': append_lst, 'remove': rm_lst})
-                self.call_network(req)
-                return
+                    req = FabnetPacketRequest(method='UpdateHashRangeTable', \
+                            sender=self.self_address, parameters={'append': append_lst, 'remove': rm_lst})
+                    self.call_network(req)
+                    return
 
-        first_range = self.ranges_table.find(MIN_HASH)
-        if not first_range:
-            first_range = self.ranges_table.get_first()
+            first_range = self.ranges_table.find(MIN_HASH)
             if not first_range:
-                return
-            if first_range.node_address == self.self_address:
-                new_dht_range = self_dht_range.extend(MIN_HASH, first_range.start-1)
-                self.update_dht_range(new_dht_range)
-                rm_lst = [(self_dht_range.get_start(), self_dht_range.get_end(), self.self_address)]
-                append_lst = [(new_dht_range.get_start(), new_dht_range.get_end(), self.self_address)]
+                first_range = self.ranges_table.get_first()
+                if not first_range:
+                    return
+                if first_range.node_address == self.self_address:
+                    new_dht_range = self_dht_range.extend(MIN_HASH, first_range.start-1)
+                    self.update_dht_range(new_dht_range)
+                    rm_lst = [(self_dht_range.get_start(), self_dht_range.get_end(), self.self_address)]
+                    append_lst = [(new_dht_range.get_start(), new_dht_range.get_end(), self.self_address)]
 
-                logger.info('Extended range by first range')
+                    logger.info('Extended range by first range')
 
-                req = FabnetPacketRequest(method='UpdateHashRangeTable', \
-                        sender=self.self_address, parameters={'append': append_lst, 'remove': rm_lst})
-                self.call_network(req)
+                    req = FabnetPacketRequest(method='UpdateHashRangeTable', \
+                            sender=self.self_address, parameters={'append': append_lst, 'remove': rm_lst})
+                    self.call_network(req)
+        finally:
+            self._unlock()
 
 
     def extend_range(self, subrange_size, start_key, end_key):
@@ -694,6 +697,9 @@ class MonitorDHTRanges(threading.Thread):
                 if self.stopped.is_set():
                     break
             except Exception, err:
+                import traceback
+                logger.write = logger.debug
+                traceback.print_exc(file=logger)
                 logger.error('[MonitorDHTRanges] %s'% err)
 
         logger.info('stopped')

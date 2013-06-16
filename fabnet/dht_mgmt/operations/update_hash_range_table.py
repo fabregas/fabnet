@@ -13,7 +13,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.dht_mgmt.constants import DS_NORMALWORK, DS_INITIALIZE, \
-                            MAX_HASH, MIN_HASH
+                            MAX_HASH, MIN_HASH, DS_DESTROYING 
 from fabnet.core.constants import RC_OK, RC_ERROR, NODE_ROLE
 from fabnet.dht_mgmt.hash_ranges_table import HashRange
 from fabnet.utils.logger import oper_logger as logger
@@ -41,6 +41,9 @@ class UpdateHashRangeTableOperation(OperationBase):
         @return object of FabnetPacketResponse
                 or None for disabling packet response to sender
         """
+        if self.operator.get_status() == DS_DESTROYING:
+            return
+
         _, icnt = self.operator.get_ranges_table_status()
         if icnt == 0:
             logger.debug('Received update for hash ranges table, but it is not initialized yet. Skip operation...')
