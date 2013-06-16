@@ -262,7 +262,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             server = TestServerThread(1986, home1)
             server.start()
             time.sleep(1)
-            server1 = TestServerThread(1987, home2, neighbour='127.0.0.1:1986',  config={'DHT_CYCLE_TRY_COUNT':10, 'ALLOW_USED_SIZE_PERCENTS':0})
+            server1 = TestServerThread(1987, home2, neighbour='127.0.0.1:1986',  config={'DHT_CYCLE_TRY_COUNT':20, 'ALLOW_USED_SIZE_PERCENTS':0})
             server1.start()
             time.sleep(1.5)
             self.assertNotEqual(server1.operator.get_status(), DS_NORMALWORK)

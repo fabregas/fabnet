@@ -111,8 +111,6 @@ class CheckHashRangeTableOperation(OperationBase):
             return
 
         if packet.ret_code == RC_DONT_STARTED:
-            if self.self_address == packet.from_node:
-                return
             self.operator.remove_node_range(packet.from_node)
             time.sleep(self.operator.get_config_value('WAIT_DHT_TABLE_UPDATE'))
             self.operator.check_near_range()
