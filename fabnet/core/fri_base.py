@@ -216,6 +216,7 @@ class FabnetPacketRequest(FabnetPacket):
         self.method = packet.get('method', None)
         self.sender = packet.get('sender', None)
         self.parameters = packet.get('parameters', {})
+        self.role = None
 
         self.validate()
 

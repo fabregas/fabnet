@@ -43,6 +43,7 @@ MAX_HASH = constants.MAX_HASH
 
 
 class TestServerThread(threading.Thread):
+    SESSION_ID = 1234322321
     def __init__(self, port, home_dir, neighbour=None, is_monitor=False, config={}):
         threading.Thread.__init__(self)
         self.port = port
@@ -127,10 +128,10 @@ class TestServerThread(threading.Thread):
         return resp.binary_data
 
     def put(self, data):
-        client = FriClient()
+        client = FriClient(session_id=self.SESSION_ID)
         checksum = hashlib.sha1(data).hexdigest()
 
-        params = {'checksum': checksum, 'wait_writes_count': 3}
+        params = {'checksum': checksum, 'wait_writes_count': 3, 'replica_count':2}
         data = RamBasedBinaryData(data, 20)
         packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
         #print '========SENDING DATA BLOCK %s (%s chunks)'%(packet_obj, data.chunks_count())
@@ -140,6 +141,23 @@ class TestServerThread(threading.Thread):
         if ret_packet.ret_code != 0:
             raise Exception('put data failed: %s'%ret_packet.ret_message)
         return ret_packet.ret_parameters['key']
+
+    def get(self, key):
+        client = FriClient(session_id=self.SESSION_ID)
+
+        params = {'key': key, 'replica_count': 2}
+        packet_obj = FabnetPacketRequest(method='ClientGetData', parameters=params, sync=True)
+
+        ret_packet = client.call_sync('127.0.0.1:%s'%self.port, packet_obj)
+        return ret_packet
+
+    def delete(self, key, session_id=None):
+        client = FriClient(session_id=session_id or self.SESSION_ID)
+        params = {'key': key, 'replica_count': 2}
+        packet_obj = FabnetPacketRequest(method='ClientDeleteData', parameters=params, sync=True)
+
+        ret_packet = client.call_sync('127.0.0.1:%s'%self.port, packet_obj)
+        return ret_packet
 
     def get_range_dir(self):
         stat = self.get_stat()
@@ -233,7 +251,7 @@ class TestDHTInitProcedure(unittest.TestCase):
             except Exception, err:
                 pass
             else:
-                raise Esception('should be exception in this case')
+                raise Exception('should be exception in this case')
         finally:
             if server:
                 server.stop()
@@ -510,6 +528,64 @@ class TestDHTInitProcedure(unittest.TestCase):
                 server1.stop()
             if monitor:
                 monitor.stop()
+
+    def test06_delele_data_block(self):
+        server = server1 = None
+        try:
+            home1 = '/tmp/node_1986_home'
+            home2 = '/tmp/node_1987_home'
+            if os.path.exists(home1):
+                shutil.rmtree(home1)
+            os.mkdir(home1)
+            if os.path.exists(home2):
+                shutil.rmtree(home2)
+            os.mkdir(home2)
+
+            server = TestServerThread(1986, home1)
+            server.start()
+            time.sleep(1)
+            server1 = TestServerThread(1987, home2, neighbour='127.0.0.1:1986')
+            server1.start()
+            time.sleep(.2)
+            self.__wait_oper_status(server, DS_NORMALWORK)
+            self.__wait_oper_status(server1, DS_NORMALWORK)
+
+            node86_stat = server.get_stat()
+            node87_stat = server1.get_stat()
+
+            self.assertEqual(long(node86_stat['DHTInfo']['range_start'], 16), 0L)
+            self.assertEqual(long(node86_stat['DHTInfo']['range_end'], 16), MAX_HASH/2)
+            self.assertEqual(long(node87_stat['DHTInfo']['range_start'], 16), MAX_HASH/2+1)
+            self.assertEqual(long(node87_stat['DHTInfo']['range_end'], 16), MAX_HASH)
+
+            data_block = 'Hello, fabregas!'
+            replica_block = 'This is replica data!'
+            key = server.put(data_block)
+
+            resp = server.get(key)
+            self.assertEqual(resp.ret_code, RC_OK, resp.ret_message)
+            resp = server1.get(key)
+            self.assertEqual(resp.ret_code, RC_OK)
+
+            resp = server.delete(None)
+            self.assertNotEqual(resp.ret_code, RC_OK)
+
+            resp = server1.delete('2cf575e37b2df13071da2fc050372a923e6fbea3')
+            self.assertNotEqual(resp.ret_code, RC_OK)
+
+            resp = server.delete(key, session_id=234234)
+            self.assertEqual(resp.ret_code, RC_PERMISSION_DENIED, resp.ret_message)
+
+            resp = server.delete(key)
+            self.assertEqual(resp.ret_code, RC_OK, resp.ret_message)
+            resp = server.get(key)
+            self.assertNotEqual(resp.ret_code, RC_OK)
+        finally:
+            if server:
+                server.stop()
+            if server1:
+                server1.stop()
+
 
     def _make_fake_hdd(self, name, size, dev='/dev/loop0'):
         os.system('sudo rm -rf /tmp/mnt_%s'%name)

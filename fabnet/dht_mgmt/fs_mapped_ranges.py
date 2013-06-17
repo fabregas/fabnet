@@ -568,6 +568,18 @@ class FSHashRanges:
         file_path = self.get_path(key, is_replica)
         return FileBasedChunks(file_path)
 
+    def delete_data_block(self, key, is_replica, r_user_id, carefully_delete):
+        file_path = self.get_path(key, is_replica)
+
+        if carefully_delete:
+            data = FileBasedChunks(file_path)
+            header = data.read(DataBlockHeader.HEADER_LEN)
+            _, _, checksum, user_id, _ = DataBlockHeader.unpack(header)
+            if user_id != r_user_id:
+                raise FSHashRangesPermissionDenied('Can not delete alien data block!')
+        
+        os.remove(file_path)
+
     def extend(self, start_key, end_key):
         self.__move_lock.acquire()
         try:

@@ -1,25 +1,24 @@
 #!/usr/bin/python
 """
-Copyright (C) 2012 Konstantin Andrusenko
+Copyright (C) 2013 Konstantin Andrusenko
     See the documentation for further information on copyrights,
     or contact the author. All Rights Reserved.
 
-@package fabnet.dht_mgmt.operations.get_data_block
+@package fabnet.dht_mgmt.operations.delete_data_block
 
 @author Konstantin Andrusenko
-@date October 3, 2012
+@date June 17, 2013
 """
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.dht_mgmt.fs_mapped_ranges import FileBasedChunks, FSHashRangesNoData
+from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRangesPermissionDenied, FSHashRangesNoData 
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_PERMISSION_DENIED
 from fabnet.dht_mgmt.constants import RC_NO_DATA
-from fabnet.dht_mgmt.data_block import DataBlockHeader
-from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
+from fabnet.core.constants import NODE_ROLE
 
-class GetDataBlockOperation(OperationBase):
-    ROLES = [NODE_ROLE, CLIENT_ROLE]
-    NAME = 'GetDataBlock'
+class DeleteDataBlockOperation(OperationBase):
+    ROLES = [NODE_ROLE]
+    NAME = 'DeleteDataBlock'
 
     def process(self, packet):
         """In this method should be implemented logic of processing
@@ -31,23 +30,22 @@ class GetDataBlockOperation(OperationBase):
         """
         key = packet.parameters.get('key', None)
         is_replica = packet.parameters.get('is_replica', False)
-        r_user_id = packet.parameters.get('user_id', packet.session_id)
         if key is None:
-            return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Key is not found in request packet!')
+            return FabnetPacketResponse(ret_code=RC_ERROR, \
+                    ret_message='Key is not found in request packet!')
+        carefully_delete = packet.parameters.get('carefully_delete', True)
+        user_id = packet.parameters.get('user_id', None) 
 
         try:
-            path = self.operator.get_data_block_path(key, is_replica)
-        except Exception, err:
-            return FabnetPacketResponse(ret_code=RC_NO_DATA, ret_message=str(err))
+            path = self.operator.delete_data_block(key, is_replica, user_id, carefully_delete)
+        except FSHashRangesNoData, err:
+            return FabnetPacketResponse(ret_code=RC_NO_DATA, \
+                    ret_message='no data: %s'%err)
+        except FSHashRangesPermissionDenied, err:
+            return FabnetPacketResponse(ret_code=RC_PERMISSION_DENIED, \
+                    ret_message='permission denied: %s'%err)
 
-        data = FileBasedChunks(path)
-        header = data.read(DataBlockHeader.HEADER_LEN)
-        _, _, checksum, user_id, _ = DataBlockHeader.unpack(header)
-        if user_id and packet.role != NODE_ROLE:
-            if r_user_id != user_id:
-                return FabnetPacketResponse(ret_code=RC_PERMISSION_DENIED, ret_message='permission denied')
-
-        return FabnetPacketResponse(binary_data=data, ret_parameters={'checksum': checksum})
+        return FabnetPacketResponse()
 
 
     def callback(self, packet, sender=None):

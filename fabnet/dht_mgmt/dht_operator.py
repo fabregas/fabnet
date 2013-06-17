@@ -42,6 +42,8 @@ from fabnet.dht_mgmt.operations.get_data_keys import GetKeysInfoOperation
 from fabnet.dht_mgmt.operations.put_data_keys import PutKeysInfoOperation
 from fabnet.dht_mgmt.operations.client_get import ClientGetOperation
 from fabnet.dht_mgmt.operations.client_put import ClientPutOperation
+from fabnet.dht_mgmt.operations.delete_data_block import DeleteDataBlockOperation
+from fabnet.dht_mgmt.operations.client_delete import ClientDeleteOperation
 
 OPERLIST = [GetRangeDataRequestOperation, GetRangesTableOperation,
              PutDataBlockOperation, GetDataBlockOperation,
@@ -49,7 +51,8 @@ OPERLIST = [GetRangeDataRequestOperation, GetRangesTableOperation,
              SplitRangeRequestOperation, PullSubrangeRequestOperation,
              UpdateHashRangeTableOperation, CheckHashRangeTableOperation,
              RepairDataBlocksOperation, GetKeysInfoOperation,
-             PutKeysInfoOperation, ClientGetOperation, ClientPutOperation]
+             PutKeysInfoOperation, ClientGetOperation, ClientPutOperation,
+             DeleteDataBlockOperation, ClientDeleteOperation]
 
 class DHTOperator(Operator):
     OPTYPE = 'DHT'
@@ -384,6 +387,9 @@ class DHTOperator(Operator):
 
     def get_data_block_path(self, key, is_replica):
         return self.get_dht_range().get_path(key, is_replica)
+
+    def delete_data_block(self, key, is_replica, user_id, carefully_delete=True):
+        self.get_dht_range().delete_data_block(key, is_replica, user_id, carefully_delete)
 
     def get_tempfile(self):
         return self.get_dht_range().tempfile()

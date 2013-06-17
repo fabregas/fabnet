@@ -13,12 +13,11 @@ import hashlib
 
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
-from fabnet.core.constants import RC_OK, RC_ERROR
+from fabnet.core.constants import RC_OK, RC_ERROR, RC_PERMISSION_DENIED
 from fabnet.dht_mgmt.constants import MIN_REPLICA_COUNT, RC_NO_DATA
 from fabnet.utils.logger import oper_logger as logger
 from fabnet.dht_mgmt.key_utils import KeyUtils
 from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE
-
 
 class ClientGetOperation(OperationBase):
     ROLES = [NODE_ROLE, CLIENT_ROLE]
@@ -64,8 +63,11 @@ class ClientGetOperation(OperationBase):
                 logger.warning('[ClientGetOperation] Internal error: No hash range found for key=%s!'%key)
             else:
                 _, _, node_address = range_obj
-                resp = self._init_operation(node_address, 'GetDataBlock', {'key': key, 'is_replica': is_replica}, sync=True)
-                if resp.ret_code:
+                resp = self._init_operation(node_address, 'GetDataBlock', {'key': key, 'is_replica': is_replica, \
+                        'user_id': packet.session_id}, sync=True)
+                if resp.ret_code == RC_PERMISSION_DENIED:
+                    return FabnetPacketResponse(ret_code=RC_PERMISSION_DENIED, ret_message=resp.ret_message)
+                elif resp.ret_code:
                     logger.warning('[ClientGetOperation] GetDataBlock error from %s: %s'%(node_address, resp.ret_message))
                 else:
                     data = resp.binary_data

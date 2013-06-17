@@ -77,6 +77,7 @@ class OperationsManager:
                     raise Exception('Method "%s" does not implemented! Available methods: %s'%(packet.method, self.__operations.keys()))
 
             operation_obj.check_role(role)
+            packet.role = role
 
             logger.debug('processing %s'%packet)
 
