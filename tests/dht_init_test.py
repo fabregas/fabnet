@@ -8,6 +8,12 @@ import json
 import random
 import string
 import hashlib
+
+from fabnet.core import constants
+constants.KEEP_ALIVE_MAX_WAIT_TIME = 5
+constants.CHECK_NEIGHBOURS_TIMEOUT = 1
+constants.FRI_CLIENT_TIMEOUT = 2
+
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.fri_client import FriClient
 from fabnet.core.fri_base import RamBasedBinaryData
@@ -253,6 +259,66 @@ class TestDHTInitProcedure(unittest.TestCase):
             else:
                 raise Exception('should be exception in this case')
         finally:
+            if server:
+                server.stop()
+            if server1:
+                server1.stop()
+
+    def test01_dht_restore_after_network_fail(self):
+        server = server1 = None
+        try:
+            home1 = '/tmp/node_1986_home'
+            home2 = '/tmp/node_1987_home'
+            if os.path.exists(home1):
+                shutil.rmtree(home1)
+            os.mkdir(home1)
+            if os.path.exists(home2):
+                shutil.rmtree(home2)
+            os.mkdir(home2)
+
+            server = TestServerThread(1986, home1)
+            server.start()
+            time.sleep(1)
+            server1 = TestServerThread(1987, home2, neighbour='127.0.0.1:1986')
+            server1.start()
+            time.sleep(.2)
+            self.__wait_oper_status(server1, DS_NORMALWORK)
+
+            node86_stat = server.get_stat()
+            node87_stat = server1.get_stat()
+
+            self.assertEqual(long(node86_stat['DHTInfo']['range_start'], 16), 0L)
+            self.assertEqual(long(node86_stat['DHTInfo']['range_end'], 16), MAX_HASH/2)
+            self.assertEqual(long(node87_stat['DHTInfo']['range_start'], 16), MAX_HASH/2+1)
+            self.assertEqual(long(node87_stat['DHTInfo']['range_end'], 16), MAX_HASH)
+
+            packet_obj = FabnetPacketRequest(method='TopologyCognition', sender=None)
+            fri_client = FriClient()
+            fri_client.call('127.0.0.1:1987', packet_obj)
+            time.sleep(2)
+
+            os.system('sudo /sbin/iptables -A INPUT -p tcp --destination-port 1986 -j DROP')
+            os.system('sudo /sbin/iptables -A OUTPUT -p tcp --destination-port 1986 -j DROP')
+
+            time.sleep(10)
+            node87_stat = server1.get_stat()
+            self.assertEqual(long(node87_stat['DHTInfo']['range_start'], 16), 0L)
+            self.assertEqual(long(node87_stat['DHTInfo']['range_end'], 16), MAX_HASH)
+
+            os.system('sudo /sbin/iptables -D INPUT -p tcp --destination-port 1986 -j DROP')
+            os.system('sudo /sbin/iptables -D OUTPUT -p tcp --destination-port 1986 -j DROP')
+
+            time.sleep(10)
+            node86_stat = server.get_stat()
+            node87_stat = server1.get_stat()
+
+            self.assertEqual(long(node86_stat['DHTInfo']['range_start'], 16), 0L)
+            self.assertEqual(long(node86_stat['DHTInfo']['range_end'], 16), MAX_HASH/2)
+            self.assertEqual(long(node87_stat['DHTInfo']['range_start'], 16), MAX_HASH/2+1)
+            self.assertEqual(long(node87_stat['DHTInfo']['range_end'], 16), MAX_HASH)
+        finally:
+            os.system('sudo /sbin/iptables -D INPUT -p tcp --destination-port 1986 -j DROP')
+            os.system('sudo /sbin/iptables -D OUTPUT -p tcp --destination-port 1986 -j DROP')
             if server:
                 server.stop()
             if server1:

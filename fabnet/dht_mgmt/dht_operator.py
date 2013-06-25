@@ -139,6 +139,9 @@ class DHTOperator(Operator):
     def __get_next_max_range(self):
         max_range = None
         for range_obj in self.ranges_table.iter_table():
+            if range_obj.node_address == self.self_address:
+                return range_obj
+
             if range_obj.node_address in self.__split_requests_cache:
                 continue
 
@@ -169,7 +172,6 @@ class DHTOperator(Operator):
         if r1:
             return r1
         return r2
-
 
     def __get_next_range_near(self, start, end):
         ret_range = None

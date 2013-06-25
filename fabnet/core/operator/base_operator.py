@@ -387,8 +387,8 @@ class Operator:
             self.__lock.release()
 
     def _rebalance_nodes(self):
-        self.rebalance_append({'neighbour_type': NT_SUPERIOR})
-        self.rebalance_append({'neighbour_type': NT_UPPER})
+        self.rebalance_append({'neighbour_type': NT_SUPERIOR}, reinit_discovery=True)
+        self.rebalance_append({'neighbour_type': NT_UPPER}, reinit_discovery=True)
 
 
     def check_neighbours(self):
@@ -443,7 +443,7 @@ class Operator:
             if is_not_respond:
                 self.on_neigbour_not_respond(n_type, nodeaddr)
 
-        if remove_nodes:
+        if remove_nodes or (not superiors) or (not uppers):
             self._rebalance_nodes()
 
     def call_node(self, node_address, packet):
@@ -535,10 +535,10 @@ class Operator:
         finally:
             self._unlock()
 
-    def rebalance_append(self, params):
+    def rebalance_append(self, params, **kw_params):
         self._lock()
         try:
-            self.__discovery.rebalance_append(params)
+            self.__discovery.rebalance_append(params, kw_params)
         finally:
             self._unlock()
 
@@ -560,6 +560,7 @@ class CheckNeighboursThread(threading.Thread):
     def run(self):
         logger.info('Check neighbours thread is started!')
 
+        proc_dt = timedelta(0)
         while not self.stopped.is_set():
             try:
                 t0 = datetime.now()

@@ -220,9 +220,12 @@ class NeigboursDiscoveryRoutines:
         self.__discovered_nodes[n_type].append(new_node)
 
 
-    def rebalance_append(self, ret_parameters):
+    def rebalance_append(self, ret_parameters, reinit_discovery=False):
         upper_neighbours = self.operator.get_neighbours(NT_UPPER)
         superior_neighbours = self.operator.get_neighbours(NT_SUPERIOR)
+
+        if reinit_discovery:
+            self.__discovered_nodes[ret_parameters['neighbour_type']] = []
 
         if ret_parameters['neighbour_type'] == NT_UPPER:
             self._check_neighbours_count(NT_UPPER, upper_neighbours, NT_SUPERIOR, superior_neighbours, ret_parameters)
