@@ -5,7 +5,7 @@ import logging
 import threading
 import json
 import random
-from fabnet.utils.db_conn import SqliteDBConnection as DBConnection
+from fabnet.utils.safe_json_file import SafeJsonFile
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 from fabnet.core.fri_server import FriServer
@@ -147,20 +147,16 @@ class TestDiscoverytOperation(unittest.TestCase):
             operator = OperatorClient('node%s'%addr.split(':')[-1])
             home_dir = operator.get_home_dir()
 
-            conn = DBConnection(os.path.join(home_dir, 'fabnet_topology.db'))
-            conn.connect()
-            rows = conn.select("SELECT node_address, node_name, superiors, uppers FROM fabnet_nodes")
-            conn.close()
-            nodes = {}
-            for row in rows:
-                nodes[row[0]] = row
-
+            db = SafeJsonFile(os.path.join(home_dir, 'fabnet_topology.db'))
+            nodes = db.read()
             print 'NODES LIST: %s'%str(nodes)
 
             for i in range(1900, 1900+NODES_COUNT):
                 address = '127.0.0.1:%s'%i
                 self.assertTrue(nodes.has_key(address))
-                self.assertEqual(nodes[address][1], 'node%s'%i)
+                self.assertTrue(len(nodes[address]['uppers']) >= 2)
+                self.assertTrue(len(nodes[address]['superiors']) >= 2)
+                self.assertEqual(nodes[address]['node_name'], 'node%s'%i)
         finally:
             for server in servers:
                 if server:

@@ -1,21 +1,17 @@
 
-import yaml
 import sys
-import sqlite3
+from fabnet.utils.safe_json_file import SafeJsonFile
 
 f_path = sys.argv[1]
 out_path = sys.argv[2]
 
-conn = sqlite3.connect(f_path)
-
-curs = conn.cursor()
-curs.execute("SELECT node_address, node_name, superiors, uppers FROM fabnet_nodes WHERE old_data=0")
-rows = curs.fetchall()
-
-curs.close()
-conn.close()
-
-
+db = SafeJsonFile(f_path)
+nodes = db.read()
+rows = []
+for node, values in nodes.items():
+    if values.get('old_data', 0) != 0:
+        continue
+    rows.append((node, values['node_name'], values['superiors'], values['uppers']))
 
 i = 1
 out = open(out_path, 'w')
@@ -28,7 +24,7 @@ for node in rows:
 out.write('#\n')
 
 for i, node in nodes.items():
-    for neigbour in node[2].split(','):
+    for neigbour in node[2]:
         n_i = None
         for j, no in nodes.items():
             if no[0] == neigbour:

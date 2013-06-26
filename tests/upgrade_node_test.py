@@ -5,7 +5,6 @@ import logging
 import signal
 import json
 import random
-import  sqlite3
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.fri_client import FriClient
 from fabnet.core.operator import Operator

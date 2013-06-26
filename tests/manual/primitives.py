@@ -7,7 +7,6 @@ import json
 import random
 import subprocess
 import signal
-import sqlite3
 import shutil
 import hashlib
 import string
@@ -17,6 +16,7 @@ from fabnet.utils.logger import logger
 from fabnet.core.constants import ET_INFO
 from fabnet.core.fri_base import FabnetPacketRequest
 from fabnet.core.fri_client import FriClient
+from fabnet.utils.safe_json_file import SafeJsonFile
 from fabnet.core.fri_base import RamBasedBinaryData
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.monitor.monitor_operator import MONITOR_DB
@@ -471,12 +471,13 @@ def wait_topology(node_i, nodes_count):
                 time.sleep(0.2)
 
             time.sleep(.5)
-            conn = sqlite3.connect(db)
-            curs = conn.cursor()
-            curs.execute("SELECT count(node_address) FROM fabnet_nodes WHERE old_data=0")
-            rows = curs.fetchall()
-            print 'nodes discovered: %s'%rows[0][0]
-            if int(rows[0][0]) != nodes_count:
+            data = SafeJsonFile(db).read()
+            cnt = 0
+            for value in data.values():
+                if int(value.get('old_data', 0)) == 0:
+                    cnt += 1
+
+            if cnt != nodes_count:
                 time.sleep(.5)
             else:
                 break

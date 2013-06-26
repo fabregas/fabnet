@@ -12,7 +12,7 @@ This module contains the NeigboursDiscoveryRoutines class implementation
 """
 import os
 from fabnet.utils.logger import oper_logger as logger
-from fabnet.utils.db_conn import SqliteDBConnection as DBConnection
+from fabnet.utils.safe_json_file import SafeJsonFile
 from fabnet.operations.topology_cognition import TOPOLOGY_DB
 from fabnet.operations.constants import MNO_APPEND, MNO_REMOVE
 from fabnet.core.constants import ONE_DIRECT_NEIGHBOURS_COUNT,\
@@ -195,7 +195,7 @@ class NeigboursDiscoveryRoutines:
                     or (node_addr in other_neighbours) or (node_addr == self.operator.self_address):
                 continue
             new_node = node_addr
-            if len(set(node_info[0]) & set(node_info[1])):
+            if len(set(node_info.get('uppers', [])) & set(node_info.get('superiors', []))):
                 #node with interset neighbours
                 break
 
@@ -283,14 +283,8 @@ class NeigboursDiscoveryRoutines:
         db = os.path.join(self.operator.home_dir, TOPOLOGY_DB)
         if not os.path.exists(db):
             return {}
-        conn = DBConnection(db)
-        rows = conn.select("SELECT node_address, superiors, uppers, old_data FROM fabnet_nodes")
-        conn.close()
-
-        nodes = {}
-        for row in rows:
-            nodes[row[0]] = (row[1].split(','), row[2].split(','), int(row[3]))
-
+        db = SafeJsonFile(db)
+        nodes = db.read()
         return nodes
 
     def smart_neighbours_rebalance(self, node_address, superior_neighbours, upper_neighbours):

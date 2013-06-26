@@ -5,7 +5,6 @@ import logging
 import threading
 import json
 import random
-import  sqlite3
 from fabnet.core import constants
 constants.CHECK_NEIGHBOURS_TIMEOUT = 1
 constants.STAT_COLLECTOR_TIMEOUT = 1

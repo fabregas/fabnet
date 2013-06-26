@@ -13,7 +13,7 @@ import os
 import threading
 from datetime import datetime
 
-from fabnet.utils.db_conn import SqliteDBConnection as DBConnection
+from fabnet.utils.safe_json_file import SafeJsonFile
 from fabnet.core.operation_base import  OperationBase
 from fabnet.core.fri_base import FabnetPacketResponse
 from fabnet.core.constants import NT_SUPERIOR, NT_UPPER, \
@@ -36,12 +36,12 @@ class TopologyCognition(OperationBase):
                 or None for disabling packet resend to neigbours
         """
         if packet.sender is None:
-            conn = DBConnection(os.path.join(self.home_dir, TOPOLOGY_DB))
-
-            conn.execute("CREATE TABLE IF NOT EXISTS fabnet_nodes(node_address TEXT, node_name TEXT, superiors TEXT, uppers TEXT, old_data INT)")
-            conn.execute("UPDATE fabnet_nodes SET old_data=1")
-
-            conn.close()
+            db = SafeJsonFile(os.path.join(self.home_dir, TOPOLOGY_DB))
+            data = db.read()
+            if data:
+                for item in data.values():
+                    item['old_data'] = 1
+                db.write(data)
 
         return packet
 
@@ -91,20 +91,15 @@ class TopologyCognition(OperationBase):
         if (node_address is None) or (superior_neighbours is None) or (upper_neighbours is None):
             raise Exception('TopologyCognition response packet is invalid! Packet: %s'%str(packet.to_dict()))
 
-        conn = DBConnection(os.path.join(self.home_dir, TOPOLOGY_DB))
-
         self._lock()
         try:
-            rows = conn.select("SELECT old_data FROM fabnet_nodes WHERE node_address='%s'" % node_address)
-            if rows:
-                conn.execute("UPDATE fabnet_nodes SET node_name='%s', superiors='%s', uppers='%s', old_data=0 WHERE node_address='%s'"% \
-                    (node_name, ','.join(superior_neighbours), ','.join(upper_neighbours), node_address))
-            else:
-                conn.execute("INSERT INTO fabnet_nodes VALUES ('%s', '%s', '%s', '%s', 0)"% \
-                        (node_address, node_name, ','.join(superior_neighbours), ','.join(upper_neighbours)))
+            db = SafeJsonFile(os.path.join(self.home_dir, TOPOLOGY_DB))
+            data = db.read()
+            data[node_address] = {'node_name': node_name, 'superiors': superior_neighbours, \
+                    'uppers': upper_neighbours, 'old_data': 0}
+            db.write(data)
         finally:
             self._unlock()
-            conn.close()
 
         if packet.ret_parameters.get('need_rebalance', False):
             self.operator.smart_neighbours_rebalance(node_address, superior_neighbours, upper_neighbours)
