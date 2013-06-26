@@ -15,7 +15,9 @@ DEFAULT_HOME = os.path.abspath(os.path.join(os.environ.get('HOME', '/tmp'), 'fab
 
 
 def usage():
-    print('Usage: %s start [<neighbour node>[:port]|init-fabnet <node name> <node type>]'%sys.argv[0])
+    print('Usage: %s init-config'%sys.argv[0])
+    print('           or')
+    print('       %s start [<neighbour node>[:port]|init-fabnet <node name> <node type>]'%sys.argv[0])
     print('           or')
     print('       %s reload'%sys.argv[0])
     print('           or')
@@ -129,7 +131,7 @@ def main(argv):
 
         config = get_init_config(home_dir)
 
-        if config['NODE_TYPE'] is None and len(argv) < 5:
+        if (config['NODE_TYPE'] is None and len(argv) < 5) or len(argv) > 5:
             usage()
             sys.exit(1)
 
@@ -171,6 +173,10 @@ def main(argv):
             print ('Fabnet node is started!')
         else:
             print ('Fabnet node is stopped!')
+    elif argv[1] == 'init-config':
+        config = get_init_config(home_dir)
+        save_init_config(home_dir, config)
+        print 'init config is saved to %s'%home_dir
     else:
         usage()
         sys.exit(1)
