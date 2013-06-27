@@ -443,7 +443,10 @@ class Operator:
             if is_not_respond:
                 self.on_neigbour_not_respond(n_type, nodeaddr)
 
-        if remove_nodes or (not superiors) or (not uppers):
+        if remove_nodes or \
+            (len(uppers) < ONE_DIRECT_NEIGHBOURS_COUNT) or \
+            (len(superiors) < ONE_DIRECT_NEIGHBOURS_COUNT):
+
             self._rebalance_nodes()
 
     def call_node(self, node_address, packet):
