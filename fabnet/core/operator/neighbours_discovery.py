@@ -190,7 +190,7 @@ class NeigboursDiscoveryRoutines:
             break
 
         d_nodes = self.get_discovered_nodes()
-        if reinit and len(d_nodes) == self.__discovered_nodes[n_type]:
+        if reinit and len(d_nodes) == len(self.__discovered_nodes[n_type]):
             self.__discovered_nodes[n_type] = []
 
         for node_addr, node_info in d_nodes.items():
