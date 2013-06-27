@@ -538,7 +538,7 @@ class Operator:
     def rebalance_append(self, params, **kw_params):
         self._lock()
         try:
-            self.__discovery.rebalance_append(params, kw_params)
+            self.__discovery.rebalance_append(params, **kw_params)
         finally:
             self._unlock()
 
