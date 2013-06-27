@@ -326,7 +326,7 @@ class FSHashRanges:
             return None
         data = open(self.__last_range_file).read()
         start, end = data.split()
-        return start, end
+        return int(start), int(end)
 
 
     def mktemp(self, binary_data):
