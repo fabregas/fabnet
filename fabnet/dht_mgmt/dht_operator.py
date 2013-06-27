@@ -429,6 +429,7 @@ class DHTOperator(Operator):
                 if resp.ret_code:
                     raise Exception('Init PutDataBlock operation on %s error. Details: %s'%(node_address, resp.ret_message))
 
+            new_range.save_range()
             self.update_dht_range(new_range)
         except Exception, err:
             logger.error('send_subrange_data error: %s'%err)
