@@ -214,7 +214,7 @@ class DHTOperator(Operator):
         curr_end = dht_range.get_end()
 
         last_range = dht_range.get_last_range()
-        if last_range:
+        if last_range and not self.__split_requests_cache:
             new_range = self.__get_next_range_near(last_range[0], last_range[1])
         elif dht_range.is_max_range() or self.__split_requests_cache:
             new_range = self.__get_next_max_range()

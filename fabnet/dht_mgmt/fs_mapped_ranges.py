@@ -324,12 +324,10 @@ class FSHashRanges:
     def get_last_range(self):
         if not os.path.exists(self.__last_range_file):
             return None
-        try:
-            data = open(self.__last_range_file).read()
-            start, end = data.split()
-            return start, end
-        finally:
-            os.remove(self.__last_range_file)
+        data = open(self.__last_range_file).read()
+        start, end = data.split()
+        return start, end
+
 
     def mktemp(self, binary_data):
         if not binary_data:
