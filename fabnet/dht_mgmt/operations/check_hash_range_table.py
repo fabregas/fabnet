@@ -63,20 +63,20 @@ class CheckHashRangeTableOperation(OperationBase):
 
         c_mod_index, c_ranges_count = self.operator.get_ranges_table_status()
 
-        if c_mod_index == f_mod_index:
-            return FabnetPacketResponse()
-
         found_range = self._find_range(range_start, range_end, packet.sender)
         if not found_range:
             logger.debug('CheckHashRangeTable: sender range does not found in local hash table...')
-            if ranges_count < c_ranges_count:
+            if (ranges_count < c_ranges_count) or \
+                (ranges_count == c_ranges_count \
+                    and c_mod_index == f_mod_index \
+                    and packet.sender < self.self_address):
                 return FabnetPacketResponse(ret_code=RC_NEED_UPDATE, \
                         ret_parameters={'mod_index': c_mod_index, 'ranges_count': c_ranges_count})
-            else:
-                return FabnetPacketResponse()
+            #else:
+            #    return FabnetPacketResponse()
 
         logger.debug('CheckHashRangeTable: f_mod_index=%s c_mod_index=%s'%(f_mod_index, c_mod_index))
-        if f_mod_index > c_mod_index:
+        if f_mod_index >= c_mod_index:
             return FabnetPacketResponse()
         else:
             return FabnetPacketResponse(ret_code=RC_NEED_UPDATE, \
