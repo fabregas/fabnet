@@ -194,12 +194,14 @@ class DHTOperator(Operator):
 
         return ret_range
 
-    def set_status_to_normalwork(self):
+    def set_status_to_normalwork(self, save_range=False):
         logger.info('Changing node status to NORMALWORK')
         self.status = DS_NORMALWORK
         self.__split_requests_cache = []
         self.__start_dht_try_count = 0
-
+        if save_range:
+            dht_range = self.get_dht_range()
+            dht_range.save_range()
 
     def start_as_dht_member(self):
         if self.status == DS_DESTROYING:
@@ -211,7 +213,10 @@ class DHTOperator(Operator):
         curr_start = dht_range.get_start()
         curr_end = dht_range.get_end()
 
-        if dht_range.is_max_range() or self.__split_requests_cache:
+        last_range = dht_range.get_last_range()
+        if last_range:
+            new_range = self.__get_next_range_near(last_range[0], last_range[1])
+        elif dht_range.is_max_range() or self.__split_requests_cache:
             new_range = self.__get_next_max_range()
         else:
             new_range = self.__get_next_range_near(curr_start, curr_end)
@@ -518,7 +523,7 @@ class CheckLocalHashTableThread(threading.Thread):
                 if ranges_count < 2:
                     neighbours = self.operator.get_neighbours(NT_SUPERIOR, self.operator.OPTYPE)
                     if not neighbours:
-                        logger.debug('Waiting neighbours...')
+                        logger.info('Waiting neighbours...')
                         time.sleep(Config.INIT_DHT_WAIT_NEIGHBOUR_TIMEOUT)
                         continue
                     neighbour = random.choice(neighbours)
@@ -621,6 +626,7 @@ class MonitorDHTRanges(threading.Thread):
             if resp.ret_code != RC_OK:
                 raise Exception(resp.ret_message)
 
+            new_dht_range.save_range()
             self.operator.update_dht_range(new_dht_range)
             pull_subrange.move_to_reservation()
         except Exception, err:

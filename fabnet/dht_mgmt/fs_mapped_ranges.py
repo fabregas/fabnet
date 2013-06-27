@@ -309,12 +309,27 @@ class FSHashRanges:
         if not os.path.exists(self.__tmp_dir):
             os.mkdir(self.__tmp_dir)
 
+        self.__last_range_file = os.path.join(save_path, '.last_range')
+
         self.__child_ranges = SafeList()
         self.__parallel_writes = SafeCounter()
         self.__block_flag = threading.Event()
         self.__no_free_space_flag = threading.Event()
         self.__move_lock = threading.Lock()
         self.__ret_range_i = None
+
+    def save_range(self):
+        open(self.__last_range_file, 'w').write('%i %i'%(self.__start, self.__end))
+
+    def get_last_range(self):
+        if not os.path.exists(self.__last_range_file):
+            return None
+        try:
+            data = open(self.__last_range_file).read()
+            start, end = data.split()
+            return start, end
+        finally:
+            os.remove(self.__last_range_file)
 
     def mktemp(self, binary_data):
         if not binary_data:

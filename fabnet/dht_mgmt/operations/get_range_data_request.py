@@ -50,4 +50,4 @@ class GetRangeDataRequestOperation(OperationBase):
             logger.info('Trying select other hash range...')
             self.operator.start_as_dht_member()
         else:
-            self.operator.set_status_to_normalwork()
+            self.operator.set_status_to_normalwork(True) #with save_range=True

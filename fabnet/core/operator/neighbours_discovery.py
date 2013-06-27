@@ -175,7 +175,7 @@ class NeigboursDiscoveryRoutines:
             else:
                 self.__cache[n_type].append(node_address)
 
-    def _check_neighbours_count(self, n_type, neighbours, other_n_type, other_neighbours, ret_parameters):
+    def _check_neighbours_count(self, n_type, neighbours, other_n_type, other_neighbours, ret_parameters, reinit=False):
         if len(neighbours) >= ONE_DIRECT_NEIGHBOURS_COUNT:
             self.__discovered_nodes[n_type] = []
             return
@@ -190,6 +190,9 @@ class NeigboursDiscoveryRoutines:
             break
 
         d_nodes = self.get_discovered_nodes()
+        if reinit and len(d_nodes) == self.__discovered_nodes[n_type]:
+            self.__discovered_nodes[n_type] = []
+
         for node_addr, node_info in d_nodes.items():
             if (node_addr in self.__discovered_nodes[n_type]) or (node_addr in neighbours) \
                     or (node_addr in other_neighbours) or (node_addr == self.operator.self_address):
@@ -224,13 +227,12 @@ class NeigboursDiscoveryRoutines:
         upper_neighbours = self.operator.get_neighbours(NT_UPPER)
         superior_neighbours = self.operator.get_neighbours(NT_SUPERIOR)
 
-        if reinit_discovery:
-            self.__discovered_nodes[ret_parameters['neighbour_type']] = []
-
         if ret_parameters['neighbour_type'] == NT_UPPER:
-            self._check_neighbours_count(NT_UPPER, upper_neighbours, NT_SUPERIOR, superior_neighbours, ret_parameters)
+            self._check_neighbours_count(NT_UPPER, upper_neighbours, NT_SUPERIOR, \
+                    superior_neighbours, ret_parameters, reinit_discovery)
         else:
-            self._check_neighbours_count(NT_SUPERIOR, superior_neighbours, NT_UPPER, upper_neighbours, ret_parameters)
+            self._check_neighbours_count(NT_SUPERIOR, superior_neighbours, NT_UPPER, \
+                    upper_neighbours, ret_parameters, reinit_discovery)
 
 
     def _get_for_delete(self, neighbours, n_type, other_neighbours):
