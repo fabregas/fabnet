@@ -69,14 +69,18 @@ def start(args):
         if '--debug' in args:
             logger.setLevel(logging.DEBUG)
 
-        if len(args) > 6:
-            ks_passwd = args[6] #for tests only. should be removed in production
-
         if ks_path and not ks_passwd:
-            ks_passwd = getpass.getpass('Key storage password: ')
+            if '--input-pwd' in args:
+                ks_passwd = raw_input('Key storage password: ')
+            else:
+                ks_passwd = getpass.getpass('Key storage password: ')
 
         def main_routine():
             global fabnet_node, started
+            status_file = os.path.join(home_dir, 'node-daemon.status') 
+            if os.path.exists(status_file):
+                os.remove(status_file)
+
             try:
                 open(os.path.join(home_dir, 'node-daemon.pid'), 'w').write(str(os.getpid()))
             except Exception, err:
@@ -88,11 +92,13 @@ def start(args):
 
                 signal.signal(signal.SIGINT, stop)
 
+                open(status_file, 'w').write('0\nstarted succefully')
+
                 while started:
                     time.sleep(1)
             except Exception, err:
+                open(status_file, 'w').write('1\nInit fabnet node failed: %s'%err)
                 logger.error('init fabnet node error: %s'%err)
-
 
         if nodaemon:
             main_routine()

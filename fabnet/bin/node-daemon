@@ -30,12 +30,18 @@ def usage():
 
 
 def stop_node(PID_FILE):
-    print('Stopping fabnet node...')
+    print('stopping fabnet node...')
     if not os.path.exists(PID_FILE):
         sys.stderr.write('No pid file found at %s\n'%PID_FILE)
         sys.exit(1)
     pid = int(open(PID_FILE).read())
-    os.kill(pid, signal.SIGINT)
+
+    if os.path.exists('/proc/%s'%pid):
+        try:
+            os.kill(pid, signal.SIGINT)
+        except OSError, err:
+            sys.stderr.write('Can not stop process with PID=%s. Details: %s\n'%(pid, err))
+
     for i in xrange(30):
         time.sleep(1)
         if not os.path.exists('/proc/%i'%pid):
@@ -43,11 +49,29 @@ def stop_node(PID_FILE):
     else:
         sys.stderr.write('Cant stop fabnet node! See logs for details...\n')
         sys.exit(1)
-    print('Fabnet node is stopped!')
+    print('fabnet node is stopped!')
     os.remove(PID_FILE)
 
 
-def start_node(node_address, neighbour, node_name, home_dir, node_type, keystore=''):
+def start_node(node_address, neighbour, node_name, home_dir, node_type, pid_file, input_pwd=False):
+    if is_node_started(pid_file):
+        print('fabnet node is already started!')
+        sys.exit(1)
+
+    home_dir = os.path.abspath(home_dir)
+    if not os.path.exists(home_dir):
+        try:
+            os.makedirs(home_dir)
+        except OSError, err:
+            sys.stderr.write('Home directory %s can not be created. Details: %s\n'%(home_dir, err))
+            sys.exit(3)
+
+    keystore = ''
+    for fname in os.listdir(home_dir):
+        if fname.endswith('.ks'):
+            keystore = os.path.join(home_dir, fname)
+            break
+
     print('starting fabnet node...')
     print(' => home directory: %s'%home_dir)
     print(' => node address: %s'%node_address)
@@ -56,20 +80,45 @@ def start_node(node_address, neighbour, node_name, home_dir, node_type, keystore
     print(' => node type: %s'%node_type)
     print(' => key storage: %s'%(keystore or 'none'))
 
-    home_dir = os.path.abspath(home_dir)
-    if not os.path.exists(home_dir):
-        os.makedirs(home_dir)
-
-    cmd = '%s %s %s %s %s %s' \
-             %(NODE_SCRIPT, node_address, neighbour, node_name, \
-                home_dir, node_type)
-    cmd = cmd.split()
+    cmd = [NODE_SCRIPT, node_address, neighbour, node_name, \
+                home_dir, node_type]
     if keystore:
         cmd.append(os.path.abspath(keystore))
+    if keystore and input_pwd:
+        cmd.append('--input-pwd')
 
     sp = subprocess.Popen(cmd)
     sp.communicate()
-    print('Fabnet node is started! See syslog for details')
+    rcode = wait_node_start(home_dir)
+    if rcode:
+        sys.stderr.write('trying to stop partly started node...\n')
+        stop_node(pid_file)
+        sys.exit(rcode)
+        
+
+def wait_node_start(home_dir):
+    status_file = os.path.join(home_dir, 'node-daemon.status')
+    for i in xrange(30):
+        time.sleep(1)
+        if not os.path.exists(status_file):
+            continue
+
+        data = open(status_file).read()
+        parts = data.split('\n')
+        code = int(parts[0])
+        if len(parts) == 1:
+            msg = 'unknown'
+        else:
+            msg = '\n'.join(parts[1:])
+        if code == 0:
+            sys.stdout.write('fabnet node is started successfully.\n')
+            return 0
+        else:
+            sys.stderr.write('ERROR! fabnet node does not started!\nDetails: %s\n'%msg)
+            return 1
+
+    sys.stderr.write('ERROR! fabnet node start is timeouted!\n')
+    return 2
 
 def is_node_started(PID_FILE):
     if not os.path.exists(PID_FILE):
@@ -109,8 +158,12 @@ def save_init_config(home_dir, config):
         config_file.set('init', key, val)
     
     init_config = os.path.join(home_dir, 'init_config')
-    with open(init_config, 'wb') as configfile:
-        config_file.write(configfile)
+    try:
+        with open(init_config, 'wb') as configfile:
+            config_file.write(configfile)
+    except IOError, err:
+        sys.stderr.write('Init config can not be created! Details: %s\n'%err)
+        sys.exit(3)
 
 
 def main(argv):
@@ -121,15 +174,12 @@ def main(argv):
     home_dir = os.environ.get('FABNET_NODE_HOME', DEFAULT_HOME)
     PID_FILE = os.path.join(home_dir, 'node-daemon.pid')
     if argv[1] == 'start':
-        if is_node_started(PID_FILE):
-            print('Node is already started!')
-            sys.exit(1)
-
-        if not os.path.exists(home_dir):
-            print('Error! Home directory %s does not exists'%home_dir)
-            sys.exit(1)
-
         config = get_init_config(home_dir)
+        if argv[-1] == '--input-pwd':
+            input_pwd = True
+            argv = argv[:-1]
+        else:
+            input_pwd = False
 
         if (config['NODE_TYPE'] is None and len(argv) < 5) or len(argv) > 5:
             usage()
@@ -144,14 +194,8 @@ def main(argv):
         port = config['FABNET_NODE_PORT']
         node_address = '%s:%s'%(ip_addr, port)
 
-        keystore = ''
-        for fname in os.listdir(home_dir):
-            if fname.endswith('.ks'):
-                keystore = os.path.join(home_dir, fname)
-                break
-
         start_node(node_address, config['FIRST_NEIGHBOUR'], config['NODE_NAME'], \
-                home_dir, config['NODE_TYPE'], keystore)
+                home_dir, config['NODE_TYPE'], PID_FILE, input_pwd)
         save_init_config(home_dir, config)
     elif argv[1] == 'stop':
         stop_node(PID_FILE)
@@ -167,7 +211,10 @@ def main(argv):
 
         stop_node(PID_FILE)
 
-        main(['', 'start'])
+        cmd = ['', 'start'] 
+        if '--input-pwd' in argv:
+            cmd.append('--input-pwd')
+        main(cmd)
     elif argv[1] == 'status':
         if is_node_started(PID_FILE):
             print ('Fabnet node is started!')
