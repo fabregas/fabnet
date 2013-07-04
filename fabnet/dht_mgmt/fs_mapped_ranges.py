@@ -22,8 +22,7 @@ from fabnet.utils.internal import total_seconds
 from fabnet.dht_mgmt.constants import MIN_HASH, MAX_HASH
 from fabnet.core.config import Config
 from fabnet.dht_mgmt.data_block import DataBlockHeader
-from fabnet.core.fri_base import FriBinaryData
-from fabnet.core.constants import DEFAULT_CHUNK_SIZE
+from fabnet.core.fri_base import FileBasedChunks
 
 class FSHashRangesException(Exception):
     pass
@@ -44,56 +43,11 @@ class FSHashRangesNoFreeSpace(FSHashRangesException):
     pass
 
 
-
-class FileBasedChunks(FriBinaryData):
-    def __init__(self, file_path, chunk_size=DEFAULT_CHUNK_SIZE):
-        self.__file_path = file_path
-        self.__chunk_size = chunk_size
-        self.__f_obj = None
-        self.__no_data_flag = False
-        self.__read_bytes = 0
-
-    def chunks_count(self):
-        f_size = os.path.getsize(self.__file_path) - self.__read_bytes
-        cnt = f_size / self.__chunk_size
-        if f_size % self.__chunk_size != 0:
-            cnt += 1
-        return cnt
-
-    def read(self, block_size):
-        if self.__no_data_flag:
-            return None
-
-        try:
-            if not self.__f_obj:
-                self.__f_obj = open(self.__file_path, 'rb')
-
-            chunk = self.__f_obj.read(block_size)
-            if not chunk:
-                self.close()
-                return None
-            self.__read_bytes += len(chunk)
-            return chunk
-        except IOError, err:
-            self.close()
-            raise FSHashRangesException('Cant read data from file system. Details: %s'%err)
-        except Exception, err:
-            self.close()
-            raise err
-
-    def get_next_chunk(self):
-        return self.read(self.__chunk_size)
-
-    def close(self):
-        self.__no_data_flag = True
-        if self.__f_obj:
-            self.__f_obj.close()
-
-
 class TmpFile:
     def __init__(self, f_path, data, seek=0):
         self.__f_path = f_path
         self.__checksum = hashlib.sha1()
+        self.__link_idx = 1
 
         if type(data) not in (list, tuple):
             data = [data]
@@ -122,6 +76,12 @@ class TmpFile:
             raise err
         finally:
             fobj.close()
+
+    def hardlink(self):
+        link = '%s.%s'%(self.__f_path, self.__link_idx)
+        os.link(self.__f_path, link)
+        self.__link_idx += 1
+        return link
 
     def __int_write(self, fobj, data):
         self.__checksum.update(data)

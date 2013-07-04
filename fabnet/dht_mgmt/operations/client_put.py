@@ -12,7 +12,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 import hashlib
 
 from fabnet.core.operation_base import  OperationBase
-from fabnet.core.fri_base import FabnetPacketResponse
+from fabnet.core.fri_base import FabnetPacketResponse, BinaryDataPointer
 from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.dht_mgmt.constants import MIN_REPLICA_COUNT
 from fabnet.utils.logger import oper_logger as logger
@@ -55,6 +55,8 @@ class ClientPutOperation(OperationBase):
         replica_count = int(packet.parameters.get('replica_count', MIN_REPLICA_COUNT))
         wait_writes_count = int(packet.parameters.get('wait_writes_count', 1))
 
+        if wait_writes_count <= 0:
+            wait_writes_count = 1
         if wait_writes_count > (replica_count+1):
             return FabnetPacketResponse(ret_code=RC_ERROR, ret_message='Cant waiting more replicas than saving!')
         if replica_count < MIN_REPLICA_COUNT:
@@ -81,10 +83,12 @@ class ClientPutOperation(OperationBase):
                 _, _, node_address = h_range
                 params = {'key': key, 'is_replica': is_replica, 'replica_count': replica_count, 'carefully_save': carefully_save}
                 if succ_count >= wait_writes_count:
-                    self._init_operation(node_address, 'PutDataBlock', params, binary_data=tempfile.chunks())
+                    binary_data_pointer = BinaryDataPointer(tempfile.hardlink(), remove_on_close=True)
+                    self._init_operation(node_address, 'PutDataBlock', params, binary_data=binary_data_pointer)
                 else:
                     if self.self_address == node_address and local_save is None:
                         local_save = (key, is_replica)
+                        succ_count += 1
                     else:
                         resp = self._init_operation(node_address, 'PutDataBlock', params, sync=True, binary_data=tempfile.chunks())
                         if resp.ret_code != RC_OK:
@@ -99,8 +103,8 @@ class ClientPutOperation(OperationBase):
             if local_save:
                 key, is_replica = local_save
                 self.operator.put_data_block(key, tempfile.file_path(), is_replica, carefully_save)
-                succ_count += 1
         except Exception, err:
+            succ_count -= 1
             msg = 'Saving data block to local range is failed: %s'%err
             logger.error(msg)
             errors.append(msg)

@@ -10,12 +10,14 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 This module contains the implementation of FabnetPacketRequest, FabnetPacketResponse classes.
 """
+import os
 import uuid
 import struct
 import zlib
 import json
+import tempfile
 
-from constants import RC_OK, FRI_PROTOCOL_IDENTIFIER, FRI_PACKET_INFO_LEN
+from constants import RC_OK, FRI_PROTOCOL_IDENTIFIER, FRI_PACKET_INFO_LEN, DEFAULT_CHUNK_SIZE
 
 
 class FriException(Exception):
@@ -74,6 +76,82 @@ class RamBasedBinaryData(FriBinaryData):
     def data(self):
         return self.__data
 
+class BinaryDataPointer:
+    def __init__(self, file_path, remove_on_close=False):
+        self.file_path = file_path 
+        self.remove_on_close = remove_on_close
+
+class FileBasedChunks(FriBinaryData):
+    @classmethod
+    def from_data_pointer(cls, bin_data_pointer): 
+        return FileBasedChunks(bin_data_pointer.file_path, \
+                remove_on_close=bin_data_pointer.remove_on_close)
+
+    def __init__(self, file_path, chunk_size=DEFAULT_CHUNK_SIZE, remove_on_close=False):
+        self.__file_path = file_path
+        self.__chunk_size = chunk_size
+        self.__f_obj = None
+        self.__no_data_flag = False
+        self.__read_bytes = 0
+        self.__remove_on_close = remove_on_close
+
+    def __del__(self):
+        if self.__remove_on_close and os.path.exists(self.__file_path):
+            os.remove(self.__file_path)
+
+    def chunks_count(self):
+        f_size = os.path.getsize(self.__file_path) - self.__read_bytes
+        cnt = f_size / self.__chunk_size
+        if f_size % self.__chunk_size != 0:
+            cnt += 1
+        return cnt
+
+    def read(self, block_size):
+        if self.__no_data_flag:
+            return None
+
+        try:
+            if not self.__f_obj:
+                self.__f_obj = open(self.__file_path, 'rb')
+
+            chunk = self.__f_obj.read(block_size)
+            if not chunk:
+                self.close()
+                return None
+            self.__read_bytes += len(chunk)
+            return chunk
+        except IOError, err:
+            self.close()
+            raise FSHashRangesException('Cant read data from file system. Details: %s'%err)
+        except Exception, err:
+            self.close()
+            raise err
+
+    def get_next_chunk(self):
+        return self.read(self.__chunk_size)
+
+    def close(self):
+        self.__no_data_flag = True
+        if self.__f_obj:
+            self.__f_obj.close()
+
+def serialize_binary_data(binary_data):
+    if isinstance(binary_data, BinaryDataPointer):
+        return binary_data
+
+    if not isinstance(binary_data, FriBinaryData): 
+        raise FriException('Invalid binary data type: %s'%type(binary_data))
+
+    fd, tmp_path = tempfile.mkstemp('-serialized_binary')    
+    while True:
+        chunk = binary_data.get_next_chunk()
+        if chunk is None:
+            break
+        os.write(fd, chunk)
+    binary_data.close()
+    os.close(fd)
+    return BinaryDataPointer(tmp_path, remove_on_close=True)
+
 
 class FriBinaryProcessor:
     NEED_COMPRESSION = False
@@ -131,6 +209,7 @@ class FriBinaryProcessor:
         p_info = struct.pack('<4sqq', FRI_PROTOCOL_IDENTIFIER, p_len, h_len)
 
         return p_info + packet_data
+
 
 class FabnetPacket:
     is_request = False
@@ -280,7 +359,8 @@ class FabnetPacketResponse(FabnetPacket):
         return str(self.__repr__())
 
     def __repr__(self):
-        return '{%s}[%s] %s %s %s'%(self.message_id, self.from_node,
+        h_bin = '[HAS_BIN]' if self.binary_data else ''
+        return '{%s}[%s]%s %s %s %s'%(self.message_id, self.from_node, h_bin,
                     self.ret_code, self.ret_message, str(self.ret_parameters)[:100])
 
 

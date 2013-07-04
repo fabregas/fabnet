@@ -10,7 +10,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 This module contains the OperationBase interface
 """
-from fabnet.core.fri_base import FabnetPacketRequest
+from fabnet.core.fri_base import FabnetPacketRequest, serialize_binary_data
 
 class PermissionDeniedException(Exception):
     pass
@@ -99,8 +99,12 @@ class OperationBase:
             return self.__fri_client.call_sync(node_address, req)
 
         if binary_data:
-            raise Exception('Sending binary data from operation in async mode is disabled!')
-        message_id = self.operator.async_remote_call(node_address, operation, parameters, False)
+            binary_data_pointer = serialize_binary_data(binary_data)
+        else:
+            binary_data_pointer = None
+
+        message_id = self.operator.async_remote_call(node_address, operation, parameters, \
+                        False, binary_data_pointer)
         return message_id
 
     def _init_network_operation(self, operation, parameters):

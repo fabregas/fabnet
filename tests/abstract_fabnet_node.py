@@ -4,6 +4,9 @@ import os
 import logging
 import json
 import threading
+from fabnet.utils.logger import core_logger as logger
+#logger.setLevel(logging.DEBUG)
+
 from fabnet.core.constants import RC_OK, RC_ERROR
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.fri_server import FriServer
@@ -13,7 +16,6 @@ from fabnet.core.workers import ProcessBasedFriWorker, ThreadBasedFriWorker
 from fabnet.core.operations_processor import OperationsProcessor
 from fabnet.core.key_storage import FileBasedKeyStorage
 from fabnet.core.operations_manager import OperationsManager
-from fabnet.utils.logger import logger
 from datetime import datetime
 from multiprocessing import Process
 from threading import Thread
@@ -24,7 +26,6 @@ from fabnet.core.operation_base import OperationBase
 from fabnet.core.fri_base import RamBasedBinaryData
 from fabnet.core.constants import NODE_ROLE, CLIENT_ROLE, RC_PERMISSION_DENIED, RC_INVALID_CERT
 
-#logger.setLevel(logging.DEBUG)
 
 VALID_STORAGE = './tests/cert/test_keystorage.zip'
 INVALID_STORAGE = './tests/cert/test_keystorage_invalid.zip'
@@ -84,7 +85,9 @@ class EchoWithCallOperation(OperationBase):
     def callback(self, ret_packet, sender):
         fobj = open('%s/callback_with_call.log'%self.home_dir, 'w')
         fobj.write('params: %s\n'%ret_packet.ret_message)
+        fobj.write('data: %s'%ret_packet.binary_data.data())
         fobj.close()
+
 
 
 class TestAbstractFabnetNode(unittest.TestCase):
@@ -173,9 +176,11 @@ class TestAbstractFabnetNode(unittest.TestCase):
             #EchoWithCallOperation
             #sync call without binary
             resp = fri_client.call_sync('127.0.0.1:6666', FabnetPacketRequest(method='echo_with_call', \
-                                        parameters={'message': 'hello, fabregas!', 'is_sync_call':True}))
+                                        parameters={'message': 'hello, fabregas!', 'is_sync_call':True},\
+                                        binary_data=RamBasedBinaryData(data, 900000)))
             self.assertEqual(resp.ret_code, 0, resp.ret_message)
             self.assertEqual(resp.ret_parameters['message'], 'hello, fabregas!')
+            self.assertEqual(resp.binary_data.data(), data)
 
             #sync call without binary (async in operation)
             resp = fri_client.call_sync('127.0.0.1:6666', FabnetPacketRequest(method='echo_with_call', \
@@ -183,6 +188,18 @@ class TestAbstractFabnetNode(unittest.TestCase):
             self.assertEqual(resp.ret_code, 0, resp.ret_message)
             time.sleep(1)
             EchoOperation.check_resp('hello, fabregas!')
+
+            #sync call with binary (async in operation)
+            resp = fri_client.call_sync('127.0.0.1:6666', FabnetPacketRequest(method='echo_with_call', \
+                                        parameters={'message': 'hello, fabregas!', 'is_sync_call':False},\
+                                        binary_data=RamBasedBinaryData(data, 900000)))
+            for i in xrange(10):
+                if os.path.exists('/tmp/callback.log'):
+                    break
+                time.sleep(1)
+            time.sleep(1)
+            self.assertEqual(resp.ret_code, 0, resp.ret_message)
+            EchoOperation.check_resp('hello, fabregas!', data)
         finally:
             fri_server.stop()
             operator_proc.stop()

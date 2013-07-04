@@ -125,7 +125,7 @@ class TestServerThread(threading.Thread):
         params = {'key': key, 'is_replica':is_replica}
         req = FabnetPacketRequest(method='GetDataBlock',\
                             sync=True, parameters=params)
-        client = FriClient(session_id=user_id)
+        client = FriClient(session_id=user_id or self.SESSION_ID)
         resp = client.call_sync('127.0.0.1:%s'%self.port, req)
         if resp.ret_code == constants.RC_NO_DATA:
             return None
@@ -133,11 +133,11 @@ class TestServerThread(threading.Thread):
             raise Exception('GetDataBlock operation failed on %s. Details: %s'%('127.0.0.1:%s'%self.port, resp.ret_message))
         return resp.binary_data
 
-    def put(self, data):
+    def put(self, data, wait_writes=3):
         client = FriClient(session_id=self.SESSION_ID)
         checksum = hashlib.sha1(data).hexdigest()
 
-        params = {'checksum': checksum, 'wait_writes_count': 3, 'replica_count':2}
+        params = {'checksum': checksum, 'wait_writes_count': wait_writes, 'replica_count':2}
         data = RamBasedBinaryData(data, 20)
         packet_obj = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
         #print '========SENDING DATA BLOCK %s (%s chunks)'%(packet_obj, data.chunks_count())
@@ -171,8 +171,20 @@ class TestServerThread(threading.Thread):
         h_end = stat['DHTInfo']['range_end']
         return os.path.join(self.home_dir, 'dht_range/%s_%s'%(h_start, h_end))
 
+    def get_keys_info(self, key):
+        client = FriClient(session_id=self.SESSION_ID)
+        packet = FabnetPacketRequest(method='GetKeysInfo', \
+                parameters={'key': key, 'replica_count': 2}, sync=True)
+
+        ret_packet = client.call_sync('127.0.0.1:%s'%self.port, packet)
+        keys_info = ret_packet.ret_parameters['keys_info']
+        return keys_info
+    
     def get_replicas_dir(self):
         return os.path.join(self.home_dir, 'dht_range/replica_data')
+
+    def get_tmp_dir(self):
+        return os.path.join(self.home_dir, 'dht_range/tmp')
 
     def get_status(self):
         self.__lock.acquire()
@@ -258,6 +270,22 @@ class TestDHTInitProcedure(unittest.TestCase):
                 pass
             else:
                 raise Exception('should be exception in this case')
+
+            data = 'Test binary data '*10
+            key = server1.put(data, wait_writes=2)
+            time.sleep(1)
+            keys = server1.get_keys_info(key)
+            for key, is_replica, node_addr in keys:
+                if '86' in node_addr:
+                    s = server
+                else:
+                    s = server1
+                rd = s.get_data_block(key, is_replica=is_replica, user_id=None)
+                self.assertEqual(rd.data(), data)
+            files = os.listdir(server1.get_tmp_dir())
+            self.assertEqual(len(files), 0, files)
+            files = os.listdir(server1.get_tmp_dir())
+            self.assertEqual(len(files), 0, files)
         finally:
             if server:
                 server.stop()

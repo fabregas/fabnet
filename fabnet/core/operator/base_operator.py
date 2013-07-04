@@ -27,7 +27,7 @@ from fabnet.core.sessions_manager import SessionsManager
 from fabnet.core.operator.async_call_agent import FriAgent
 from fabnet.core.operator.neighbours_discovery import NeigboursDiscoveryRoutines
 from fabnet.core.constants import MC_SIZE
-from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
+from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse, FileBasedChunks
 from fabnet.core.fri_client import FriClient
 from fabnet.core.statistic import Statistic
 from fabnet.core.constants import RC_OK, RC_ERROR, RC_NOT_MY_NEIGHBOUR, NT_SUPERIOR, NT_UPPER, \
@@ -473,8 +473,13 @@ class Operator:
 
         self.__async_requests.put((address, packet))
 
-    def async_remote_call(self, node_address, operation, parameters, multicast=False):
-        req = FabnetPacketRequest(method=operation, sender=self.self_address, parameters=parameters)
+    def async_remote_call(self, node_address, operation, parameters, multicast=False, bin_data_pointer=None):
+        if bin_data_pointer:
+            binary_data = FileBasedChunks.from_data_pointer(bin_data_pointer) 
+        else:
+            binary_data = None
+        req = FabnetPacketRequest(method=operation, sender=self.self_address, \
+                parameters=parameters, binary_data=binary_data)
         if multicast:
             self.call_network(req, node_address)
         else:
@@ -482,9 +487,14 @@ class Operator:
 
         return req.message_id
 
-    def response_to_sender(self, sender, message_id, ret_code, ret_message, parameters):
+    def response_to_sender(self, sender, message_id, ret_code, ret_message, parameters, bin_data_pointer=None):
+        if bin_data_pointer:
+            binary_data = FileBasedChunks.from_data_pointer(bin_data_pointer) 
+        else:
+            binary_data = None
         resp = FabnetPacketResponse(message_id=message_id, ret_code=ret_code, \
-                                ret_message=ret_message, ret_parameters=parameters)
+                                ret_message=ret_message, ret_parameters=parameters, \
+                                binary_data=binary_data)
         self.__call_operation(sender, resp)
 
 

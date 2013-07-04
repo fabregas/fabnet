@@ -16,7 +16,7 @@ from multiprocessing import RLock
 
 from fabnet.utils.internal import total_seconds
 from fabnet.utils.logger import core_logger as logger
-from fabnet.core.fri_base import FabnetPacketResponse
+from fabnet.core.fri_base import FabnetPacketResponse, serialize_binary_data
 from fabnet.core.operator import OperatorClient
 from fabnet.core.fri_client import FriClient
 from fabnet.core.operation_base import OperationBase, PermissionDeniedException
@@ -161,8 +161,13 @@ class OperationsManager:
             self.callback(packet)
             return
 
+        if packet.binary_data:
+            binary_data_pointer = serialize_binary_data(packet.binary_data)
+        else:
+            binary_data_pointer = None
         self.operator_cl.response_to_sender(sender, packet.message_id, \
-                        packet.ret_code, packet.ret_message, packet.ret_parameters)
+                        packet.ret_code, packet.ret_message, packet.ret_parameters,\
+                        binary_data_pointer)
 
     def get_session(self, session_id):
         return self.operator_cl.get_session(session_id)
