@@ -186,7 +186,7 @@ class DHTOperator(Operator):
         found_range = self.ranges_table.find(end)
         if found_range and found_range.node_address not in self.__split_requests_cache:
             ret_range_e = self.__normalize_range_request(start, end, found_range)
-            if ret_range_e and ret_range_e.length() > ret_range.length():
+            if (not ret_range) or (ret_range_e and ret_range_e.length() > ret_range.length()):
                 ret_range = ret_range_e
 
         if not ret_range:
