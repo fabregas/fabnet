@@ -67,7 +67,7 @@ class Operator:
 
     def __init__(self, self_address, home_dir='/tmp/', key_storage=None, \
                     is_init_node=False, node_name='unknown-node', config={}):
-        self.update_config(config)
+        self.update_config(config, self.OPTYPE)
         self.msg_container = MessageContainer(MC_SIZE)
 
         self.__lock = threading.RLock()
@@ -191,8 +191,8 @@ class Operator:
             return True
         return False
 
-    def update_config(self, config):
-        Config.update_config(config)
+    def update_config(self, config, section=None):
+        Config.update_config(config, section=section)
 
     def get_config(self):
         return Config.get_config_dict()

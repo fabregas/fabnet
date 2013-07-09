@@ -11,7 +11,7 @@ from fabnet.utils.logger import logger
 from fabnet.dht_mgmt.fs_mapped_ranges import FSHashRanges, TmpFile
 
 from fabnet.core.config import Config
-Config.update_config({'WAIT_FILE_MD_TIMEDELTA': 0.1})
+Config.update_config({'WAIT_FILE_MD_TIMEDELTA': 0.1}, 'DHT')
 
 logger.setLevel(logging.DEBUG)
 

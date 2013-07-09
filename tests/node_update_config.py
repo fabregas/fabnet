@@ -32,7 +32,7 @@ class TestNodeUpdateConfig(unittest.TestCase):
             resp = fri_client.call_sync(address, packet_obj)
             self.assertNotEqual(resp.ret_code, 0)
 
-            params = {'config': {'TEST_CONFIG': 'str', 'TEST_INT': 234}}
+            params = {'config': {'TEST': {'TEST_CONFIG': 'str', 'TEST_INT': 234}}}
             packet_obj = FabnetPacketRequest(method='UpdateNodeConfig', parameters=params, sync=True)
             resp = fri_client.call_sync(address, packet_obj)
             self.assertEqual(resp.ret_code, 0, resp.ret_message)
@@ -40,8 +40,10 @@ class TestNodeUpdateConfig(unittest.TestCase):
             packet_obj = FabnetPacketRequest(method='GetNodeConfig', sync=True)
             resp = fri_client.call_sync(address, packet_obj)
             self.assertEqual(resp.ret_code, 0, resp.ret_message)
-            self.assertEqual(resp.ret_parameters['TEST_CONFIG'], 'str')
-            self.assertEqual(resp.ret_parameters['TEST_INT'], 234)
+            self.assertTrue('TEST' in resp.ret_parameters, resp.ret_parameters)
+
+            self.assertEqual(resp.ret_parameters['TEST']['TEST_CONFIG'], 'str')
+            self.assertEqual(resp.ret_parameters['TEST']['TEST_INT'], 234)
 
             time.sleep(.2)
         except Exception, err:

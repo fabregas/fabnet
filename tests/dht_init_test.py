@@ -352,12 +352,12 @@ class TestDHTInitProcedure(unittest.TestCase):
             if server1:
                 server1.stop()
 
-    def __wait_oper_status(self, server, status):
+    def __wait_oper_status(self, server, status, errmsg=None):
         for i in xrange(10):
             if server.get_status() == status:
                 return
             time.sleep(.5)
-        self.assertEqual(server.get_status(), status)
+        self.assertEqual(server.get_status(), status, errmsg)
 
     def test02_dht_init_fail(self):
         server = server1 = None
@@ -387,8 +387,8 @@ class TestDHTInitProcedure(unittest.TestCase):
             time.sleep(.2)
             server.operator.join_subranges()
             time.sleep(.2)
-            server1.operator.update_config({'ALLOW_USED_SIZE_PERCENTS':70})
-            self.__wait_oper_status(server1, DS_NORMALWORK)
+            server1.operator.update_config({'DHT': {'ALLOW_USED_SIZE_PERCENTS':70}})
+            self.__wait_oper_status(server1, DS_NORMALWORK, server1.operator.get_config())
 
             data_block = 'Hello, fabregas! '*100
             checksum = hashlib.sha1(data_block).hexdigest()

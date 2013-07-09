@@ -10,6 +10,9 @@ import ConfigParser
 NODE_SCRIPT = os.path.abspath(os.path.join(os.path.dirname(__file__), 'fabnet-node'))
 PYPATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 
+sys.path.insert(0, PYPATH)
+from fabnet.core.config import Config
+
 DEFAULT_PORT = 1987
 DEFAULT_HOME = os.path.abspath(os.path.join(os.environ.get('HOME', '/tmp'), 'fabnet_node_home'))
 
@@ -25,7 +28,7 @@ def usage():
     print('           or')
     print('       %s status'%sys.argv[0])
     print('\n   You can redefine following environment variables: FABNET_NODE_HOME')
-    print('   Node init config is saving to $FABNET_NODE_HOME/init_config file')
+    print('   Node init config is saving to $FABNET_NODE_HOME/node_config file')
     print('   If you want start secured fabnet node, home directory should contain key storage file named in format *.ks')
 
 
@@ -135,32 +138,19 @@ def get_init_config(home_dir):
               'NODE_NAME': hostname,
               'NODE_TYPE': None}
 
-    init_config = os.path.join(home_dir, 'init_config')
-    if not os.path.exists(init_config):
-        return config
-    
-    config_file = ConfigParser.RawConfigParser(allow_no_value=True)
-    config_file.read(init_config)
-    for config_key in config:
-        try:
-            val = config_file.get('init', config_key)
-            config[config_key] = val
-        except ConfigParser.Error, err:
-            pass
-
+    config_file = os.path.join(home_dir, 'node_config')
+    if os.path.exists(config_file): 
+        Config.load(config_file)
+        config.update(Config.get_config_dict('init', {}))
     return config
             
 
 def save_init_config(home_dir, config):
-    config_file = ConfigParser.RawConfigParser()
-    config_file.add_section('init')
-    for key, val in config.items():
-        config_file.set('init', key, val)
-    
-    init_config = os.path.join(home_dir, 'init_config')
+    config_file = os.path.join(home_dir, 'node_config')
+    Config.load(config_file)
+
     try:
-        with open(init_config, 'wb') as configfile:
-            config_file.write(configfile)
+        Config.update_config(config, 'init')
     except IOError, err:
         sys.stderr.write('Init config can not be created! Details: %s\n'%err)
         sys.exit(3)

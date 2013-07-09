@@ -59,12 +59,13 @@ class DHTOperator(Operator):
 
     def __init__(self, self_address, home_dir='/tmp/', key_storage=None, \
                         is_init_node=False, node_name='unknown', config={}):
+        cur_cfg = {}
+        cur_cfg.update(DEFAULT_DHT_CONFIG)
+        cur_cfg.update(config)
         Operator.__init__(self, self_address, home_dir, key_storage, \
-                                        is_init_node, node_name, config)
+                                        is_init_node, node_name, cur_cfg)
 
         self.status = DS_INITIALIZE
-        Config.update_config(DEFAULT_DHT_CONFIG)
-        Config.update_config(config)
         self.ranges_table = HashRangesTable()
         if is_init_node:
             self.ranges_table.append(MIN_HASH, MAX_HASH, self.self_address)
