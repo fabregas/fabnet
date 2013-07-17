@@ -18,15 +18,15 @@ DEFAULT_HOME = os.path.abspath(os.path.join(os.environ.get('HOME', '/tmp'), 'fab
 
 
 def usage():
-    print('Usage: %s init-config'%sys.argv[0])
+    print('Usage: node-daemon init-config')
     print('           or')
-    print('       %s start [<neighbour node>[:port]|init-fabnet <node name> <node type>]'%sys.argv[0])
+    print('       node-daemon start [<neighbour node>[:port]|init-fabnet <node addr> <node name> <node type>]')
     print('           or')
-    print('       %s reload'%sys.argv[0])
+    print('       node-daemon reload')
     print('           or')
-    print('       %s stop'%sys.argv[0])
+    print('       node-daemon stop')
     print('           or')
-    print('       %s status'%sys.argv[0])
+    print('       node-daemon status')
     print('\n   You can redefine following environment variables: FABNET_NODE_HOME')
     print('   Node init config is saving to $FABNET_NODE_HOME/node_config file')
     print('   If you want start secured fabnet node, home directory should contain key storage file named in format *.ks')
@@ -36,7 +36,7 @@ def stop_node(PID_FILE):
     print('stopping fabnet node...')
     if not os.path.exists(PID_FILE):
         sys.stderr.write('No pid file found at %s\n'%PID_FILE)
-        sys.exit(1)
+        sys.exit(20)
     pid = int(open(PID_FILE).read())
 
     if os.path.exists('/proc/%s'%pid):
@@ -59,7 +59,7 @@ def stop_node(PID_FILE):
 def start_node(node_address, neighbour, node_name, home_dir, node_type, pid_file, input_pwd=False):
     if is_node_started(pid_file):
         print('fabnet node is already started!')
-        sys.exit(1)
+        sys.exit(30)
 
     home_dir = os.path.abspath(home_dir)
     if not os.path.exists(home_dir):
@@ -171,14 +171,22 @@ def main(argv):
         else:
             input_pwd = False
 
-        if (config['NODE_TYPE'] is None and len(argv) < 5) or len(argv) > 5:
+        if (config['NODE_TYPE'] is None and len(argv) < 6) or len(argv) > 6:
             usage()
             sys.exit(1)
 
-        if len(argv) == 5:
+        if len(argv) == 6:
             config['FIRST_NEIGHBOUR'] = argv[2]
-            config['NODE_NAME'] = argv[3]
-            config['NODE_TYPE'] = argv[4]
+            node_address = argv[3]
+            config['NODE_NAME'] = argv[4]
+            config['NODE_TYPE'] = argv[5]
+
+            if ':' in node_address:
+                ip_addr, port = node_address.split(':')
+            else:
+                ip_addr, port = node_address, DEFAULT_PORT
+            config['FABNET_NODE_HOST'], config['FABNET_NODE_PORT'] = ip_addr, port
+            
 
         ip_addr = config['FABNET_NODE_HOST']
         port = config['FABNET_NODE_PORT']

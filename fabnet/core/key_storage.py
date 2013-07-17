@@ -46,7 +46,29 @@ class AbstractKeyStorage:
         self._load_key_storage(ks_path, passwd)
 
     def _load_key_storage(self, ks_path, passwd):
-        pass
+        if not os.path.exists(ks_path):
+            raise Exception('Key storage file %s does not found!'%ks_path)
+
+        storage = zipfile.ZipFile(ks_path)
+        if passwd:
+            storage.setpassword(passwd)
+
+        def read_file(f_name):
+            f_obj = storage.open(f_name)
+            data = f_obj.read()
+            f_obj.close()
+            return str(data)
+
+        files = storage.namelist()
+        for f_name in files:
+            if f_name.endswith('.crt'):
+                self._node_cert = read_file(f_name)
+            elif f_name.endswith('.key'):
+                self._node_prikey = read_file(f_name)
+
+        storage.close()
+        if self._node_cert is None or self._node_prikey is None:
+            raise Exception('Certificate and/or private key does not found in key storage')
 
     def get_node_cert(self):
         return self._node_cert
