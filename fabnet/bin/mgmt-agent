@@ -8,6 +8,7 @@ import daemon
 import tempfile
 
 PYPATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
+DAEMON_PATH = os.path.abspath(__file__)
 sys.path.insert(0, PYPATH)
 
 from fabnet.mgmt.management_agent import ManagementAgent, DEFAULT_MGMT_PORT
@@ -49,7 +50,10 @@ def check_started_daemon(allow_reload):
         sys.stderr.write('Management agent is already started (run with --force flag for reload)\n')
         sys.exit(30)
 
+    argv = None
     if os.path.exists('/proc/%s'%pid):
+        cmdline = open('/proc/%s/cmdline'%pid).read().replace('\x00', ' ')
+        argv = cmdline.split()
         print ('stopping management agent daemon...')
         try:
             os.kill(pid, signal.SIGINT)
@@ -61,30 +65,39 @@ def check_started_daemon(allow_reload):
     for i in xrange(30):
         time.sleep(1)
         if not os.path.exists('/proc/%i'%pid):
+            os.remove(pid_file)
             print ('done')
             break
     else:
         sys.stderr.write('Cant stop manangement agent! See logs for details...\n')
         sys.exit(1)
 
+    return argv
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Management agent daemon')
-    parser.add_argument('--host', dest='host',
+    start = parser.add_argument_group('start')
+    reload = parser.add_argument_group('reload')
+    start.add_argument('--host', dest='host',
                    help='manangent agent bind hostname or IP address (0.0.0.0 by default)')
-    parser.add_argument('--port', type=int, dest='port',
+    start.add_argument('--port', type=int, dest='port',
                    help='manangent agent bind port (%s by default)'% DEFAULT_MGMT_PORT)
-    parser.add_argument('--ks-path', dest='ks_path',
+    start.add_argument('--ks-path', dest='ks_path',
                    help='manangent agent key storage path for SSL transport support '\
                            '(*.ks file in current or home directory used by default)')
-    parser.add_argument('--daemonize', '-d', dest='daemon', action='store_true',
+    start.add_argument('--daemonize', '-d', dest='daemon', action='store_true',
                    help='run management agent in background as a daemon')
-    parser.add_argument('--force', '-f', dest='force', action='store_true',
+    start.add_argument('--force', '-f', dest='force', action='store_true',
                    help='reload management agent if started')
+
+    reload.add_argument('--reload', dest='reload', action='store_true',
+                   help='reload management agent')
+
     args = parser.parse_args()
 
     ks_path = args.ks_path
-    if not ks_path:
+    if not ks_path and not args.reload:
         ks_path = detect_ks()
 
     try:
@@ -107,10 +120,18 @@ if __name__ == '__main__':
         while True:
             time.sleep(1)
 
-    if not args.daemon:
+    if not (args.daemon or args.reload):
         main_routine()
     else:
-        check_started_daemon(args.force)
+        allow_reload = args.force or args.reload
+        last_argv = check_started_daemon(allow_reload)
+        if args.reload:
+            if not last_argv:
+                sys.stderr.write('Management agent daemon does not started!\n')
+                sys.exit(30) 
+            ret = os.system('%s %s'%(DAEMON_PATH, ' '.join(last_argv[2:])))
+            sys.exit(ret)
+
         print('starting management agent daemon in background...')
         with daemon.DaemonContext():
             try:

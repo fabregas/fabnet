@@ -104,4 +104,7 @@ if __name__ == '__main__':
     if node_type not in OPERATORS_MAP.keys():
         sys.stderr.write('Unsupported node type: %s\n'%node_type)
         sys.exit(1)
+
+    print ('try reload management agent daemon...')
+    os.system('%s --reload'%os.path.join(PYPATH, 'fabnet/bin/mgmt-agent')) #reloading management agent
     sys.exit(upgrade(node_type))
