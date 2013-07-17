@@ -21,11 +21,13 @@ from fabnet.core.fri_base import RamBasedBinaryData
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
 from fabnet.monitor.monitor_operator import MONITOR_DB
 from fabnet.dht_mgmt.hash_ranges_table import HashRangesTable
+from fabnet.core.config import Config
 
 from Crypto import Random
 
 
 monitoring_home = '/tmp/monitor_node_home'
+MONITOR_DB = 'fabnet_monitor_db'
 
 def make_fake_hdd(name, size, dev='/dev/loop0'):
     if os.path.exists('/tmp/%s'%name):
@@ -118,6 +120,9 @@ def reboot_nodes(processes, addresses, timeout=None):
 def create_monitor(neigbour):
     os.system('rm -rf %s'%monitoring_home)
     os.system('mkdir %s'%monitoring_home)
+    Config.load(os.path.join(monitoring_home, 'node_config'))
+    Config.update_config({'db_engine': 'postgresql', \
+        'db_conn_str': "dbname=%s user=postgres"%MONITOR_DB}, 'Monitor')
     address = '%s:%s'%('127.0.0.1', 1989)
     logger.warning('{SNP} STARTING MONITORING NODE %s'%address)
     mon_p = subprocess.Popen(['/usr/bin/python', './fabnet/bin/fabnet-node', address, neigbour, 'monitor', monitoring_home, 'Monitor', '--nodaemon'])

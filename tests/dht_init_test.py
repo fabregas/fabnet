@@ -22,7 +22,7 @@ from fabnet.dht_mgmt.data_block import DataBlockHeader
 from fabnet.dht_mgmt import constants
 from fabnet.core.config import Config
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
-from fabnet.monitor.constants import MONITOR_DB
+from monitor_test import MONITOR_DB
 from fabnet.core.node import Node
 from fabnet.dht_mgmt.hash_ranges_table import HashRangesTable
 from fabnet.dht_mgmt.dht_operator import DHTOperator
@@ -520,7 +520,9 @@ class TestDHTInitProcedure(unittest.TestCase):
             server1 = TestServerThread(1987, home2, neighbour='127.0.0.1:1986', config={'MAX_USED_SIZE_PERCENTS': 99})
             server1.start()
             time.sleep(1)
-            monitor = TestServerThread(1990, monitor_home, is_monitor=True, neighbour='127.0.0.1:1986')
+            monitor = TestServerThread(1990, monitor_home, is_monitor=True, neighbour='127.0.0.1:1986', \
+                    config={'db_engine': 'postgresql', 'db_conn_str': "dbname=%s user=postgres"%MONITOR_DB})
+
             monitor.start()
             time.sleep(1.5)
 

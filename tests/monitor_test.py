@@ -10,11 +10,13 @@ import string
 import hashlib
 import subprocess
 import signal
+from fabnet.core.config import Config
 from fabnet.core.fri_base import FabnetPacketRequest, FabnetPacketResponse
 from fabnet.core.fri_client import FriClient
 from fabnet.core.constants import RC_OK, NT_SUPERIOR, NT_UPPER, ET_INFO, ET_ALERT
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
-from fabnet.monitor.monitor_operator import MonitorOperator, MONITOR_DB
+from fabnet.utils.db_conn import DBOperationalException, DBEmptyResult
+from fabnet.monitor.monitor_operator import MonitorOperator
 from fabnet.dht_mgmt.dht_operator import DHTOperator
 
 from fabnet.utils.logger import logger
@@ -24,6 +26,8 @@ logger.setLevel(logging.DEBUG)
 PROCESSES = []
 ADDRESSES = []
 DEBUG = False
+
+MONITOR_DB = 'fabnet_monitor_db'
 
 class TestMonitorNode(unittest.TestCase):
     def create_net(self, nodes_count):
@@ -50,6 +54,9 @@ class TestMonitorNode(unittest.TestCase):
             logger.warning('{SNP} STARTING NODE %s'%address)
             if n_node == 'init-fabnet':
                 ntype = 'Monitor'
+                Config.load(os.path.join(home, 'node_config'))
+                Config.update_config({'db_engine': 'postgresql', \
+                    'db_conn_str': "dbname=%s user=postgres"%MONITOR_DB}, 'Monitor')
             else:
                 ntype = 'DHT'
             args = ['/usr/bin/python', './fabnet/bin/fabnet-node', address, n_node, '%.02i'%i, home, ntype, '--nodaemon']
@@ -104,11 +111,49 @@ class TestMonitorNode(unittest.TestCase):
 
     def test00_initnet(self):
         os.system('dropdb -U postgres %s'%MONITOR_DB)
-        self.create_net(4)
+        os.system('createdb -U postgres %s'%MONITOR_DB)
 
         conn = DBConnection("dbname=%s user=postgres"%MONITOR_DB)
         conn.select('select 1')
-        conn.close()
+        try:
+            notification_tbl = """CREATE TABLE notification (
+                id serial PRIMARY KEY,
+                node_address varchar(512) NOT NULL,
+                notify_type varchar(64) NOT NULL,
+                notify_topic varchar(512),
+                notify_msg text,
+                notify_dt timestamp
+            )"""
+
+            nodes_info_tbl = """CREATE TABLE nodes_info (
+                id serial PRIMARY KEY,
+                node_address varchar(512) UNIQUE NOT NULL,
+                node_name varchar(128) NOT NULL,
+                node_type varchar(128),
+                home_dir varchar(1024),
+                status integer NOT NULL DEFAULT 0,
+                superiors text,
+                uppers text,
+                statistic text,
+                last_check timestamp
+            )"""
+
+            try:
+                conn.select("SELECT id FROM nodes_info WHERE id=1")
+            except DBOperationalException:
+                conn.execute(nodes_info_tbl)
+
+           
+            try:
+                conn.select("SELECT id FROM notification WHERE id=1")
+            except DBOperationalException:
+                conn.execute(notification_tbl)
+        except Exception, err:
+            raise err
+        finally:
+            conn.close()
+
+        self.create_net(4)
 
     def test99_stopnet(self):
         for process in PROCESSES:

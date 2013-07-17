@@ -21,14 +21,13 @@ from fabnet.core.fri_base import  FabnetPacketRequest
 from fabnet.core.fri_client import FriClient
 from fabnet.core.operator import Operator
 from fabnet.core.config import Config
-from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
-from fabnet.utils.db_conn import DBOperationalException, DBEmptyResult
 from fabnet.utils.logger import oper_logger as logger
 from fabnet.utils.internal import total_seconds
 
-from fabnet.monitor.constants import DEFAULT_MONITOR_CONFIG, MONITOR_DB, UP, DOWN
+from fabnet.monitor.constants import DEFAULT_MONITOR_CONFIG, UP, DOWN
 from fabnet.monitor.topology_cognition_mon import TopologyCognitionMon
 from fabnet.monitor.notify_operation_mon import NotifyOperationMon
+from fabnet.monitor.monitor_dbapi import PostgresDBAPI, AbstractDBAPI 
 
 OPERLIST = [NotifyOperationMon, TopologyCognitionMon]
 
@@ -42,8 +41,9 @@ class MonitorOperator(Operator):
 
         Operator.__init__(self, self_address, home_dir, key_storage, is_init_node, node_name, cur_cfg)
 
-        self.__monitor_db_path = "dbname=%s user=postgres"%MONITOR_DB
-        self._conn = self._init_db()
+        self.__db_conn_str = None
+        self.__db_api = None
+        self.check_database()
 
         if key_storage:
             cert = key_storage.get_node_cert()
@@ -64,93 +64,49 @@ class MonitorOperator(Operator):
         self.__discovery_topology_thrd.setName('%s-DiscoverTopologyThread'%self.node_name)
         self.__discovery_topology_thrd.start()
 
+    def check_database(self):
+        db_conn_str = Config.get('db_conn_str', self.OPTYPE)
+        if self.__db_api and db_conn_str == self.__db_conn_str:
+            return
+        
+        if self.__db_api:
+            try:
+                self.__db_api.close()
+            except Exception, err:
+                logger.error('DBAPI closing failed with error "%s"'%err)
+
+        db_engine = Config.get('db_engine', self.OPTYPE)
+        if db_engine is None:
+            self.__db_api = AbstractDBAPI()
+        elif db_engine == 'postgresql':
+            self.__db_api = PostgresDBAPI(db_conn_str)
+        elif db_engine == 'mongodb':
+            self.__db_api = MongoDBAPI(db_conn_str)
+        self.__db_conn_str = db_conn_str
+
     def stop_inherited(self):
         self.__collect_up_nodes_stat_thread.stop()
         self.__collect_dn_nodes_stat_thread.stop()
         self.__discovery_topology_thrd.stop()
 
         self.__discovery_topology_thrd.join()
-        self._conn.close()
-
-    def _init_db(self):
-        os.system('createdb -U postgres %s'%MONITOR_DB)
-        conn = DBConnection(self.__monitor_db_path)
-
-        try:
-            notification_tbl = """CREATE TABLE notification (
-                id serial PRIMARY KEY,
-                node_address varchar(512) NOT NULL,
-                notify_type varchar(64) NOT NULL,
-                notify_topic varchar(512),
-                notify_msg text,
-                notify_dt timestamp
-            )"""
-
-            nodes_info_tbl = """CREATE TABLE nodes_info (
-                id serial PRIMARY KEY,
-                node_address varchar(512) UNIQUE NOT NULL,
-                node_name varchar(128) NOT NULL,
-                node_type varchar(128),
-                home_dir varchar(1024),
-                status integer NOT NULL DEFAULT 0,
-                superiors text,
-                uppers text,
-                statistic text,
-                last_check timestamp
-            )"""
-
-            try:
-                conn.select("SELECT id FROM nodes_info WHERE id=1")
-            except DBOperationalException:
-                conn.execute(nodes_info_tbl)
-
-            try:
-                conn.select("SELECT id FROM notification WHERE id=1")
-            except DBOperationalException:
-                conn.execute(notification_tbl)
-        except Exception, err:
-            conn.close()
-            raise err
-
-        return conn
-
+        self.__db_api.close()
 
     def get_nodes_list(self, status=UP):
-        try:
-            return self._conn.select_col("SELECT node_address FROM nodes_info WHERE status=%s", (status,))
-        except DBEmptyResult:
-            return []
-
+        return self.__db_api.get_nodes_list(status)
 
     def change_node_status(self, nodeaddr, status):
-        rows = self._conn.select("SELECT id FROM nodes_info WHERE node_address=%s", (nodeaddr, ))
-        if not rows:
-            self._conn.execute("INSERT INTO nodes_info (node_address, node_name, status) VALUES (%s, %s, %s)", (nodeaddr, '', status))
-        else:
-            self._conn.execute("UPDATE nodes_info SET status=%s WHERE id=%s", (status, rows[0][0]))
-
+        self.__db_api.change_node_status(nodeaddr, status)
 
     def update_node_info(self, nodeaddr, node_name, home_dir, node_type, superior_neighbours, upper_neighbours):
-        superiors = ','.join(superior_neighbours)
-        uppers = ','.join(upper_neighbours)
-        rows = self._conn.select("SELECT id, node_name, home_dir, node_type, status, superiors, uppers \
-                                    FROM nodes_info WHERE node_address=%s", (nodeaddr, ))
-        if not rows:
-            self._conn.execute("INSERT INTO nodes_info (node_address, node_name, home_dir, node_type, status, superiors, uppers) \
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)", (nodeaddr, node_name, home_dir, node_type, UP, superiors, uppers))
-        else:
-            if rows[0][1:] == (node_name, home_dir, node_type, UP, superiors, uppers):
-                return
-            self._conn.execute("UPDATE nodes_info \
-                                SET node_name=%s, home_dir=%s, node_type=%s, status=%s, superiors=%s, uppers=%s \
-                                WHERE id=%s", \
-                                (node_name, home_dir, node_type, UP, superiors, uppers, rows[0][0]))
-
+        self.__db_api.update_node_info(nodeaddr, node_name, home_dir, node_type, \
+                superior_neighbours, upper_neighbours)
 
     def update_node_stat(self, nodeaddr, stat):
-        self._conn.execute("UPDATE nodes_info SET status=%s, statistic=%s, last_check=%s \
-                            WHERE node_address=%s", (UP, stat, datetime.now(), nodeaddr))
+        self.__db_api.update_node_stat(nodeaddr, stat)
 
+    def notification(self, notify_provider, notify_type, notify_topic, message, date):
+        self.__db_api.notification(notify_provider, notify_type, notify_topic, message, date)
 
 
 class CollectNodeStatisticsThread(threading.Thread):
@@ -222,6 +178,8 @@ class DiscoverTopologyThread(threading.Thread):
 
                 if self.stopped.is_set():
                     break
+
+                self.operator.check_database()
 
                 from_addr = self.next_discovery_node()
                 if from_addr:

@@ -10,7 +10,7 @@ import signal
 
 import primitives
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
-from fabnet.monitor.monitor_operator import MONITOR_DB
+from primitives import MONITOR_DB
 
 
 LOG_DIR = '/tmp/fabnet-test-logs'
