@@ -80,11 +80,11 @@ if __name__ == '__main__':
     start = parser.add_argument_group('start')
     reload = parser.add_argument_group('reload')
     start.add_argument('--host', dest='host',
-                   help='manangent agent bind hostname or IP address (0.0.0.0 by default)')
+                   help='management agent bind hostname or IP address (0.0.0.0 by default)')
     start.add_argument('--port', type=int, dest='port',
-                   help='manangent agent bind port (%s by default)'% DEFAULT_MGMT_PORT)
+                   help='management agent bind port (%s by default)'% DEFAULT_MGMT_PORT)
     start.add_argument('--ks-path', dest='ks_path',
-                   help='manangent agent key storage path for SSL transport support '\
+                   help='management agent key storage path for SSL transport support '\
                            '(*.ks file in current or home directory used by default)')
     start.add_argument('--daemonize', '-d', dest='daemon', action='store_true',
                    help='run management agent in background as a daemon')

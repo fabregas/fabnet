@@ -80,7 +80,6 @@ class MgmtCommandsProcessor(ThreadBasedFriWorker):
 
         elif method == 'ReloadNode':
             return self.reload_node(node_home, ks_pwd)
-
         else:
             raise Exception('Unknown method "%s"'%method)
 
