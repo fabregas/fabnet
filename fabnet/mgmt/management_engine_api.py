@@ -20,7 +20,24 @@ from fabnet.mgmt.constants import *
 from fabnet.mgmt.exceptions import *
 from fabnet.core.key_storage import AbstractKeyStorage
 
-class ManagementEngineAPI:
+
+class check_auth:
+    roles_map = {}
+    def __init__(self, *roles):
+        self.roles = roles
+
+    def __call__(self_a, method):
+        self_a.roles_map[method.__name__] = self_a.roles
+        def decorated(self, session_id, *args, **kw_args):
+            if not isinstance(self, ManagementEngineAPI):
+                raise Exception('decorator @check_auth(<roles>) should '\
+                        'be used for ManagementEngineAPI class methods')
+
+            self._check_roles(session_id, self_a.roles)
+            return method(self, session_id, *args, **kw_args)
+        return decorated
+
+class ManagementEngineAPI(object):
     def __init__(self, db_mgr):
         self._db_mgr = db_mgr
         self._admin_ks = None
@@ -54,6 +71,33 @@ class ManagementEngineAPI:
         os.close(f_hdl)
         return f_path
 
+    def _check_roles(self, session_id, need_roles):
+        user = self._db_mgr.get_user_by_session(session_id)
+        if user is None:
+            raise MEAuthException('Unknown user session!')
+
+        roles = user[DBK_ROLES] 
+        for role in roles:
+            if role in need_roles:
+                return
+        raise MEPermException('User does not have permissions for this action!')
+
+    def get_allowed_methods(self, session_id):
+        user = self._db_mgr.get_user_by_session(session_id)
+        if user is None:
+            raise MEAuthException('Unknown user session!')
+
+        roles = user[DBK_ROLES] 
+        methods = []
+        for item in dir(self):
+            item_roles = check_auth.roles_map.get(item, None)
+            if not item_roles:
+                continue
+            for role in roles:
+                if role in item_roles:
+                    methods.append(item)
+        return methods
+
     def authenticate(self, username, password):
         user = self._db_mgr.get_user_info(username)
         if not user:
@@ -70,13 +114,30 @@ class ManagementEngineAPI:
     def logout(self, session_id):
         self._db_mgr.del_session(session_id)
 
+    @check_auth(ROLE_UM)
+    def get_available_roles(self, session_id):
+        return ROLES_DESC
+
+    @check_auth(ROLE_UM)
     def create_user(self, session_id, username, password, roles):
-        self._check_role(session_id, ROLE_CF)
         pwd_hash =  hashlib.sha1(password).hexdigest()
         self._db_mgr.create_user(username, pwd_hash, roles)
 
+    @check_auth(ROLE_UM)
+    def get_user_info(self, session_id, username):
+        user = self._db_mgr.get_user_info(username)
+        if not user:
+            return user
+        session = self._db_mgr.get_user_last_session(username)
+        user[DBK_LAST_SESSION] = session
+        return user
+
+    @check_auth(ROLE_UM)
+    def remove_user(self, session_id, username):
+        self._db_mgr.remove_user(username)
+
+    @check_auth(ROLE_UM)
     def change_user_roles(self, session_id, username, roles):
-        self._check_role(session_id, ROLE_CF)
         self._db_mgr.update_user_info(username, roles=roles)
 
     def change_user_password(self, session_id, new_password):
@@ -88,41 +149,33 @@ class ManagementEngineAPI:
         self._db_mgr.update_user_info(user[DBK_USERNAME], \
                 pwd_hash=pwd_hash)
 
-    def _check_role(self, session_id, role):
-        user = self._db_mgr.get_user_by_session(session_id)
-        if user is None:
-            raise MEAuthException('Unknown user session!')
-
-        roles = user[DBK_ROLES]
-        if role not in roles:
-            raise MEPermException('User does not have permissions for this action!')
-
+    @check_auth(ROLE_RO)
     def get_cluster_config(self, session_id):
-        self._check_role(session_id, ROLE_RO)
         return self._db_mgr.get_cluster_config()
 
+    @check_auth(ROLE_CF)
     def configure_cluster(self, session_id, config):
-        self._check_role(session_id, ROLE_CF)
         self._db_mgr.set_cluster_config(config)
 
+    @check_auth(ROLE_SS)
     def show_nodes(self, session_id, filters={}, rows=None, pad=None):
-        self._check_role(session_id, ROLE_RO)
         pass
 
+    @check_auth(ROLE_SS)
     def start_nodes(self, session_id, nodes_list=[]):
-        self._check_role(session_id, ROLE_SS)
         pass
     
+    @check_auth(ROLE_SS)
     def reload_nodes(self, session_id, nodes_list=[]):
-        self._check_role(session_id, ROLE_SS)
         pass
 
+    @check_auth(ROLE_SS)
     def stop_nodes(self, session_id, nodes_list=[]):
-        self._check_role(session_id, ROLE_SS)
         pass
 
+    @check_auth(ROLE_SS)
     def upgrade_nodes(self, session_id):
-        self._check_role(session_id, ROLE_UPGR)
         pass
+
 
 

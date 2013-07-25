@@ -35,8 +35,7 @@ class MgmtDatabaseManager:
         users_cnt = self.__mgmt_db[DBK_USERS].find({}).count()
         if users_cnt:
             return
-        self.create_user('admin', hashlib.sha1('admin').hexdigest(),\
-                [ROLE_CF, ROLE_RO])
+        self.create_user('admin', hashlib.sha1('admin').hexdigest(), [ROLE_UM])
 
     def close(self):
         self.__client.close()
@@ -59,7 +58,7 @@ class MgmtDatabaseManager:
         user = self.__mgmt_db[DBK_USERS].find_one({DBK_USERNAME: username})
         return user
 
-    def __validate(self, value, c_type, minlen=None, val_name=None):
+    def __validate(self, value, c_type, minlen=None, val_name=None, possible_vals=None):
         if not val_name:
             val_name = value
 
@@ -70,6 +69,14 @@ class MgmtDatabaseManager:
         if minlen and len(value) < minlen:
             raise MEInvalidArgException('len(%s) < %s raised'%(val_name, minlen))
 
+        if possible_vals:
+            if type(value) not in (list, tuple):
+                value = [value]
+            for item in value:
+                if item not in possible_vals:
+                    raise MEInvalidArgException('"%s" does not supported! possible values: %s'\
+                            %(item, possible_vals))
+
     def create_user(self, username, pwd_hash, roles):
         user = self.get_user_info(username)
         if user:
@@ -77,12 +84,15 @@ class MgmtDatabaseManager:
 
         self.__validate(username, str, minlen=3, val_name='user_name')
         self.__validate(pwd_hash, str, minlen=1, val_name='password_hash')
-        self.__validate(roles, list, minlen=1, val_name='roles')
+        self.__validate(roles, list, minlen=1, val_name='roles', possible_vals=ROLES_DESC.keys())
 
         user = {DBK_USERNAME: username,
                      DBK_USER_PWD_HASH: pwd_hash,
                      DBK_ROLES: roles}
         self.__mgmt_db[DBK_USERS].insert(user)
+
+    def remove_user(self, username):
+        self.__mgmt_db[DBK_USERS].remove({DBK_USERNAME: username})
 
     def update_user_info(self, username, pwd_hash=None, roles=None):
         user = self.__mgmt_db[DBK_USERS].find_one({DBK_USERNAME: username})
@@ -94,7 +104,7 @@ class MgmtDatabaseManager:
             user[DBK_USER_PWD_HASH] = pwd_hash
 
         if roles:
-            self.__validate(roles, list, minlen=1, val_name='roles')
+            self.__validate(roles, list, minlen=1, val_name='roles', possible_vals=ROLES_DESC.keys())
             user[DBK_ROLES] = roles
 
         self.__mgmt_db[DBK_USERS].update({DBK_USERNAME: username}, user)
@@ -117,4 +127,10 @@ class MgmtDatabaseManager:
         if not user:
             return None
         return user
+
+    def get_user_last_session(self, username):
+        sessions = self.__mgmt_db[DBK_SESSIONS].find({DBK_USERNAME: username}).sort([(DBK_START_DT, -1)])
+        for session in sessions:
+            return session
+        return None
 
