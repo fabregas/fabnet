@@ -1,5 +1,5 @@
 
-from telnetsrv.threaded import TelnetHandler, command
+from telnetsrv.threaded import TelnetHandler
 
 class InvalidArgumentsException(Exception):
     pass
@@ -105,6 +105,8 @@ class MgmtCLIHandler(TelnetHandler):
                 self.COMMANDS[alias.upper()] = self.COMMANDS[name]
 
     def session_end(self):
+        if getattr(self, 'session_id', None) is None:
+            return
         self.mgmtManagementAPI.logout(self.session_id)
 
     @cli_command('exit')
@@ -125,15 +127,19 @@ class MgmtCLIHandler(TelnetHandler):
         if params:
             cmd = params[0].upper()
 
-            if self.COMMANDS.has_key(cmd):
-                method = cli_command.cli_commands.get(cmd.lower(), None)
+            method = cli_command.cli_commands.get(cmd.lower(), None)
+            if method:
                 _, _, aliases, help_msg = method
                 doc = help_msg.split("\n")
                 docp = doc[0].strip()
                 docl = '\n'.join( [l.strip() for l in doc[2:]] )
                 if not docl.strip():  # If there isn't anything here, use line 1
                     docl = doc[1].strip()
-                self.writeline("%s %s\n\n%s" % (cmd, docp, docl))
+                if aliases:
+                    al_doc = '\nCommand aliases: %s'%', '.join(aliases)
+                else:
+                    al_doc = ''
+                self.writeline("%s %s\n\n%s%s" % (cmd, docp, docl, al_doc))
                 return
             else:
                 self.writeline("Command '%s' not known" % cmd)
@@ -144,7 +150,10 @@ class MgmtCLIHandler(TelnetHandler):
         keys = self.COMMANDS.keys()
         keys.sort()
         for cmd in keys:
-            _, _, aliases, help_msg = cli_command.cli_commands[cmd.lower()]
+            method = cli_command.cli_commands.get(cmd.lower(), None)
+            if not method:
+                continue
+            _, _, aliases, help_msg = method
             #if getattr(method, 'hidden', False):
             #    continue
             doc = help_msg.split("\n")
@@ -157,9 +166,9 @@ class MgmtCLIHandler(TelnetHandler):
             self.writeline("%s %s" % (cmd, docps))
 
     @validator(str, (str, 1))
-    @cli_command('create-user', 'create_user')
+    @cli_command('create-user', 'create_user', 'createuser', 'cru')
     def command_create_user(self, params):
-        '''<user name> <role1> [<role2>, ...]
+        '''<user name> <role1> [<role2> ...]
         Create new user account
         This command creates new user account in management database
         Use show-roles command for display all possible roles list
@@ -177,7 +186,7 @@ class MgmtCLIHandler(TelnetHandler):
         self.writeresponse('user "%s" is created!'%params[0])
 
     @validator()
-    @cli_command('show-roles', 'get_available_roles')
+    @cli_command('show-roles', 'get_available_roles', 'shroles', 'shr')
     def command_show_roles(self, params):
         '''
         Show available roles
@@ -187,7 +196,7 @@ class MgmtCLIHandler(TelnetHandler):
             self.writeline('%s - %s'%(role.ljust(12), role_desc))
 
     @validator(str)
-    @cli_command('user-info', 'get_user_info')
+    @cli_command('user-info', 'get_user_info', 'shuser', 'userinfo')
     def command_show_user(self, params):
         '''<user name>
         Show user account information
@@ -204,8 +213,51 @@ class MgmtCLIHandler(TelnetHandler):
         else:
             self.writeline('No sessions found')
 
+    @validator(str, (str, 1))
+    @cli_command('change-user-roles', 'change_user_roles', 'churoles')
+    def command_change_user_roles(self, params):
+        '''<user name> <role1> [<role2> ...]
+        Change user roles
+        Use show-roles command for display all possible roles list
+        '''
+        self.mgmtManagementAPI.change_user_roles(self.session_id, \
+                params[0], params[1:])
+        self.writeline('User roles are installed for user "%s"'%params[0])
+
+    @validator(str)
+    @cli_command('remove-user', 'remove_user', 'rmuser')
+    def command_remove_user(self, params):
+        '''<user name>
+        Remove user account
+        '''
+        self.mgmtManagementAPI.remove_user(self.session_id, params[0])
+        self.writeline('User "%s" is removed.'%params[0])
+
+    @validator()
+    @cli_command('change-pwd')
+    def command_remove_user(self, params):
+        '''[<user name>]
+        Change user password
+        If user name does not specified, current user should be used 
+        '''
+        username = None
+        if len(params) > 0:
+            username = params[0]
+
+        pwd = self.readline(prompt='Enter new user password: ', echo=False)
+        self.writeline('')
+        re_pwd = self.readline(prompt='Verify new user password: ', echo=False)
+        self.writeline('')
+        if pwd != re_pwd:
+            self.writeresponse('Error: password verification failed!')
+            return
+
+        self.mgmtManagementAPI.change_user_password(self.session_id, username, pwd)
+        self.writeresponse('Password is changed!')
+
+
 import SocketServer
-class TelnetServer(SocketServer.TCPServer):
+class TelnetServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     allow_reuse_address = True
 
 from fabnet.mgmt.mgmt_db import MgmtDatabaseManager
@@ -218,3 +270,4 @@ MgmtCLIHandler.mgmtManagementAPI = mgmt_api
 
 server = TelnetServer(("0.0.0.0", 8023), MgmtCLIHandler)
 server.serve_forever()
+

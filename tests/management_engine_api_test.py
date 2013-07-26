@@ -52,9 +52,10 @@ class TestManagementEngineAPI(unittest.TestCase):
         self.assertEqual(user_info[DBK_USERNAME], 'admin')
         self.assertEqual(user_info[DBK_ROLES], [ROLE_UM])
 
-        mgmt_api.change_user_password(session_id, 'qwerty')
+        mgmt_api.change_user_password(session_id, None, 'qwerty')
         mgmt_api.create_user(session_id, 'megaadmin', 'qwerty', \
                 [ROLE_RO, ROLE_CF, ROLE_SS, ROLE_UPGR, ROLE_UM])
+        mgmt_api.change_user_password(session_id, 'megaadmin', 'qwerty')
 
         mgmt_api.change_user_roles(session_id, 'megaadmin', [ROLE_RO, ROLE_CF, ROLE_UPGR])
 
@@ -72,6 +73,9 @@ class TestManagementEngineAPI(unittest.TestCase):
         self.assertTrue(ROLE_SS in roles)
 
         ma_session_id = mgmt_api.authenticate('megaadmin', 'qwerty')
+
+        with self.assertRaises(MEPermException):
+            mgmt_api.change_user_password(ma_session_id, 'admin', 'qwerty')
 
         with self.assertRaises(MEPermException):
             mgmt_api.create_user(ma_session_id, 'rouser', 'qwerty', [ROLE_RO])

@@ -34,5 +34,5 @@ ROLES_DESC = {ROLE_RO: 'Read only access',
             ROLE_UM: 'Manage users accounts access',
             ROLE_CF: 'Configure cluster access',
             ROLE_SS: 'Start/Stop/Reload nodes access',
-            ROLE_UPGR: 'Uppgrade nodes access'}
+            ROLE_UPGR: 'Upgrade nodes access'}
 

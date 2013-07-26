@@ -120,6 +120,9 @@ class ManagementEngineAPI(object):
 
     @check_auth(ROLE_UM)
     def create_user(self, session_id, username, password, roles):
+        if len(password) < 3:
+            raise MEInvalidArgException('Password is too short!')
+
         pwd_hash =  hashlib.sha1(password).hexdigest()
         self._db_mgr.create_user(username, pwd_hash, roles)
 
@@ -134,16 +137,28 @@ class ManagementEngineAPI(object):
 
     @check_auth(ROLE_UM)
     def remove_user(self, session_id, username):
+        user = self._db_mgr.get_user_info(username)
+        if not user:
+            raise MENotFoundException('User "%s" does not found!'%username)
         self._db_mgr.remove_user(username)
 
     @check_auth(ROLE_UM)
     def change_user_roles(self, session_id, username, roles):
         self._db_mgr.update_user_info(username, roles=roles)
 
-    def change_user_password(self, session_id, new_password):
-        user = self._db_mgr.get_user_by_session(session_id)
-        if user is None:
-            raise MEAuthException('Unknown user session!')
+    def change_user_password(self, session_id, username, new_password):
+        if username:
+            self._check_roles(session_id, ROLE_UM)
+            user = self._db_mgr.get_user_info(username)
+            if not user:
+                raise MENotFoundException('User "%s" does not found!'%username)
+        else:
+            user = self._db_mgr.get_user_by_session(session_id)
+            if user is None:
+                raise MEAuthException('Unknown user session!')
+
+        if len(new_password) < 3:
+            raise MEInvalidArgException('Password is too short!')
 
         pwd_hash =  hashlib.sha1(new_password).hexdigest()
         self._db_mgr.update_user_info(user[DBK_USERNAME], \
