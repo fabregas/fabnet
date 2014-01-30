@@ -114,7 +114,7 @@ class MgmtDatabaseManager:
         self.__mgmt_db[DBK_SESSIONS].insert({DBK_ID: session_id, \
                                         DBK_USERNAME: username, \
                                         DBK_START_DT: datetime.now()})
-            
+
     def del_session(self, session_id):
         self.__mgmt_db[DBK_SESSIONS].remove({DBK_ID: session_id})
 
@@ -133,4 +133,10 @@ class MgmtDatabaseManager:
         for session in sessions:
             return session
         return None
+
+    def append_node(self, node_name, node_type, node_address):
+        self.__mgmt_db[DBK_NODES].insert({DBK_ID: node_name, \
+                                        DBK_NODETYPE: node_type, \
+                                        DBK_NODEADDR: node_address, \
+                                        DBK_INSTALLDATE: datetime.now()})
 

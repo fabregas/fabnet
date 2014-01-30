@@ -12,7 +12,7 @@ This module contains the implementation of ManagementEngineAPI class
 """
 import os
 import hashlib
-import tempfile 
+import tempfile
 import uuid
 import base64
 
@@ -20,6 +20,7 @@ from fabnet.mgmt.constants import *
 from fabnet.mgmt.exceptions import *
 from fabnet.core.key_storage import AbstractKeyStorage
 
+import paramiko
 
 class check_auth:
     roles_map = {}
@@ -172,14 +173,26 @@ class ManagementEngineAPI(object):
     def configure_cluster(self, session_id, config):
         self._db_mgr.set_cluster_config(config)
 
+    @check_auth(ROLE_NM)
+    def install_new_node(self, session_id, ssh_address, ssh_user, ssh_pwd, node_name, \
+            node_type, node_address):
+        client = paramiko.SSHClient()
+        client.get_host_keys().add(ssh_address, 'ssh-rsa', paramiko.RSAKey.generate(1024))
+        client.connect(ssh_address, username=ssh_user, password=ssh_pwd)
+        stdin, stdout, stderr = client.exec_command('ls')
+
+        #sftp = s.open_sftp()
+        #sftp.put('/home/me/file.ext', '/remote/home/file.ext')
+        self._db_mgr.append_node(node_name, node_type, node_address)
+
     @check_auth(ROLE_SS)
-    def show_nodes(self, session_id, filters={}, rows=None, pad=None):
+    def show_nodes(self, session_id, filters={}, rows=None):
         pass
 
     @check_auth(ROLE_SS)
     def start_nodes(self, session_id, nodes_list=[]):
         pass
-    
+
     @check_auth(ROLE_SS)
     def reload_nodes(self, session_id, nodes_list=[]):
         pass

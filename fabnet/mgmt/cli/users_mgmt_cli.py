@@ -11,6 +11,7 @@ Copyright (C) 2013 Konstantin Andrusenko
 This module contains the implementation of UsersMgmtCLIHandler class
 """
 from fabnet.mgmt.cli.base_cli import *
+from fabnet.mgmt.constants import *
 
 class UsersMgmtCLIHandler(BaseMgmtCLIHandler):
     @validator(str, (str, 1))

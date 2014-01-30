@@ -19,7 +19,6 @@ from fabnet.core.fri_client import FriClient
 from fabnet.utils.safe_json_file import SafeJsonFile
 from fabnet.core.fri_base import RamBasedBinaryData
 from fabnet.utils.db_conn import PostgresqlDBConnection as DBConnection
-from fabnet.monitor.monitor_operator import MONITOR_DB
 from fabnet.dht_mgmt.hash_ranges_table import HashRangesTable
 from fabnet.core.config import Config
 

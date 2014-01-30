@@ -23,15 +23,22 @@ DBK_ROLES = 'roles'
 DBK_USER_PWD_HASH = 'password_hash'
 DBK_LAST_SESSION = 'last_session'
 
+DBK_NODES = 'installed_nodes'
+DBK_NODETYPE = 'node_type'
+DBK_NODEADDR = 'node_addr'
+DBK_INSTALLDATE = 'install_date'
+
 #user roles
 ROLE_RO = 'readonly'
 ROLE_UM = 'usersmanage'
+ROLE_NM = 'nodesmanage'
 ROLE_CF = 'configure'
 ROLE_SS = 'startstop'
 ROLE_UPGR = 'upgrade'
 
 ROLES_DESC = {ROLE_RO: 'Read only access',
             ROLE_UM: 'Manage users accounts access',
+            ROLE_NM: 'Manage cluster nodes (install, remove)',
             ROLE_CF: 'Configure cluster access',
             ROLE_SS: 'Start/Stop/Reload nodes access',
             ROLE_UPGR: 'Upgrade nodes access'}
