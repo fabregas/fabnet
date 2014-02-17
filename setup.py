@@ -8,6 +8,8 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 if __name__ == '__main__':
+    prepare_install('/opt/blik/fabnet', '/opt/blik/fabnet/fabnet_package_files.lst')
+
     setup(
         name = "fabnet-core",
         version = get_cur_ver(),
