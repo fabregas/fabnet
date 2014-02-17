@@ -17,12 +17,12 @@ def get_all(path):
 
 
 def get_cur_ver():
-    p = Popen(['git', 'describe', '--always', '--tag'], stdout=PIPE, stderr=PIPE)
-    out, err = p.communicate()
-    if p.returncode != 0:
-        print ('ERROR! git describe failed: %s'%err)
-        sys.exit(1)
-    return out.strip()
+    if not os.path.exists('VERSION'):
+        raise Exception('No VERSION file found!')
+
+
+    ver = open('VERSION').read()
+    return ver.strip()
 
 
 def clear_empty_dir(path):
@@ -113,4 +113,9 @@ def check_deps(deps):
     if ret:
         raise Exception('ERROR! Failed installation!')
 
+
+def install_submodule(submodule_path):
+    ret = os.system('sudo easy_install %s' % submodule_path)
+    if ret:
+        raise Exception('ERROR! Failed submodule installation!')
 
