@@ -34,7 +34,7 @@ def clear_empty_dir(path):
 
     lst = os.listdir(path)
     if not lst:
-        os.rmdir(path)
+        os.system('rm -rf %s'%path)
         print ' -> removed empty dir %s'%path
         return
 
@@ -49,7 +49,7 @@ def prepare_install(path, lst_file_path):
             if not line:
                 continue
             try:
-                os.remove(line)
+                os.system('rm -f %s'%line)
                 print ' -> removed old %s'%line
             except OSError, err:
                 print 'Warning! file %s does not removed. %s'%(line, err)
@@ -114,8 +114,8 @@ def check_deps(deps):
         raise Exception('ERROR! Failed installation!')
 
 
-def install_submodule(submodule_path):
-    ret = os.system('sudo easy_install %s' % submodule_path)
+def install_submodule(submodule_path, log_name):
+    ret = os.system('PYTHONPATH="/opt/blik/fabnet/packages" easy_install --install-dir=/opt/blik/fabnet/packages --prefix=/opt/blik/fabnet --record /opt/blik/fabnet/%s %s'%(log_name, submodule_path))
     if ret:
         raise Exception('ERROR! Failed submodule installation!')
 
